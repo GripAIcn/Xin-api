@@ -1,7 +1,7 @@
 package model
 
 type User struct {
-	ID           uint   `gorm:"primarykey;autoIncrement"`
-	Username     string `gorm:"column:username;unique"`
-	PasswordHash string `gorm:"column:password;NOT NULL"`
+	ID       uint   `json:"id" gorm:"column:id;primarykey;autoIncrement"`
+	Username string `json:"username" gorm:"column:username;unique" validate:"max=12"`
+	Password string `json:"password" gorm:"column:password;NOT NULL" validate:"min=8,max=20"`
 }
