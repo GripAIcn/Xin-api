@@ -46,7 +46,7 @@ func Load() *Config {
 			Expire: getEnvToTimeDuration("JWT_EXPIRE", 24*time.Hour),
 		},
 		Server: ServerConfig{
-			Port: getEnv("SERVER_PORT", "8080"), // 默认 8080 端口
+			Port: getEnv("PROXY_PORT", "8080"), // 默认 8080 端口
 		},
 	}
 }
