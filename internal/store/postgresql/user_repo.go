@@ -10,13 +10,13 @@ import (
 )
 
 type UserRepo interface {
-	// 新增用户（返回 user_id）
+	// Create 新增用户（返回 user_id）
 	Create(ctx context.Context, user *model.User) error
-	// 修改密码（通过 user_id）
+	// UpdatePassword 修改密码（通过 user_id）
 	UpdatePassword(ctx context.Context, userID uint, newPasswordHash string) error
-	// 修改账号信息（如 username 或 email，按需）
+	// UpdateAccount 修改账号信息（如 username 或 email，按需）
 	UpdateAccount(ctx context.Context, userID uint, username string) error
-	// 根据用户名查询用户（用于登录验证）
+	// GetIdByUsername 根据用户名查询用户（用于登录验证）
 	GetIdByUsername(ctx context.Context, username string) (*model.User, error)
 }
 
