@@ -32,3 +32,4 @@ go.sum
 .idea/
 # .vscode/
 docs/
+scripts/
