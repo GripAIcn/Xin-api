@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"Xin-api/internal/model"
-
 	"gorm.io/gorm"
+
+	"Xin-api/internal/model"
 )
 
 type UserRepo interface {
