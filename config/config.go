@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,12 +16,22 @@ import (
 type Config struct {
 	JWT    JWTConfig
 	Server ServerConfig
+	Redis  RedisConfig
 }
 
 // JWTConfig JWT 专有配置
 type JWTConfig struct {
 	Secret string
 	Expire time.Duration
+}
+
+// RedisConfig Redis 客户端配置
+type RedisConfig struct {
+	Host     string
+	Port     string
+	Password string
+	DB       int
+	PoolSize int
 }
 
 // ServerConfig 服务运行时配置
@@ -48,6 +59,13 @@ func Load() *Config {
 		Server: ServerConfig{
 			Port: getEnv("PROXY_PORT", "8080"), // 默认 8080 端口
 		},
+		Redis: RedisConfig{
+			Host:     getEnv("REDIS_HOST", "127.0.0.1"),
+			Port:     getEnv("REDIS_PORT", "6379"),
+			Password: getEnv("REDIS_PASSWORD", ""),
+			DB:       getEnvToInt("REDIS_DB", 0),
+			PoolSize: getEnvToInt("REDIS_POOL_SIZE", 20),
+		},
 	}
 }
 
@@ -72,6 +90,21 @@ func getEnvToTimeDuration(key string, defaultDuration time.Duration) time.Durati
 	}
 
 	return duration
+}
+
+// getEnvToInt 读取整数型环境变量
+func getEnvToInt(key string, defaultValue int) int {
+	val := os.Getenv(key)
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return defaultValue
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		log.Printf("[CONFIG] [WARN] parse env %s value '%s' to int failed: %v, using default: %d", key, val, err, defaultValue)
+		return defaultValue
+	}
+	return n
 }
 
 // getEnv 辅助工具：读取字符串环境变量，若为空则返回默认值
