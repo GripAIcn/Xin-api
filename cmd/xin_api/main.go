@@ -12,8 +12,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"Xin-api/config"
+	"Xin-api/internal/middleware"
 	"Xin-api/internal/router"
 	"Xin-api/internal/store/postgresql"
+	storeRedis "Xin-api/internal/store/redis"
 )
 
 func main() {
@@ -24,10 +26,16 @@ func main() {
 	// 2. 初始化 PostgreSQL 核心驱动
 	db := postgresql.NewPostgres()
 
-	// 3. 依赖注入：将 gorm.DB 注入到 Repository 实现层
+	// 3. 初始化 Redis 分布式协同层
+	rdb := storeRedis.NewRedisClient(cfg.Redis)
+
+	// 4. 依赖注入：将 gorm.DB 注入到 Repository 实现层
 	userRepo := postgresql.NewUserRepo(db)
 
-	// 4. 构建无状态控制面 Engine
+	// 5. 构造分布式限流器（数据面使用，暂不挂载路由）
+	_ = middleware.NewDistributedLimiter(rdb)
+
+	// 6. 构建无状态控制面 Engine
 	gin.SetMode(gin.ReleaseMode) // 生产环境切换为 Release 模式以榨干 Gin 的性能
 	r := gin.New()
 	r.Use(gin.Recovery()) // 引入崩溃恢复切面，防止单点故障引发多米诺骨牌级雪崩
