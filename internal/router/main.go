@@ -1,18 +1,26 @@
 package router
 
 import (
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
 	"Xin-api/config"
 	"Xin-api/internal/handler"
 	"Xin-api/internal/middleware"
 	"Xin-api/internal/store/postgresql"
-
-	"github.com/gin-gonic/gin"
 )
 
 // SetupRouter 统一注册控制面管理后台路由
-func SetupRouter(r *gin.Engine, repo postgresql.UserRepo, jwtCfg config.JWTConfig) {
+func SetupRouter(r *gin.Engine, db *gorm.DB, jwtCfg config.JWTConfig) {
 	// 1. 初始化 Handler（注入底层的 DB 仓库和配置）
-	userHandler := handler.NewUserHandler(repo, jwtCfg)
+	userRepo := postgresql.NewUserRepo(db)
+	userHandler := handler.NewUserHandler(userRepo, jwtCfg)
+	apiKeyRepo := postgresql.NewApiKeyRepo(db)
+	apiKeyHandler := handler.NewApiKeyHandler(apiKeyRepo)
+	groupRepo := postgresql.NewGroupRepo(db)
+	groupHandler := handler.NewGroupHandler(groupRepo)
+	channelRepo := postgresql.NewChannelRepo(db)
+	channelHandler := handler.NewChannelHandler(channelRepo)
 
 	// 2. 创建 v1 版本的统一根路由组
 	v1 := r.Group("/v1")
@@ -28,12 +36,31 @@ func SetupRouter(r *gin.Engine, repo postgresql.UserRepo, jwtCfg config.JWTConfi
 		// ==========================================
 		// 权限受控路由组 (Protected Group)：必须通过 JWT 拦截器
 		// ==========================================
-		protected := v1.Group("/users")
-		protected.Use(middleware.JWTAuth(jwtCfg.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
+		protectedUser := v1.Group("/users").Use(middleware.JWTAuth(jwtCfg.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
 		{
-			protected.POST("", userHandler.CreateUser)             // 添加账户名和密码
-			protected.PUT("/password", userHandler.UpdatePassword) // 修改当前登录用户的密码
-			protected.PUT("/account", userHandler.UpdateAccount)   // 修改当前登录用户的账号名
+			protectedUser.POST("", userHandler.CreateUser)             // 添加账户名和密码
+			protectedUser.PUT("/password", userHandler.UpdatePassword) // 修改当前登录用户的密码
+			protectedUser.PUT("/account", userHandler.UpdateAccount)   // 修改当前登录用户的账号名
+		}
+
+		protected := v1.Group("").Use(middleware.JWTAuth(jwtCfg.Secret))
+		{
+			// 项目组路由
+			protected.POST("/groups", groupHandler.CreateGroup)
+			protected.GET("/groups", groupHandler.ListGroups)
+			protected.PUT("/groups/:id", groupHandler.UpdateGroup)
+			protected.PUT("/groups/:id/status", groupHandler.UpdateStatus)
+			protected.DELETE("/groups/:id", groupHandler.DeleteGroup)
+
+			// 供应商渠道路由
+			protected.POST("/channels", channelHandler.CreateChannel)
+			protected.GET("/channels", channelHandler.ListChannelsByGroup)
+			protected.PUT("/channels/:id", channelHandler.UpdateChannel)
+			protected.DELETE("/channels/:id", channelHandler.DeleteChannel)
+
+			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)   // 为组分发新 Key
+			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)     // 查询组名下的 Key 列表
+			protected.DELETE("/apikeys", apiKeyHandler.DeleteApiKey) // 吊销/软删除指定的 Key
 		}
 	}
 }
