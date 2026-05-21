@@ -49,7 +49,7 @@ func AdminFail(c *gin.Context, bizCode int) {
 // OpenAIErrorBody 严格契合 OpenAI 官方 SDK 的错误内嵌结构
 type OpenAIErrorBody struct {
 	Message string  `json:"message"`         // 错误描述
-	Type    string  `json:"type"`            // 错误类型，例如 invalid_request_error, insuﬃcient_quota
+	Type    string  `json:"type"`            // 错误类型，例如 invalid_request_error, insufficient_quota
 	Param   *string `json:"param,omitempty"` // 触发错误的参数项
 	Code    string  `json:"code,omitempty"`  // 字符串型错误标识码
 }
@@ -73,6 +73,9 @@ func DataPlaneError(c *gin.Context, bizCode int) {
 	case RateLimited:
 		errType = "requests_error"
 		errCode = "rate_limit_exceeded"
+	case ServiceUnavailable:
+		errType = "server_error"
+		errCode = "service_unavailable"
 	case CircuitBreakerOpen, UpstreamTimeout:
 		errType = "server_error"
 		errCode = "upstream_service_unavailable"
