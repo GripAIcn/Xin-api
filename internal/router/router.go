@@ -5,13 +5,18 @@ import (
 	"gorm.io/gorm"
 
 	"Xin-api/config"
+	"Xin-api/internal/adapter"
 	"Xin-api/internal/handler"
 	"Xin-api/internal/middleware"
+	"Xin-api/internal/service"
 	"Xin-api/internal/store/postgresql"
 )
 
 // SetupRouter 统一注册控制面管理后台路由
-func SetupRouter(r *gin.Engine, db *gorm.DB, jwtCfg config.JWTConfig) {
+func SetupRouter(r *gin.Engine, db *gorm.DB, jwtCfg config.JWTConfig,
+	balancer *service.WeightedRRBalancer,
+	breaker *service.CircuitBreaker,
+	streamProxy *service.StreamProxy) {
 	// 1. 初始化 Handler（注入底层的 DB 仓库和配置）
 	userRepo := postgresql.NewUserRepo(db)
 	userHandler := handler.NewUserHandler(userRepo, jwtCfg)
@@ -61,6 +66,23 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, jwtCfg config.JWTConfig) {
 			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)   // 为组分发新 Key
 			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)     // 查询组名下的 Key 列表
 			protected.DELETE("/apikeys", apiKeyHandler.DeleteApiKey) // 吊销/软删除指定的 Key
+		}
+
+		// ==========================================
+		// 数据面路由 (Data Plane)：使用 ApiKey 认证
+		// ==========================================
+		adapterGroup := adapter.NewRegistry()
+		adapterGroup.Register(adapter.NewOpenAIAdapter())
+
+		chatHandler := handler.NewChatHandler(
+			postgresql.NewChannelRepo(db),
+			balancer, breaker, streamProxy,
+			adapterGroup,
+		)
+		dataPlane := v1.Group("")
+		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))
+		{
+			dataPlane.POST("/chat/completions", chatHandler.HandleDataPlane)
 		}
 	}
 }
