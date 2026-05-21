@@ -12,11 +12,25 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// CircuitBreakerConfig 熔断器配置
+type CircuitBreakerConfig struct {
+	FailureThreshold int           // 连续失败次数阈值
+	RecoveryInterval time.Duration // 自动恢复间隔
+}
+
+// ProxyConfig 上游代理配置
+type ProxyConfig struct {
+	RequestTimeout time.Duration // 上游请求超时
+	MaxBodyMB      int           // 最大请求体 MB
+}
+
 // Config 全局配置大包装结构体（便于未来横向扩展）
 type Config struct {
-	JWT    JWTConfig
-	Server ServerConfig
-	Redis  RedisConfig
+	JWT            JWTConfig
+	Server         ServerConfig
+	Redis          RedisConfig
+	CircuitBreaker CircuitBreakerConfig
+	Proxy          ProxyConfig
 }
 
 // JWTConfig JWT 专有配置
@@ -65,6 +79,14 @@ func Load() *Config {
 			Password: getEnv("REDIS_PASSWORD", ""),
 			DB:       getEnvToInt("REDIS_DB", 0),
 			PoolSize: getEnvToInt("REDIS_POOL_SIZE", 20),
+		},
+		CircuitBreaker: CircuitBreakerConfig{
+			FailureThreshold: getEnvToInt("CB_FAILURE_THRESHOLD", 5),
+			RecoveryInterval: getEnvToTimeDuration("CB_RECOVERY_INTERVAL", 60*time.Second),
+		},
+		Proxy: ProxyConfig{
+			RequestTimeout: getEnvToTimeDuration("PROXY_REQUEST_TIMEOUT", 120*time.Second),
+			MaxBodyMB:      getEnvToInt("PROXY_MAX_BODY_MB", 10),
 		},
 	}
 }
