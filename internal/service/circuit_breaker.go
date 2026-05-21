@@ -12,6 +12,12 @@ import (
 	"Xin-api/internal/store/postgresql"
 )
 
+// ChannelBreaker 熔断器接口
+type ChannelBreaker interface {
+	IsHealthy(ctx context.Context, channelID int64) (bool, error)
+	Record(ctx context.Context, channelID int64, err error)
+}
+
 const (
 	cbFailCountKey   = "cb:%d:fail_count"
 	cbLastFailKey    = "cb:%d:last_fail_time"
