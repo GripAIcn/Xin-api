@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"Xin-api/internal/store/postgresql"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -64,5 +65,33 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 		c.Set(CtxUsernameKey, claims["username"])
 
 		c.Next() // 鉴权通过，放行继续执行后续路由
+	}
+}
+
+// ApiKeyAuth 数据面 API Key 认证中间件
+// 从 Authorization: Bearer sk-xin-xxx 提取 key，查库获取 GroupID
+func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		auth := c.GetHeader("Authorization")
+		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+			response.DataPlaneError(c, response.Unauthorized)
+			return
+		}
+
+		key := strings.TrimPrefix(auth, "Bearer ")
+		apiKey, err := apiKeyRepo.GetWithGroup(c.Request.Context(), key)
+		if err != nil || apiKey == nil {
+			response.DataPlaneError(c, response.Unauthorized)
+			return
+		}
+
+		// 检查分组是否启用
+		if apiKey.Group.Status != 1 {
+			response.DataPlaneError(c, response.Forbidden)
+			return
+		}
+
+		c.Set("group_id", apiKey.GroupID)
+		c.Next()
 	}
 }
