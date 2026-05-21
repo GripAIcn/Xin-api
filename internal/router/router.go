@@ -13,19 +13,19 @@ import (
 )
 
 // SetupRouter 统一注册控制面管理后台路由
-func SetupRouter(r *gin.Engine, db *gorm.DB, jwtCfg config.JWTConfig,
-	balancer *service.WeightedRRBalancer,
-	breaker *service.CircuitBreaker,
-	streamProxy *service.StreamProxy) {
+func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
+	breaker *service.CircuitBreaker) {
 	// 1. 初始化 Handler（注入底层的 DB 仓库和配置）
 	userRepo := postgresql.NewUserRepo(db)
-	userHandler := handler.NewUserHandler(userRepo, jwtCfg)
+	userHandler := handler.NewUserHandler(userRepo, cfg.JWT)
 	apiKeyRepo := postgresql.NewApiKeyRepo(db)
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeyRepo)
 	groupRepo := postgresql.NewGroupRepo(db)
 	groupHandler := handler.NewGroupHandler(groupRepo)
 	channelRepo := postgresql.NewChannelRepo(db)
 	channelHandler := handler.NewChannelHandler(channelRepo)
+	balancer := service.NewWeightedRRBalancer()
+	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout)
 
 	// 2. 创建 v1 版本的统一根路由组
 	v1 := r.Group("/v1")
