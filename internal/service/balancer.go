@@ -6,6 +6,11 @@ import (
 	"Xin-api/internal/model"
 )
 
+// ChannelBalancer 负载均衡接口
+type ChannelBalancer interface {
+	Select(key string, channels []model.Channel) *model.Channel
+}
+
 type roundRobinState struct {
 	index int
 	mu    sync.Mutex
