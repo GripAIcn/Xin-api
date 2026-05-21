@@ -14,6 +14,7 @@ import (
 	"Xin-api/config"
 	"Xin-api/internal/middleware"
 	"Xin-api/internal/router"
+	"Xin-api/internal/service"
 	"Xin-api/internal/store/postgresql"
 	storeRedis "Xin-api/internal/store/redis"
 )
@@ -32,13 +33,21 @@ func main() {
 	// 4. 构造分布式限流器（数据面使用，暂不挂载路由）
 	_ = middleware.NewDistributedLimiter(rdb)
 
-	// 5. 构建无状态控制面 Engine
+	// 5. 数据面组件初始化
+	channelRepo := postgresql.NewChannelRepo(db)
+
+	breaker := service.NewCircuitBreaker(rdb, channelRepo, cfg.CircuitBreaker)
+
+	// 启动熔断恢复协程
+	go breaker.RecoveryLoop(context.Background(), cfg.CircuitBreaker.RecoveryInterval)
+
+	// 6. 构建无状态控制面 Engine
 	gin.SetMode(gin.ReleaseMode) // 生产环境切换为 Release 模式以榨干 Gin 的性能
 	r := gin.New()
 	r.Use(gin.Recovery()) // 引入崩溃恢复切面，防止单点故障引发多米诺骨牌级雪崩
 
 	// 6. 【控制面】动态路由与核心鉴权切面总装
-	router.SetupRouter(r, db, cfg.JWT)
+	router.SetupRouter(r, db, *cfg, breaker)
 
 	// ==========================================
 	// 7. 生产级优化：优雅启停 (Graceful Shutdown)
