@@ -41,14 +41,14 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		// ==========================================
 		// 权限受控路由组 (Protected Group)：必须通过 JWT 拦截器
 		// ==========================================
-		protectedUser := v1.Group("/users").Use(middleware.JWTAuth(jwtCfg.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
+		protectedUser := v1.Group("/users").Use(middleware.JWTAuth(cfg.JWT.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
 		{
 			protectedUser.POST("", userHandler.CreateUser)             // 添加账户名和密码
 			protectedUser.PUT("/password", userHandler.UpdatePassword) // 修改当前登录用户的密码
 			protectedUser.PUT("/account", userHandler.UpdateAccount)   // 修改当前登录用户的账号名
 		}
 
-		protected := v1.Group("").Use(middleware.JWTAuth(jwtCfg.Secret))
+		protected := v1.Group("").Use(middleware.JWTAuth(cfg.JWT.Secret))
 		{
 			// 项目组路由
 			protected.POST("/groups", groupHandler.CreateGroup)
