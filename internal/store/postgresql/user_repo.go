@@ -51,8 +51,11 @@ func (r *userRepo) UpdateAccount(ctx context.Context, userID uint, username stri
 
 func (r *userRepo) GetIdByUsername(ctx context.Context, username string) (*model.User, error) {
 	user, err := gorm.G[model.User](r.db).Where("username = ?", username).First(ctx)
-	if err != nil || errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, err
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		return nil, nil
 	}
 	return &user, nil
 }
