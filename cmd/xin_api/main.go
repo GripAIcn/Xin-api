@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
 	"Xin-api/config"
@@ -42,9 +43,18 @@ func main() {
 	go breaker.RecoveryLoop(context.Background(), cfg.CircuitBreaker.RecoveryInterval)
 
 	// 6. 构建无状态控制面 Engine
-	gin.SetMode(gin.ReleaseMode) // 生产环境切换为 Release 模式以榨干 Gin 的性能
+	//gin.SetMode(gin.ReleaseMode) // 生产环境切换为 Release 模式以榨干 Gin 的性能
 	r := gin.New()
 	r.Use(gin.Recovery()) // 引入崩溃恢复切面，防止单点故障引发多米诺骨牌级雪崩
+
+	// CORS 中间件 — 允许前端开发服务器跨域访问
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:9090", "http://127.0.0.1:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// 6. 【控制面】动态路由与核心鉴权切面总装
 	router.SetupRouter(r, db, *cfg, breaker)
