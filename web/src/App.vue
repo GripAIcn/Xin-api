@@ -1,85 +1,32 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import HelloWorld from './components/HelloWorld.vue'
+import { RouterView } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { Sonner } from '@/components/ui/sonner'
+import { computed } from 'vue'
+
+const authStore = useAuthStore()
+
+// 检查认证状态是否已确定（用于避免闪烁）
+const isAuthReady = computed(() => {
+  // 如果有 token 或明确未登录，都认为状态已确定
+  return authStore.isAuthenticated || !localStorage.getItem('token')
+})
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="@/assets/logo.svg" width="125" height="125" />
+  <Sonner position="top-right" rich-colors />
 
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
+  <!-- 认证状态确定后显示内容 -->
+  <RouterView v-if="isAuthReady" />
 
-      <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
-      </nav>
+  <!-- 加载状态 -->
+  <div
+    v-else
+    class="flex h-screen w-full items-center justify-center bg-background"
+  >
+    <div class="flex flex-col items-center gap-4">
+      <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <p class="text-sm text-muted-foreground">加载中...</p>
     </div>
-  </header>
-
-  <RouterView />
+  </div>
 </template>
-
-<style scoped>
-header {
-  line-height: 1.5;
-  max-height: 100vh;
-}
-
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-nav {
-  width: 100%;
-  font-size: 12px;
-  text-align: center;
-  margin-top: 2rem;
-}
-
-nav a.router-link-exact-active {
-  color: var(--color-text);
-}
-
-nav a.router-link-exact-active:hover {
-  background-color: transparent;
-}
-
-nav a {
-  display: inline-block;
-  padding: 0 1rem;
-  border-left: 1px solid var(--color-border);
-}
-
-nav a:first-of-type {
-  border: 0;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  nav {
-    text-align: left;
-    margin-left: -1rem;
-    font-size: 1rem;
-
-    padding: 1rem 0;
-    margin-top: 1rem;
-  }
-}
-</style>
