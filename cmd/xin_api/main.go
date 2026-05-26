@@ -59,8 +59,15 @@ func main() {
 	// 6. 【控制面】动态路由与核心鉴权切面总装
 	router.SetupRouter(r, db, *cfg, breaker)
 
+	// 7. 静态前端 SPA (生产模式)
+	r.StaticFile("/", "./web/dist/index.html")
+	r.Static("/assets", "./web/dist/assets")
+	r.NoRoute(func(c *gin.Context) {
+		c.File("./web/dist/index.html")
+	})
+
 	// ==========================================
-	// 7. 生产级优化：优雅启停 (Graceful Shutdown)
+	// 8. 生产级优化：优雅启停 (Graceful Shutdown)
 	// ==========================================
 	srv := &http.Server{
 		Addr:    ":" + cfg.Server.Port, // 比如 :8080
