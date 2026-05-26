@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 前端开发依赖
+web/node_modules
+web/dist
+web/.cache
+
+# Go 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+xin-api
+tmp/
+
+# 测试文件
+*_test.go
+*.test
+
+# 文档
+*.md
+LICENSE
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# 日志
+*.log
+logs/
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
