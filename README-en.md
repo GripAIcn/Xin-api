@@ -1,0 +1,209 @@
+# Xin API 🚀
+
+[中文](./README.md) | English
+
+<p align="center">
+  <strong>A high-performance gateway for unified LLM API management, full-link tracing, and smart distribution</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version">
+  <img src="https://img.shields.io/badge/Gin-1.12-00ADD8?style=flat-square" alt="Gin Framework">
+  <img src="https://img.shields.io/badge/Vue.js-3.x-42b883?style=flat-square&logo=vue.js&logoColor=white" alt="Vue.js">
+  <img src="https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis">
+  <img src="https://img.shields.io/badge/Nginx-Alpine-009639?style=flat-square&logo=nginx&logoColor=white" alt="Nginx">
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker Ready">
+</p>
+
+---
+
+## ✨ Introduction
+
+Xin API is a high-performance Large Language Model (LLM) gateway service that seamlessly integrates with mainstream models like OpenAI, Anthropic Claude, DeepSeek, and more — providing a standardized, unified API access layer.
+
+### Core Features
+
+- **🎯 Unified API Gateway**: Standardize different LLM APIs under a single `/v1/chat/completions` endpoint
+- **🔀 Smart Distribution**: Weight-based load balancing to automatically route requests to the optimal channel
+- **🛡️ Circuit Breaker**: Distributed circuit breaker that isolates failing channels and prevents cascading failures
+- **⚡ Rate Limiting**: Redis-based distributed rate limiter supporting RPM/TPM multi-dimensional limiting
+- **👥 Multi-Tenant Management**: Hierarchical management of users, groups, and channels
+- **🔑 API Key Management**: Flexible API key distribution and revocation
+- **📊 Full-Link Tracing**: Complete request chain tracing and audit logging (extensible)
+- **🌐 Web Admin Dashboard**: Modern management UI built with Vue 3 + Tailwind CSS
+- **🐳 Containerized Deployment**: Out-of-the-box Docker Compose deployment
+
+---
+
+## 🏗️ Architecture
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | Vue 3 + TypeScript + Vite + Tailwind CSS + Radix UI |
+| **Backend** | Go 1.25 + Gin + GORM + JWT |
+| **Database** | PostgreSQL 16 (metadata storage) |
+| **Cache** | Redis 7 (rate limiting, circuit breaker, sessions) |
+| **Proxy** | Nginx (reverse proxy, static assets) |
+| **Deployment** | Docker + Docker Compose |
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Go 1.25+
+- Node.js 22+
+- PostgreSQL 16+
+- Redis 7+
+- Docker & Docker Compose (recommended)
+
+### Docker Compose One-Click Deployment (Recommended)
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/your-org/Xin-api.git
+cd Xin-api
+
+# 2. Configure environment variables
+cp .env.example .env
+# Edit .env to set database password, JWT secret, etc.
+
+# 3. Start with one command
+cd build
+./scripts/deploy.sh start
+
+# 4. Access the services
+# Web Dashboard: http://localhost
+# API Endpoint:  http://localhost/v1
+# Health Check:  http://localhost/health
+```
+
+### Local Development Setup
+
+#### 1. Start Dependencies
+
+```bash
+# Start PostgreSQL and Redis
+docker run -d --name xin-postgres \
+  -e POSTGRES_PASSWORD=123456 \
+  -p 5432:5432 \
+  postgres:16-alpine
+
+docker run -d --name xin-redis \
+  -e REDIS_PASSWORD=123456 \
+  -p 6379:6379 \
+  redis:7-alpine
+```
+
+#### 2. Start Backend
+
+```bash
+# Configure environment
+cp .env.example .env
+
+# Install dependencies and run
+go mod download
+go run cmd/xin_api/main.go
+```
+
+#### 3. Start Frontend Dev Server
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+The frontend dev server runs on `http://localhost:5173` by default.
+
+---
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROXY_PORT` | `8080` | Backend service port |
+| `GIN_MODE` | `debug` | Run mode (debug/release) |
+| `POSTGRESQL_DSN` | - | PostgreSQL connection string |
+| `REDIS_HOST` | `127.0.0.1` | Redis host |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_PASSWORD` | - | Redis password |
+| `JWT_SECRET` | - | JWT signing secret |
+| `JWT_EXPIRE` | `24h` | JWT expiration time |
+| `CB_FAILURE_THRESHOLD` | `5` | Circuit breaker failure threshold |
+| `CB_RECOVERY_INTERVAL` | `60s` | Circuit breaker recovery interval |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | Upstream request timeout |
+| `PROXY_MAX_BODY_MB` | `10` | Max request body size |
+| `DEFAULT_RPM` | `60` | Default requests per minute limit |
+| `DEFAULT_TPM` | `100000` | Default tokens per minute limit |
+
+---
+
+## 📸 Screenshots
+
+### Admin Dashboard Features
+
+- **📊 Dashboard**: System overview, request statistics
+- **👥 User Management**: User accounts and permissions
+- **📁 Group Management**: Create and manage project groups with channels
+- **🔌 Channel Management**: Configure upstream LLM channels with weighted routing
+- **🔑 API Key Management**: Distribute and manage API keys
+- **⚙️ System Settings**: Global configuration
+
+---
+
+## 🐳 Production Deployment
+
+### Docker Compose Deployment
+
+For complete deployment configuration, see [build/README.md](build/README.md)
+
+```bash
+cd build
+
+# Start all services (PostgreSQL, Redis, App, Nginx)
+docker-compose up -d
+
+# Check service status
+docker-compose ps
+
+# View application logs
+docker-compose logs -f app
+
+# Stop services
+docker-compose down
+```
+
+### Data Persistence
+
+Data is automatically persisted via Docker Volumes:
+
+- `postgres_data`: PostgreSQL data
+- `redis_data`: Redis data
+- `nginx_logs`: Nginx logs
+
+### Production Recommendations
+
+1. **Change default passwords**: Update database and Redis passwords
+2. **Rotate JWT secret**: Use a strong random string for JWT_SECRET
+3. **Enable HTTPS**: Configure Nginx SSL certificates
+4. **Configure log rotation**: Prevent logs from filling disk space
+5. **Regular backups**: Schedule regular PostgreSQL backups
+
+---
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+<p align="center">
+  <strong>⭐ If you find this project helpful, please give it a Star!</strong>
+</p>
