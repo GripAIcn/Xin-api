@@ -72,14 +72,16 @@ cd Xin-api
 cp .env.example .env
 # Edit .env to set database password, JWT secret, etc.
 
-# 3. Start with one command
+# 3. Start services
 cd build
 ./scripts/deploy.sh start
+
+# Or use docker-compose directly
+# docker-compose up -d --build
 
 # 4. Access the services
 # Web Dashboard: http://localhost
 # API Endpoint:  http://localhost/v1
-# Health Check:  http://localhost/health
 ```
 
 ### Local Development Setup
@@ -164,11 +166,26 @@ The frontend dev server runs on `http://localhost:5173` by default.
 
 For complete deployment configuration, see [build/README.md](build/README.md)
 
+Deployment directory structure:
+
+```
+build/
+├── Dockerfile              # Go backend multi-stage build
+├── Dockerfile.nginx        # Nginx image (with frontend assets)
+├── docker-compose.yml      # Service orchestration (PostgreSQL + Redis + App + Nginx)
+├── .dockerignore          # Docker build ignore file
+└── nginx/                 # Nginx configuration files
+    ├── nginx.conf
+    └── default.conf
+```
+
+Start command:
+
 ```bash
 cd build
 
-# Start all services (PostgreSQL, Redis, App, Nginx)
-docker-compose up -d
+# Build and start all services
+docker-compose up -d --build
 
 # Check service status
 docker-compose ps

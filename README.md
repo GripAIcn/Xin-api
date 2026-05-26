@@ -72,14 +72,16 @@ cd Xin-api
 cp .env.example .env
 # 编辑 .env 修改数据库密码、JWT密钥等
 
-# 3. 一键启动
+# 3. 启动服务
 cd build
 ./scripts/deploy.sh start
+
+# 或直接使用 docker-compose
+# docker-compose up -d --build
 
 # 4. 访问服务
 # Web 管理后台: http://localhost
 # API 地址: http://localhost/v1
-# 健康检查: http://localhost/health
 ```
 
 ### 本地开发部署
@@ -164,11 +166,31 @@ npm run dev
 
 完整的部署配置请参考 [build/README.md](build/README.md)
 
+部署目录结构：
+
+```
+build/
+├── Dockerfile              # Go 后端多阶段构建
+├── Dockerfile.nginx        # Nginx 镜像（含前端产物）
+├── docker-compose.yml      # 服务编排（PostgreSQL + Redis + App + Nginx）
+├── .dockerignore          # Docker 构建忽略文件
+├── nginx/                 # Nginx 配置文件
+│   ├── nginx.conf
+│   └── default.conf
+└── scripts/
+    └── deploy.sh          # 部署脚本
+```
+
+启动命令：
+
 ```bash
 cd build
 
-# 启动所有服务（PostgreSQL, Redis, App, Nginx）
-docker-compose up -d
+# 一键启动所有服务
+./scripts/deploy.sh start
+
+# 或构建并启动所有服务
+docker-compose up -d --build
 
 # 查看服务状态
 docker-compose ps
@@ -178,6 +200,18 @@ docker-compose logs -f app
 
 # 停止服务
 docker-compose down
+```
+
+### 部署脚本命令
+
+```bash
+./scripts/deploy.sh start    # 启动所有服务
+./scripts/deploy.sh stop     # 停止所有服务
+./scripts/deploy.sh restart  # 重启所有服务
+./scripts/deploy.sh logs     # 查看日志
+./scripts/deploy.sh status   # 查看服务状态
+./scripts/deploy.sh build    # 重新构建镜像
+./scripts/deploy.sh update   # 更新代码并重启服务
 ```
 
 ### 数据持久化
