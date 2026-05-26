@@ -131,6 +131,14 @@ The frontend dev server runs on `http://localhost:5173` by default.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PROXY_PORT` | `8080` | Backend service port |
+| `ADMIN_PORT` | `9090` | Admin panel port |
+| `NGINX_HTTP_PORT` | `80` | Nginx HTTP port |
+| `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS port |
+| `POSTGRES_USER` | `root` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | `123456` | PostgreSQL password |
+| `POSTGRES_DB` | `gateway` | PostgreSQL database name |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port |
+| `REDIS_PORT` | `6379` | Redis port |
 | `GIN_MODE` | `debug` | Run mode (debug/release) |
 | `POSTGRESQL_DSN` | - | PostgreSQL connection string |
 | `REDIS_HOST` | `127.0.0.1` | Redis host |
@@ -170,13 +178,15 @@ Deployment directory structure:
 
 ```
 build/
-├── Dockerfile              # Go backend multi-stage build
-├── Dockerfile.nginx        # Nginx image (with frontend assets)
+├── Dockerfile              # Unified multi-stage build (Node.js + Go + Alpine)
+├── Dockerfile.nginx        # Nginx reverse proxy configuration
 ├── docker-compose.yml      # Service orchestration (PostgreSQL + Redis + App + Nginx)
 ├── .dockerignore          # Docker build ignore file
-└── nginx/                 # Nginx configuration files
-    ├── nginx.conf
-    └── default.conf
+├── nginx/                 # Nginx configuration files
+│   ├── nginx.conf
+│   └── default.conf
+└── scripts/
+    └── deploy.sh          # Deployment script
 ```
 
 Start command:
@@ -184,7 +194,10 @@ Start command:
 ```bash
 cd build
 
-# Build and start all services
+# One-click start all services
+./scripts/deploy.sh start
+
+# Or build and start all services
 docker-compose up -d --build
 
 # Check service status
@@ -196,6 +209,42 @@ docker-compose logs -f app
 # Stop services
 docker-compose down
 ```
+
+### Deploy Script Commands
+
+```bash
+./scripts/deploy.sh start    # Start all services
+./scripts/deploy.sh stop     # Stop all services
+./scripts/deploy.sh restart  # Restart all services
+./scripts/deploy.sh logs     # View all logs
+./scripts/deploy.sh logs app      # View app logs (frontend + backend)
+./scripts/deploy.sh logs nginx    # View Nginx logs
+./scripts/deploy.sh logs postgres # View database logs
+./scripts/deploy.sh logs redis    # View cache logs
+./scripts/deploy.sh status   # Check service status
+./scripts/deploy.sh build    # Rebuild images
+./scripts/deploy.sh health   # Check service health status
+./scripts/deploy.sh update   # Update code and restart services
+```
+
+### Service Architecture
+
+```
+User Request → Nginx (80/443)
+    ├── /v1/*  → Backend API Service (app:8080)
+    └── /*     → Frontend Static Files (app:8080)
+
+Backend Dependencies: PostgreSQL + Redis
+```
+
+### Service Ports
+
+| Service | Container Port | Host Port | Description |
+|---------|---------------|-----------|-------------|
+| Nginx | 80/443 | 80/443 | Web Entry (Unified) |
+| Xin-api | 8080 | - | Backend + Frontend Static Files (Internal) |
+| PostgreSQL | 5432 | 5432 | Database |
+| Redis | 6379 | 6379 | Cache Service |
 
 ### Data Persistence
 

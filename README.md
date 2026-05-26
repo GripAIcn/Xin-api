@@ -131,6 +131,14 @@ npm run dev
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `PROXY_PORT` | `8080` | 后端服务端口 |
+| `ADMIN_PORT` | `9090` | 管理面端口 |
+| `NGINX_HTTP_PORT` | `80` | Nginx HTTP 端口 |
+| `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS 端口 |
+| `POSTGRES_USER` | `root` | PostgreSQL 用户名 |
+| `POSTGRES_PASSWORD` | `123456` | PostgreSQL 密码 |
+| `POSTGRES_DB` | `gateway` | PostgreSQL 数据库名 |
+| `POSTGRES_PORT` | `5432` | PostgreSQL 端口 |
+| `REDIS_PORT` | `6379` | Redis 端口 |
 | `GIN_MODE` | `debug` | 运行模式（debug/release）|
 | `POSTGRESQL_DSN` | - | PostgreSQL 连接字符串 |
 | `REDIS_HOST` | `127.0.0.1` | Redis 主机 |
@@ -170,8 +178,8 @@ npm run dev
 
 ```
 build/
-├── Dockerfile              # Go 后端多阶段构建
-├── Dockerfile.nginx        # Nginx 镜像（含前端产物）
+├── Dockerfile              # 前后端统一多阶段构建（Node.js + Go + Alpine）
+├── Dockerfile.nginx        # Nginx 反向代理配置
 ├── docker-compose.yml      # 服务编排（PostgreSQL + Redis + App + Nginx）
 ├── .dockerignore          # Docker 构建忽略文件
 ├── nginx/                 # Nginx 配置文件
@@ -208,11 +216,35 @@ docker-compose down
 ./scripts/deploy.sh start    # 启动所有服务
 ./scripts/deploy.sh stop     # 停止所有服务
 ./scripts/deploy.sh restart  # 重启所有服务
-./scripts/deploy.sh logs     # 查看日志
+./scripts/deploy.sh logs     # 查看所有日志
+./scripts/deploy.sh logs app      # 查看应用日志（前后端）
+./scripts/deploy.sh logs nginx    # 查看 Nginx 日志
+./scripts/deploy.sh logs postgres # 查看数据库日志
+./scripts/deploy.sh logs redis    # 查看缓存日志
 ./scripts/deploy.sh status   # 查看服务状态
 ./scripts/deploy.sh build    # 重新构建镜像
+./scripts/deploy.sh health   # 检查服务健康状态
 ./scripts/deploy.sh update   # 更新代码并重启服务
 ```
+
+### 服务架构
+
+```
+用户请求 → Nginx (80/443)
+    ├── /v1/*  → 后端 API 服务 (app:8080)
+    └── /*     → 前端静态文件 (app:8080)
+
+后端依赖：PostgreSQL + Redis
+```
+
+### 服务端口
+
+| 服务 | 容器端口 | 主机端口 | 说明 |
+|------|---------|---------|------|
+| Nginx | 80/443 | 80/443 | Web 入口（统一） |
+| Xin-api | 8080 | - | 后端 + 前端静态文件（内部） |
+| PostgreSQL | 5432 | 5432 | 数据库 |
+| Redis | 6379 | 6379 | 缓存服务 |
 
 ### 数据持久化
 
