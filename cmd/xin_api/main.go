@@ -43,7 +43,7 @@ func main() {
 	go breaker.RecoveryLoop(context.Background(), cfg.CircuitBreaker.RecoveryInterval)
 
 	// 6. 构建无状态控制面 Engine
-	//gin.SetMode(gin.ReleaseMode) // 生产环境切换为 Release 模式以榨干 Gin 的性能
+	gin.SetMode(gin.ReleaseMode) // 生产环境切换为 Release 模式以榨干 Gin 的性能
 	r := gin.New()
 	r.Use(gin.Recovery()) // 引入崩溃恢复切面，防止单点故障引发多米诺骨牌级雪崩
 
