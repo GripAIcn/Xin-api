@@ -65,7 +65,7 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/Xin-api.git
+git clone https://github.com/GripAIcn/Xin-api.git
 cd Xin-api
 
 # 2. Configure environment variables

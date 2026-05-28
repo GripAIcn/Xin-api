@@ -65,7 +65,7 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-org/Xin-api.git
+git clone https://github.com/GripAIcn/Xin-api.git
 cd Xin-api
 
 # 2. 配置环境变量
