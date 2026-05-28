@@ -7,7 +7,9 @@ WORKDIR /web
 
 COPY web/package.json web/package-lock.json ./
 
-RUN npm ci --ignore-scripts
+# 💡 顺手优化：设置淘宝 npm 镜像源，加速前端依赖下载
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm ci --ignore-scripts
 
 COPY web/ .
 
@@ -24,11 +26,14 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 
+# 💡 核心优化：设置国内 Go 模块代理，解决下载慢/卡住的问题
+ENV GOPROXY=https://goproxy.cn,direct
+
 RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOMAXPROCS=1 go build \
     -ldflags="-w -s" \
     -o xin-api \
     ./cmd/xin_api/main.go
