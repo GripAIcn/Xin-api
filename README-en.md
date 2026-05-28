@@ -131,27 +131,28 @@ The frontend dev server runs on `http://localhost:5173` by default.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PROXY_PORT` | `8080` | Backend service port |
-| `ADMIN_PORT` | `9090` | Admin panel port |
-| `NGINX_HTTP_PORT` | `80` | Nginx HTTP port |
-| `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS port |
+| `NGINX_HTTP_PORT` | `80` | Nginx HTTP port (Docker Compose only) |
+| `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS port (Docker Compose only) |
+| `GIN_MODE` | `release` | Run mode (debug/release) |
+| `LOG_LEVEL` | `info` | Log level |
+| `POSTGRES_HOST` | `127.0.0.1` | PostgreSQL host |
 | `POSTGRES_USER` | `root` | PostgreSQL username |
 | `POSTGRES_PASSWORD` | `123456` | PostgreSQL password |
 | `POSTGRES_DB` | `gateway` | PostgreSQL database name |
 | `POSTGRES_PORT` | `5432` | PostgreSQL port |
-| `REDIS_PORT` | `6379` | Redis port |
-| `GIN_MODE` | `debug` | Run mode (debug/release) |
-| `POSTGRESQL_DSN` | - | PostgreSQL connection string |
 | `REDIS_HOST` | `127.0.0.1` | Redis host |
 | `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_PASSWORD` | - | Redis password |
-| `JWT_SECRET` | - | JWT signing secret |
+| `REDIS_PASSWORD` | `123456` | Redis password |
+| `REDIS_DB` | `0` | Redis database number |
+| `REDIS_POOL_SIZE` | `20` | Redis connection pool size |
+| `JWT_SECRET` | `123456zbcd+-` | JWT signing secret (must change in production) |
 | `JWT_EXPIRE` | `24h` | JWT expiration time |
 | `CB_FAILURE_THRESHOLD` | `5` | Circuit breaker failure threshold |
 | `CB_RECOVERY_INTERVAL` | `60s` | Circuit breaker recovery interval |
-| `PROXY_REQUEST_TIMEOUT` | `120s` | Upstream request timeout |
-| `PROXY_MAX_BODY_MB` | `10` | Max request body size |
-| `DEFAULT_RPM` | `60` | Default requests per minute limit |
-| `DEFAULT_TPM` | `100000` | Default tokens per minute limit |
+| `PROXY_REQUEST_TIMEOUT` | `180s` | Upstream request timeout |
+| `PROXY_MAX_BODY_MB` | `10` | Max request body size (MB) |
+| `DEFAULT_RPM` | `60` | Default requests per minute limit (Docker Compose only) |
+| `DEFAULT_TPM` | `100000` | Default tokens per minute limit (Docker Compose only) |
 
 ---
 
