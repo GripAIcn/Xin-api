@@ -156,7 +156,20 @@ npm run dev
 
 ---
 
+## 🌐 在线演示
+
+访问 [http://api.gripai.cn/](http://api.gripai.cn/) 体验 Xin API 管理后台
+
+- **账号**：admin
+- **密码**：12345678
+
+---
+
 ## 📸 界面预览
+
+### 仪表盘
+
+![仪表盘](screenshot/dashboard.png)
 
 ### 管理后台功能
 

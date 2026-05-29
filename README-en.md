@@ -156,7 +156,20 @@ The frontend dev server runs on `http://localhost:5173` by default.
 
 ---
 
-## 📸 Screenshots
+## 🌐 Live Demo
+
+Try Xin API Admin Dashboard at [http://api.gripai.cn/](http://api.gripai.cn/)
+
+- **Username**: admin
+- **Password**: 12345678
+
+---
+
+##  Screenshots
+
+### Dashboard
+
+![Dashboard](screenshot/dashboard.png)
 
 ### Admin Dashboard Features
 
