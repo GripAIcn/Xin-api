@@ -87,7 +87,14 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "项目组修改成功")
+	group, err := h.groupRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		logger.Error(c.Request.Context(), "fetch updated group failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	response.AdminSuccess(c, group)
 }
 
 // UpdateStatus 启停项目组状态
@@ -110,7 +117,14 @@ func (h *GroupHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "状态更新成功")
+	group, err := h.groupRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		logger.Error(c.Request.Context(), "fetch updated group failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	response.AdminSuccess(c, group)
 }
 
 // ListGroups 获取全部项目组

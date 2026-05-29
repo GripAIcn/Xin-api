@@ -48,7 +48,7 @@ func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "渠道创建成功")
+	response.AdminSuccess(c, channel)
 }
 
 // DeleteChannel 软删除渠道
@@ -101,7 +101,7 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "渠道更新成功")
+	response.AdminSuccess(c, channel)
 }
 
 // ListChannelsByGroup 获取项目组名下的全量渠道
