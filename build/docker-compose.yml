@@ -55,7 +55,12 @@ services:
       PROXY_PORT: ${PROXY_PORT:-8080}
       GIN_MODE: ${GIN_MODE:-release}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      POSTGRESQL_DSN: host=postgres user=${POSTGRES_USER:-root} password=${POSTGRES_PASSWORD:-123456} dbname=${POSTGRES_DB:-gateway} port=5432 sslmode=disable TimeZone=Asia/Shanghai
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-123456}
+      POSTGRES_DB: ${POSTGRES_DB:-gateway}
+      POSTGRES_SSLMODE: disable
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
@@ -70,6 +75,7 @@ services:
       DEFAULT_RPM: ${DEFAULT_RPM:-60}
       DEFAULT_TPM: ${DEFAULT_TPM:-100000}
       TZ: Asia/Shanghai
+
     expose:
       - "8080"
     depends_on:
