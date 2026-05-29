@@ -18,6 +18,7 @@ import {
   Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
 } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'vue-sonner'
 import { ArrowLeft, Plus, Pencil, Trash2, Copy, Check, AlertTriangle } from 'lucide-vue-next'
 
@@ -58,8 +59,11 @@ onMounted(async () => {
       channelStore.fetchByGroup(groupId.value),
       apiKeyStore.fetchAll(groupId.value),
     ])
-  } catch {
-    toast.error('加载数据失败')
+  } catch (e: any) {
+    // 只在真正出错时提示，空数据不提示
+    if (e?.message && e.message !== 'Response data is empty') {
+      toast.error('加载数据失败')
+    }
   } finally {
     loading.value = false
   }

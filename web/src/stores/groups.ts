@@ -10,15 +10,20 @@ export const useGroupStore = defineStore('groups', () => {
   async function fetchAll() {
     loading.value = true
     try {
-      groups.value = await groupsApi.listGroups()
+      const result = await groupsApi.listGroups()
+      groups.value = result || []
+    } catch (error) {
+      groups.value = []
+      throw error
     } finally {
       loading.value = false
     }
   }
 
   async function create(name: string) {
-    const group = await groupsApi.createGroup({ name })
-    groups.value.push(group)
+    const newGroup = await groupsApi.createGroup({ name })
+    // 将新创建的项目组添加到列表中
+    groups.value.unshift(newGroup)
   }
 
   async function update(id: number, name: string) {
@@ -30,9 +35,8 @@ export const useGroupStore = defineStore('groups', () => {
   }
 
   async function toggleStatus(id: number, currentStatus: number) {
-    const newStatus = currentStatus === 1 ? 0 : 1
     const updated = await groupsApi.updateGroupStatus(id, {
-      status: newStatus,
+      status: currentStatus === 1 ? 0 : 1,
     })
     const index = groups.value.findIndex((g) => g.id === id)
     if (index !== -1) {

@@ -11,9 +11,10 @@ export const useApiKeyStore = defineStore('apikeys', () => {
   async function fetchAll(groupId?: number) {
     loading.value = true
     try {
-      apiKeys.value = await apikeysApi.listApiKeys(groupId)
+      const result = await apikeysApi.listApiKeys(groupId)
+      apiKeys.value = result || []
     } catch (error: any) {
-      // 重新抛出错误以便组件可以处理
+      apiKeys.value = []
       throw error
     } finally {
       loading.value = false

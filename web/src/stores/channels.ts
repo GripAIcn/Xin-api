@@ -10,9 +10,10 @@ export const useChannelStore = defineStore('channels', () => {
   async function fetchByGroup(groupId?: number) {
     loading.value = true
     try {
-      channels.value = await channelsApi.listChannelsByGroup(groupId)
+      const result = await channelsApi.listChannelsByGroup(groupId)
+      channels.value = result || []
     } catch (error: any) {
-      // 重新抛出错误以便组件可以处理
+      channels.value = []
       throw error
     } finally {
       loading.value = false
