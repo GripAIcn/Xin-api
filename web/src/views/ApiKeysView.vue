@@ -3,7 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useApiKeyStore } from '@/stores/apikeys'
 import { useGroupStore } from '@/stores/groups'
 import { Plus, Delete, CopyDocument, Check } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 const apiKeyStore = useApiKeyStore()
 const groupStore = useGroupStore()
@@ -15,6 +15,10 @@ const creating = ref(false)
 const newKeyValue = ref('')
 const showNewKeyDialog = ref(false)
 const keyCopied = ref(false)
+
+// 删除确认弹窗
+const showDeleteDialog = ref(false)
+const deleteKeyInfo = ref<any>(null)
 
 const loadKeys = async () => {
   loading.value = true
@@ -83,23 +87,20 @@ const copyKey = async () => {
   }
 }
 
-const handleDelete = async (row: any) => {
+const openDeleteDialog = (row: any) => {
+  deleteKeyInfo.value = row
+  showDeleteDialog.value = true
+}
+
+const handleDelete = async () => {
+  if (!deleteKeyInfo.value) return
   try {
-    await ElMessageBox.confirm(
-      '确定要删除此 API Key 吗？使用此 Key 的应用将立即无法访问网关。',
-      '确认删除',
-      {
-        confirmButtonText: '确认删除',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-    await apiKeyStore.remove(row.key)
+    await apiKeyStore.remove(deleteKeyInfo.value.key)
     ElMessage.success('API Key 已删除')
+    showDeleteDialog.value = false
+    deleteKeyInfo.value = null
   } catch (e: any) {
-    if (e !== 'cancel') {
-      ElMessage.error(e.message || '删除失败')
-    }
+    ElMessage.error(e.message || '删除失败')
   }
 }
 
@@ -175,7 +176,7 @@ const formatDate = (date: string) => {
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button link type="danger" :icon="Delete" @click="handleDelete(row)" />
+            <el-button link type="danger" :icon="Delete" @click="openDeleteDialog(row)" />
           </template>
         </el-table-column>
         <template #empty>
@@ -205,6 +206,29 @@ const formatDate = (date: string) => {
       </div>
       <template #footer>
         <el-button type="primary" @click="showNewKeyDialog = false">我已保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Delete Confirm Dialog -->
+    <el-dialog
+      v-model="showDeleteDialog"
+      title="确认删除 API Key"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        title="删除后，使用此 Key 的应用将立即无法访问网关。"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+      <div class="delete-key-display" v-if="deleteKeyInfo">
+        <span class="delete-key-label">API Key：</span>
+        <code class="delete-key-value">{{ maskKey(deleteKeyInfo.key) }}</code>
+      </div>
+      <template #footer>
+        <el-button @click="showDeleteDialog = false">取消</el-button>
+        <el-button type="danger" @click="handleDelete">确认删除</el-button>
       </template>
     </el-dialog>
   </div>
@@ -252,6 +276,29 @@ const formatDate = (date: string) => {
   flex: 1;
   font-family: monospace;
   font-size: 14px;
+  word-break: break-all;
+}
+
+.delete-key-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  border-left: 3px solid #409eff;
+}
+
+.delete-key-label {
+  font-size: 13px;
+  color: #909399;
+  flex-shrink: 0;
+}
+
+.delete-key-value {
+  font-family: monospace;
+  font-size: 14px;
+  color: #606266;
   word-break: break-all;
 }
 

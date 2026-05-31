@@ -164,11 +164,23 @@ const copyKey = async () => {
 
 const handleDeleteKey = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确定要删除此 API Key 吗？使用此 Key 的应用将立即无法访问网关。', '确认删除', {
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
+    await ElMessageBox.confirm(
+      `<div class="delete-confirm-content">
+        <p class="delete-warning">删除后，使用此 Key 的应用将<strong>立即无法访问</strong>网关。</p>
+        <div class="delete-key-info">
+          <span class="delete-key-label">API Key：</span>
+          <code class="delete-key-value">${maskKey(row.key)}</code>
+        </div>
+      </div>`,
+      '确认删除 API Key',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+        customClass: 'delete-confirm-dialog'
+      }
+    )
     await apiKeyStore.remove(row.key)
     ElMessage.success('API Key 已删除')
   } catch (e: any) {

@@ -92,7 +92,7 @@ const toggleSidebar = () => {
     <el-aside
       v-if="!isMobile"
       class="sidebar"
-      :width="isCollapse ? '64px' : '220px'"
+      :width="isCollapse ? '64px' : '200px'"
     >
       <div class="sidebar-header">
         <div class="logo">
@@ -231,6 +231,7 @@ const toggleSidebar = () => {
   flex-direction: column;
   position: relative;
   transition: width 0.3s;
+  overflow: hidden;
 }
 
 .sidebar-header {
@@ -269,18 +270,20 @@ const toggleSidebar = () => {
 .sidebar-menu {
   flex: 1;
   border-right: none;
+  overflow: hidden;
 }
 
 .sidebar-footer {
-  padding: 16px;
+  padding: 12px 16px;
   border-top: 1px solid #1f2d3d;
+  flex-shrink: 0;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .user-avatar {
