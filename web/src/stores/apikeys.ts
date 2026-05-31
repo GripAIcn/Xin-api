@@ -19,7 +19,8 @@ export const useApiKeyStore = defineStore('apikeys', () => {
   }
 
   async function remove(key: string) {
-    await apiKeysApi.deleteApiKey(key)
+    // 根据 API 文档，key 通过请求体传递
+    await apiKeysApi.deleteApiKey({ key })
     apiKeys.value = apiKeys.value.filter(k => k.key !== key)
   }
 

@@ -94,3 +94,7 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   group_id: number
 }
+
+export interface DeleteApiKeyRequest {
+  key: string
+}
