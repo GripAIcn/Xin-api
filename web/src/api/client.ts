@@ -19,6 +19,7 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response: AxiosResponse<AdminResponse<unknown>>) => {
     const data = response.data
+    // 后端业务状态码：20000 表示成功
     if (data.code !== undefined && data.code !== 20000) {
       return Promise.reject(new Error(data.message || 'Request failed'))
     }
@@ -39,6 +40,7 @@ export function handleApiResponse<T>(response: {
   data: { code: number; message: string; data?: T }
 }): T {
   const { code, message, data } = response.data
+  // 后端业务状态码：20000 表示成功
   if (code !== 20000) {
     throw new Error(message || 'Request failed')
   }
