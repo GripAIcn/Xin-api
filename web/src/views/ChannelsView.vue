@@ -2,34 +2,37 @@
 import { ref, onMounted, watch } from 'vue'
 import { useChannelStore } from '@/stores/channels'
 import { useGroupStore } from '@/stores/groups'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
-import ErrorAlertDialog from '@/components/ErrorAlertDialog.vue'
+import { Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const channelStore = useChannelStore()
 const groupStore = useGroupStore()
 
 const loading = ref(true)
 const selectedGroupId = ref<string>('')
-const channelDialogOpen = ref(false)
-const deleteDialogOpen = ref(false)
-const editingChannel = ref<any>(null)
-const deletingChannel = ref<any>(null)
-const channelForm = ref({ group_id: '', name: '', model_mapping: '', base_url: '', api_key: '', weight: 1 })
+const dialogVisible = ref(false)
+const dialogType = ref<'create' | 'edit'>('create')
+const formRef = ref()
 const submitting = ref(false)
 
-// 错误弹窗状态
-const errorDialog = ref({ open: false, title: '提示', message: '' })
-const showError = (message: string, title = '提示') => {
-  errorDialog.value = { open: true, title, message }
+const form = ref({
+  id: 0,
+  group_id: '',
+  name: '',
+  model_mapping: '',
+  base_url: '',
+  api_key: '',
+  weight: 1,
+  status: 1
+})
+
+const rules = {
+  group_id: [{ required: true, message: '请选择项目组', trigger: 'change' }],
+  name: [{ required: true, message: '请输入渠道名称', trigger: 'blur' }, { min: 2, message: '至少 2 个字符', trigger: 'blur' }],
+  model_mapping: [{ required: true, message: '请输入模型映射', trigger: 'blur' }],
+  base_url: [{ required: true, message: '请输入 Base URL', trigger: 'blur' }],
+  api_key: [{ required: true, message: '请输入 API Key', trigger: 'blur' }],
+  weight: [{ required: true, message: '请输入权重', trigger: 'blur' }]
 }
 
 const loadChannels = async () => {
@@ -51,13 +54,13 @@ const loadChannels = async () => {
     }
 
     if (groupId === undefined) {
-      showError('请先创建项目组')
+      ElMessage.warning('请先创建项目组')
       return
     }
 
     await channelStore.fetchByGroup(groupId)
   } catch (e: any) {
-    showError(e?.message || '加载渠道列表失败')
+    ElMessage.error(e?.message || '加载渠道列表失败')
   } finally {
     loading.value = false
   }
@@ -73,85 +76,98 @@ onMounted(async () => {
 watch(selectedGroupId, () => loadChannels())
 
 const openCreate = () => {
-  editingChannel.value = null
-  channelForm.value = { group_id: selectedGroupId.value || '', name: '', model_mapping: '', base_url: '', api_key: '', weight: 1 }
-  channelDialogOpen.value = true
-}
-
-const openEdit = (ch: any) => {
-  editingChannel.value = ch
-  channelForm.value = {
-    group_id: String(ch.group_id),
-    name: ch.name,
-    model_mapping: ch.model_mapping,
-    base_url: ch.base_url,
-    api_key: ch.api_key,
-    weight: ch.weight,
+  dialogType.value = 'create'
+  form.value = {
+    id: 0,
+    group_id: selectedGroupId.value || '',
+    name: '',
+    model_mapping: '',
+    base_url: '',
+    api_key: '',
+    weight: 1,
+    status: 1
   }
-  channelDialogOpen.value = true
+  dialogVisible.value = true
 }
 
-const validateForm = () => {
-  const f = channelForm.value
-  const groupId = Number(f.group_id)
-  if (!groupId) return '请选择项目组'
-  if (!f.name || f.name.length < 2) return '渠道名称至少 2 个字符'
-  if (!f.model_mapping) return '请输入模型映射'
-  if (!f.base_url) return '请输入 Base URL'
-  if (!f.api_key) return '请输入 API Key'
-  if (f.weight < 1 || f.weight > 100) return '权重范围 1-100'
-  return null
-}
-
-const handleSave = async () => {
-  const error = validateForm()
-  if (error) {
-    showError(error)
-    return
+const openEdit = (row: any) => {
+  dialogType.value = 'edit'
+  form.value = {
+    id: row.id,
+    group_id: String(row.group_id),
+    name: row.name,
+    model_mapping: row.model_mapping,
+    base_url: row.base_url,
+    api_key: row.api_key,
+    weight: row.weight,
+    status: row.status
   }
+  dialogVisible.value = true
+}
 
-  const f = channelForm.value
-  const groupId = Number(f.group_id)
+const handleSubmit = async () => {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
 
   submitting.value = true
   try {
-    if (editingChannel.value) {
-      await channelStore.update(editingChannel.value.id, { ...f, group_id: groupId, status: editingChannel.value.status })
-      toast.success('渠道更新成功')
+    const groupId = Number(form.value.group_id)
+    if (dialogType.value === 'edit') {
+      await channelStore.update(form.value.id, {
+        group_id: groupId,
+        name: form.value.name,
+        model_mapping: form.value.model_mapping,
+        base_url: form.value.base_url,
+        api_key: form.value.api_key,
+        weight: form.value.weight,
+        status: form.value.status
+      })
+      ElMessage.success('渠道更新成功')
     } else {
-      await channelStore.create({ ...f, group_id: groupId })
-      toast.success('渠道创建成功')
+      await channelStore.create({
+        group_id: groupId,
+        name: form.value.name,
+        model_mapping: form.value.model_mapping,
+        base_url: form.value.base_url,
+        api_key: form.value.api_key,
+        weight: form.value.weight
+      })
+      ElMessage.success('渠道创建成功')
     }
-    channelDialogOpen.value = false
+    dialogVisible.value = false
   } catch (e: any) {
-    showError(e.message || '操作失败')
+    ElMessage.error(e.message || '操作失败')
   } finally {
     submitting.value = false
   }
 }
 
-const openDelete = (ch: any) => {
-  deletingChannel.value = ch
-  deleteDialogOpen.value = true
-}
-
-const handleDelete = async () => {
-  submitting.value = true
+const handleDelete = async (row: any) => {
   try {
-    await channelStore.remove(deletingChannel.value.id)
-    toast.success('渠道已删除')
-    deleteDialogOpen.value = false
+    await ElMessageBox.confirm(`确定要删除渠道「${row.name}」吗？`, '确认删除', {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await channelStore.remove(row.id)
+    ElMessage.success('渠道已删除')
   } catch (e: any) {
-    showError(e.message || '删除失败')
-  } finally {
-    submitting.value = false
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
+    }
   }
 }
 
-const statusBadge = (status: number) => {
-  if (status === 1) return { label: '正常', variant: 'default' as const }
-  if (status === 2) return { label: '熔断', variant: 'destructive' as const }
-  return { label: '禁用', variant: 'secondary' as const }
+const statusType = (status: number) => {
+  if (status === 1) return 'success'
+  if (status === 2) return 'danger'
+  return 'info'
+}
+
+const statusLabel = (status: number) => {
+  if (status === 1) return '正常'
+  if (status === 2) return '熔断'
+  return '禁用'
 }
 
 const groupName = (groupId: number) => {
@@ -160,154 +176,137 @@ const groupName = (groupId: number) => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
+  <div class="channels-page">
+    <!-- 页面标题 -->
+    <div class="page-header">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight">渠道管理</h1>
-        <p class="text-muted-foreground">管理所有上游供应商渠道</p>
+        <h2 class="page-title">渠道管理</h2>
+        <p class="page-desc">管理所有上游供应商渠道</p>
       </div>
-      <Button @click="openCreate" :disabled="!groupStore.groups?.length">
-        <Plus class="h-4 w-4 mr-1" />添加渠道
-      </Button>
+      <el-button type="primary" :icon="Plus" @click="openCreate" :disabled="!groupStore.groups?.length">
+        添加渠道
+      </el-button>
     </div>
 
-    <!-- Filter -->
-    <div class="flex items-center gap-4">
-      <div class="w-64">
-        <Select v-model="selectedGroupId">
-          <SelectTrigger>
-            <SelectValue placeholder="全部项目组" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部项目组</SelectItem>
-            <SelectItem v-for="g in groupStore.groups" :key="g.id" :value="String(g.id)">
-              {{ g.name }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
+    <!-- 筛选器 -->
+    <el-card shadow="never" class="filter-card">
+      <el-select v-model="selectedGroupId" placeholder="选择项目组" style="width: 240px">
+        <el-option label="全部项目组" value="all" />
+        <el-option
+          v-for="g in groupStore.groups"
+          :key="g.id"
+          :label="g.name"
+          :value="String(g.id)"
+        />
+      </el-select>
+    </el-card>
 
-    <Card>
-      <CardContent class="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>所属项目组</TableHead>
-              <TableHead>名称</TableHead>
-              <TableHead>模型映射</TableHead>
-              <TableHead>Base URL</TableHead>
-              <TableHead>权重</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead class="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-if="!channelStore.channels?.length">
-              <TableCell colspan="8" class="text-center text-muted-foreground py-8">
-                {{ loading ? '加载中...' : '暂无渠道' }}
-              </TableCell>
-            </TableRow>
-            <TableRow v-for="ch in channelStore.channels" :key="ch.id">
-              <TableCell class="font-mono text-sm">{{ ch.id }}</TableCell>
-              <TableCell>{{ groupName(ch.group_id) }}</TableCell>
-              <TableCell class="font-medium">{{ ch.name }}</TableCell>
-              <TableCell class="font-mono text-sm max-w-[150px] truncate">{{ ch.model_mapping }}</TableCell>
-              <TableCell class="font-mono text-sm max-w-[200px] truncate">{{ ch.base_url }}</TableCell>
-              <TableCell>{{ ch.weight }}</TableCell>
-              <TableCell>
-                <Badge :variant="statusBadge(ch.status).variant">{{ statusBadge(ch.status).label }}</Badge>
-              </TableCell>
-              <TableCell class="text-right">
-                <div class="flex justify-end gap-1">
-                  <Button variant="ghost" size="icon" @click="openEdit(ch)">
-                    <Pencil class="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" @click="openDelete(ch)">
-                    <Trash2 class="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <!-- 数据表格 -->
+    <el-card shadow="never">
+      <el-table
+        v-loading="loading"
+        :data="channelStore.channels"
+        stripe
+        style="width: 100%"
+      >
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column label="所属项目组" min-width="150">
+          <template #default="{ row }">
+            {{ groupName(row.group_id) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="name" label="名称" min-width="150" />
+        <el-table-column prop="model_mapping" label="模型映射" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="base_url" label="Base URL" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="weight" label="权重" width="80" />
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="statusType(row.status)" size="small">
+              {{ statusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="150" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" :icon="Edit" @click="openEdit(row)" />
+            <el-button link type="danger" :icon="Delete" @click="handleDelete(row)" />
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="暂无渠道" />
+        </template>
+      </el-table>
+    </el-card>
 
-    <!-- Channel Form Dialog -->
-    <Dialog v-model:open="channelDialogOpen">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ editingChannel ? '编辑渠道' : '添加渠道' }}</DialogTitle>
-          <DialogDescription>配置上游渠道的连接信息</DialogDescription>
-        </DialogHeader>
-        <form @submit.prevent="handleSave">
-          <div class="space-y-3 py-2">
-            <div class="space-y-1.5">
-              <Label>所属项目组</Label>
-              <Select v-if="!editingChannel" v-model="channelForm.group_id">
-                <SelectTrigger>
-                  <SelectValue placeholder="选择项目组" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="g in groupStore.groups" :key="g.id" :value="String(g.id)">{{ g.name }}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input v-else :value="groupName(Number(channelForm.group_id))" disabled />
-            </div>
-            <div class="space-y-1.5">
-              <Label>渠道名称</Label>
-              <Input v-model="channelForm.name" placeholder="例如：OpenAI 主通道" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>模型映射</Label>
-              <Input v-model="channelForm.model_mapping" placeholder="例如：gpt-4o,deepseek-chat" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>Base URL</Label>
-              <Input v-model="channelForm.base_url" placeholder="例如：https://api.openai.com" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>API Key</Label>
-              <Input v-model="channelForm.api_key" placeholder="上游供应商 API Key" type="password" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>权重 (1-100)</Label>
-              <Input v-model.number="channelForm.weight" type="number" min="1" max="100" />
-            </div>
-          </div>
-          <DialogFooter class="mt-4">
-            <DialogClose as-child>
-              <Button variant="outline" type="button">取消</Button>
-            </DialogClose>
-            <Button type="submit" :disabled="submitting">
-              {{ submitting ? '保存中...' : '保存' }}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Delete Dialog -->
-    <Dialog v-model:open="deleteDialogOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>确认删除</DialogTitle>
-          <DialogDescription>确定要删除渠道「{{ deletingChannel?.name }}」吗？</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose as-child>
-            <Button variant="outline">取消</Button>
-          </DialogClose>
-          <Button variant="destructive" @click="handleDelete" :disabled="submitting">
-            {{ submitting ? '删除中...' : '确认删除' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Error Alert Dialog -->
-    <ErrorAlertDialog v-model:open="errorDialog.open" :title="errorDialog.title" :message="errorDialog.message" />
+    <!-- 创建/编辑对话框 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogType === 'create' ? '添加渠道' : '编辑渠道'"
+      width="600px"
+    >
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form-item label="所属项目组" prop="group_id">
+          <el-select v-model="form.group_id" placeholder="选择项目组" style="width: 100%" :disabled="dialogType === 'edit'">
+            <el-option
+              v-for="g in groupStore.groups"
+              :key="g.id"
+              :label="g.name"
+              :value="String(g.id)"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="渠道名称" prop="name">
+          <el-input v-model="form.name" placeholder="例如：OpenAI 主通道" />
+        </el-form-item>
+        <el-form-item label="模型映射" prop="model_mapping">
+          <el-input v-model="form.model_mapping" placeholder="例如：gpt-4o,deepseek-chat" />
+        </el-form-item>
+        <el-form-item label="Base URL" prop="base_url">
+          <el-input v-model="form.base_url" placeholder="例如：https://api.openai.com" />
+        </el-form-item>
+        <el-form-item label="API Key" prop="api_key">
+          <el-input v-model="form.api_key" type="password" placeholder="上游供应商 API Key" show-password />
+        </el-form-item>
+        <el-form-item label="权重" prop="weight">
+          <el-input-number v-model="form.weight" :min="1" :max="100" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">
+          {{ submitting ? '保存中...' : '保存' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.channels-page {
+  max-width: 1200px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.page-desc {
+  font-size: 14px;
+  color: #909399;
+  margin: 0;
+}
+
+.filter-card {
+  margin-bottom: 20px;
+}
+</style>

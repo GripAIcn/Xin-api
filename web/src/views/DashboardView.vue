@@ -5,10 +5,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useGroupStore } from '@/stores/groups'
 import { useChannelStore } from '@/stores/channels'
 import { useApiKeyStore } from '@/stores/apikeys'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
-import { FolderKanban, Cable, Key, ArrowRight } from 'lucide-vue-next'
+import {
+  Folder,
+  Connection,
+  Key,
+  ArrowRight,
+} from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -37,26 +39,26 @@ const statsCards = computed(() => [
   {
     title: '项目组',
     value: groupStore.groups?.length ?? 0,
-    icon: FolderKanban,
+    icon: Folder,
     path: '/groups',
-    color: 'text-blue-600',
-    bg: 'bg-blue-100',
+    color: '#409EFF',
+    bg: '#ecf5ff',
   },
   {
     title: '渠道',
     value: channelStore.channels?.length ?? 0,
-    icon: Cable,
+    icon: Connection,
     path: '/channels',
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-100',
+    color: '#67C23A',
+    bg: '#f0f9eb',
   },
   {
     title: 'API Key',
     value: apiKeyStore.apiKeys?.length ?? 0,
     icon: Key,
     path: '/apikeys',
-    color: 'text-purple-600',
-    bg: 'bg-purple-100',
+    color: '#E6A23C',
+    bg: '#fdf6ec',
   },
 ])
 
@@ -68,61 +70,172 @@ const quickActions = [
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight">
+  <div class="dashboard">
+    <!-- 欢迎区域 -->
+    <div class="welcome-section">
+      <h1 class="welcome-title">
         欢迎回来，{{ authStore.username || '管理员' }}
       </h1>
-      <p class="text-muted-foreground">这是 Xin-api 网关控制面板，在这里管理你的项目组、渠道和 API Key。</p>
+      <p class="welcome-desc">
+        这是 Xin-api 网关控制面板，在这里管理你的项目组、渠道和 API Key。
+      </p>
     </div>
 
-    <!-- Stats -->
-    <div class="grid gap-4 sm:grid-cols-3">
-      <div v-for="card in statsCards" :key="card.title">
-        <Card
-          class="cursor-pointer transition-colors hover:bg-accent/50"
+    <!-- 统计卡片 -->
+    <el-row :gutter="20" class="stats-row">
+      <el-col :xs="24" :sm="8" v-for="card in statsCards" :key="card.title">
+        <el-card
+          class="stat-card"
+          shadow="hover"
           @click="router.push(card.path)"
         >
-          <CardContent class="p-6">
-            <div v-if="loading">
-              <Skeleton class="h-4 w-20 mb-2" />
-              <Skeleton class="h-8 w-12" />
+          <el-skeleton :rows="2" animated v-if="loading" />
+          <div v-else class="stat-content">
+            <div class="stat-info">
+              <p class="stat-title">{{ card.title }}</p>
+              <p class="stat-value" :style="{ color: card.color }">
+                {{ card.value }}
+              </p>
             </div>
-            <template v-else>
-              <div class="flex items-center justify-between">
-                <div>
-                  <p class="text-sm text-muted-foreground">{{ card.title }}</p>
-                  <p class="text-2xl font-bold mt-1">{{ card.value }}</p>
-                </div>
-                <div :class="cn('flex h-10 w-10 items-center justify-center rounded-full', card.bg)">
-                  <component :is="card.icon" :class="cn('h-5 w-5', card.color)" />
-                </div>
-              </div>
-            </template>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <Card>
-      <CardHeader>
-        <CardTitle class="text-base">快速操作</CardTitle>
-        <CardDescription>常用管理入口</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div class="flex flex-wrap gap-3">
-          <div
-            v-for="action in quickActions"
-            :key="action.path"
-            @click="router.push(action.path)"
-            class="flex cursor-pointer items-center gap-2 rounded-lg border bg-card px-4 py-2 text-sm font-medium transition-colors hover:bg-accent"
-          >
-            {{ action.label }}
-            <ArrowRight class="h-3.5 w-3.5" />
+            <div
+              class="stat-icon"
+              :style="{ background: card.bg, color: card.color }"
+            >
+              <el-icon :size="24">
+                <component :is="card.icon" />
+              </el-icon>
+            </div>
           </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- 快速操作 -->
+    <el-card class="quick-actions" shadow="never">
+      <template #header>
+        <div class="card-header">
+          <span>快速操作</span>
+          <span class="header-desc">常用管理入口</span>
         </div>
-      </CardContent>
-    </Card>
+      </template>
+      <div class="actions-list">
+        <el-button
+          v-for="action in quickActions"
+          :key="action.path"
+          class="action-btn"
+          @click="router.push(action.path)"
+        >
+          {{ action.label }}
+          <el-icon class="action-icon"><ArrowRight /></el-icon>
+        </el-button>
+      </div>
+    </el-card>
   </div>
 </template>
+
+<style scoped>
+.dashboard {
+  max-width: 1200px;
+}
+
+.welcome-section {
+  margin-bottom: 24px;
+}
+
+.welcome-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.welcome-desc {
+  font-size: 14px;
+  color: #909399;
+  margin: 0;
+}
+
+.stats-row {
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  cursor: pointer;
+  transition: transform 0.2s;
+  margin-bottom: 20px;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+}
+
+.stat-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-title {
+  font-size: 14px;
+  color: #909399;
+  margin: 0 0 8px 0;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1;
+}
+
+.stat-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-actions {
+  margin-top: 8px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-header span:first-child {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.header-desc {
+  font-size: 13px;
+  color: #909399;
+  font-weight: normal;
+}
+
+.actions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-icon {
+  font-size: 12px;
+}
+</style>

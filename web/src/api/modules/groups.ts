@@ -1,40 +1,22 @@
-import apiClient, { handleApiResponse } from '@/api/client'
-import type {
-  Group,
-  CreateGroupRequest,
-  UpdateGroupRequest,
-  UpdateGroupStatusRequest,
-} from '@/types/api'
+import apiClient, { handleApiResponse } from '../client'
+import type { Group, CreateGroupRequest, UpdateGroupRequest, UpdateGroupStatusRequest } from '@/types/api'
 
-export async function listGroups(): Promise<Group[]> {
-  const response = await apiClient.get('/v1/groups')
-  return handleApiResponse<Group[]>(response)
+export function fetchGroups() {
+  return apiClient.get('/v1/groups').then(res => handleApiResponse<Group[]>(res))
 }
 
-export async function createGroup(
-  data: CreateGroupRequest,
-): Promise<Group> {
-  const response = await apiClient.post('/v1/groups', data)
-  return handleApiResponse<Group>(response)
+export function createGroup(data: CreateGroupRequest) {
+  return apiClient.post('/v1/groups', data).then(res => handleApiResponse<Group>(res))
 }
 
-export async function updateGroup(
-  id: number,
-  data: UpdateGroupRequest,
-): Promise<Group> {
-  const response = await apiClient.put(`/v1/groups/${id}`, data)
-  return handleApiResponse<Group>(response)
+export function updateGroup(id: number, data: UpdateGroupRequest) {
+  return apiClient.put(`/v1/groups/${id}`, data).then(res => handleApiResponse<Group>(res))
 }
 
-export async function updateGroupStatus(
-  id: number,
-  data: UpdateGroupStatusRequest,
-): Promise<Group> {
-  const response = await apiClient.put(`/v1/groups/${id}/status`, data)
-  return handleApiResponse<Group>(response)
+export function updateGroupStatus(id: number, data: UpdateGroupStatusRequest) {
+  return apiClient.put(`/v1/groups/${id}/status`, data).then(res => handleApiResponse<Group>(res))
 }
 
-export async function deleteGroup(id: number): Promise<void> {
-  const response = await apiClient.delete(`/v1/groups/${id}`)
-  handleApiResponse(response)
+export function deleteGroup(id: number) {
+  return apiClient.delete(`/v1/groups/${id}`).then(res => handleApiResponse<null>(res))
 }

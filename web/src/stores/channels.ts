@@ -5,42 +5,35 @@ import * as channelsApi from '@/api/modules/channels'
 
 export const useChannelStore = defineStore('channels', () => {
   const channels = ref<Channel[]>([])
-  const loading = ref(false)
 
   async function fetchByGroup(groupId?: number) {
-    loading.value = true
-    try {
-      const result = await channelsApi.listChannelsByGroup(groupId)
-      channels.value = result || []
-    } catch (error: any) {
-      channels.value = []
-      throw error
-    } finally {
-      loading.value = false
-    }
+    const data = await channelsApi.fetchChannelsByGroup(groupId)
+    channels.value = data || []
+    return data
   }
 
   async function create(data: CreateChannelRequest) {
-    const channel = await channelsApi.createChannel(data)
-    channels.value.push(channel)
+    const result = await channelsApi.createChannel(data)
+    channels.value.push(result)
+    return result
   }
 
   async function update(id: number, data: UpdateChannelRequest) {
-    const updated = await channelsApi.updateChannel(id, data)
-    const index = channels.value.findIndex((c) => c.id === id)
+    const result = await channelsApi.updateChannel(id, data)
+    const index = channels.value.findIndex(c => c.id === id)
     if (index !== -1) {
-      channels.value[index] = updated
+      channels.value[index] = result
     }
+    return result
   }
 
   async function remove(id: number) {
     await channelsApi.deleteChannel(id)
-    channels.value = channels.value.filter((c) => c.id !== id)
+    channels.value = channels.value.filter(c => c.id !== id)
   }
 
   return {
     channels,
-    loading,
     fetchByGroup,
     create,
     update,

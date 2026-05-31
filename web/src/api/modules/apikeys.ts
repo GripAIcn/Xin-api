@@ -1,30 +1,16 @@
-import apiClient, { handleApiResponse } from '@/api/client'
-import type {
-  ApiKey,
-  CreateApiKeyRequest,
-} from '@/types/api'
+import apiClient, { handleApiResponse } from '../client'
+import type { ApiKey, CreateApiKeyRequest } from '@/types/api'
 
-export async function listApiKeys(groupId?: number): Promise<ApiKey[]> {
-  // 如果有 groupId，作为查询参数传递
-  if (groupId !== undefined && groupId !== null && groupId > 0) {
-    const response = await apiClient.get('/v1/apikeys', {
-      params: { group_id: groupId }
-    })
-    return handleApiResponse<ApiKey[]>(response)
-  }
-  // 没有 groupId 时，不传递任何参数
-  const response = await apiClient.get('/v1/apikeys')
-  return handleApiResponse<ApiKey[]>(response)
+export function fetchApiKeys(groupId?: number) {
+  const url = groupId ? `/v1/apikeys?group_id=${groupId}` : '/v1/apikeys'
+  return apiClient.get(url).then(res => handleApiResponse<ApiKey[]>(res))
 }
 
-export async function createApiKey(
-  data: CreateApiKeyRequest,
-): Promise<ApiKey> {
-  const response = await apiClient.post('/v1/apikeys', data)
-  return handleApiResponse<ApiKey>(response)
+export function createApiKey(data: CreateApiKeyRequest) {
+  return apiClient.post('/v1/apikeys', data).then(res => handleApiResponse<ApiKey>(res))
 }
 
-export async function deleteApiKey(key: string): Promise<void> {
-  const response = await apiClient.delete(`/v1/apikeys/${key}`)
-  handleApiResponse(response)
+export function deleteApiKey(key: string) {
+  // 后端使用 POST 请求体传递 key
+  return apiClient.post('/v1/apikeys/delete', { key }).then(res => handleApiResponse<null>(res))
 }

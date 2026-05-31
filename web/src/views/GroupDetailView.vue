@@ -4,23 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useGroupStore } from '@/stores/groups'
 import { useChannelStore } from '@/stores/channels'
 import { useApiKeyStore } from '@/stores/apikeys'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import {
-  Card, CardHeader, CardTitle, CardDescription, CardContent,
-} from '@/components/ui/card'
-import {
-  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
-} from '@/components/ui/table'
-import {
-  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose,
-} from '@/components/ui/dialog'
-import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from 'vue-sonner'
-import { ArrowLeft, Plus, Pencil, Trash2, Copy, Check, AlertTriangle } from 'lucide-vue-next'
+import { Plus, Edit, Delete, CopyDocument, Check, ArrowLeft } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,21 +21,25 @@ const loading = ref(true)
 // New key display
 const newKeyValue = ref('')
 const showNewKeyDialog = ref(false)
-const showNewKey = ref(false)
 const keyCopied = ref(false)
 
 // Channel CRUD
-const channelDialogOpen = ref(false)
-const editingChannel = ref<any>(null)
-const channelForm = ref({ name: '', model_mapping: '', base_url: '', api_key: '', weight: 1 })
+const channelDialogVisible = ref(false)
+const channelDialogType = ref<'create' | 'edit'>('create')
+const channelFormRef = ref()
 const channelSubmitting = ref(false)
-const deleteChannelDialogOpen = ref(false)
-const deletingChannel = ref<any>(null)
+const channelForm = ref({
+  id: 0,
+  name: '',
+  model_mapping: '',
+  base_url: '',
+  api_key: '',
+  weight: 1,
+  status: 1
+})
 
-// API Key CRUD
+// API Key
 const apiKeySubmitting = ref(false)
-const deleteKeyDialogOpen = ref(false)
-const deletingKey = ref<any>(null)
 
 onMounted(async () => {
   try {
@@ -60,9 +49,8 @@ onMounted(async () => {
       apiKeyStore.fetchAll(groupId.value),
     ])
   } catch (e: any) {
-    // 只在真正出错时提示，空数据不提示
     if (e?.message && e.message !== 'Response data is empty') {
-      toast.error('加载数据失败')
+      ElMessage.error('加载数据失败')
     }
   } finally {
     loading.value = false
@@ -70,68 +58,83 @@ onMounted(async () => {
 })
 
 // === Channel Handlers ===
-const openCreateChannel = () => {
-  editingChannel.value = null
-  channelForm.value = { name: '', model_mapping: '', base_url: '', api_key: '', weight: 1 }
-  channelDialogOpen.value = true
+const channelRules = {
+  name: [{ required: true, message: '请输入渠道名称', trigger: 'blur' }, { min: 2, message: '至少 2 个字符', trigger: 'blur' }],
+  model_mapping: [{ required: true, message: '请输入模型映射', trigger: 'blur' }],
+  base_url: [{ required: true, message: '请输入 Base URL', trigger: 'blur' }],
+  api_key: [{ required: true, message: '请输入 API Key', trigger: 'blur' }],
+  weight: [{ required: true, message: '请输入权重', trigger: 'blur' }]
 }
 
-const openEditChannel = (ch: any) => {
-  editingChannel.value = ch
+const openCreateChannel = () => {
+  channelDialogType.value = 'create'
+  channelForm.value = { id: 0, name: '', model_mapping: '', base_url: '', api_key: '', weight: 1, status: 1 }
+  channelDialogVisible.value = true
+}
+
+const openEditChannel = (row: any) => {
+  channelDialogType.value = 'edit'
   channelForm.value = {
-    name: ch.name,
-    model_mapping: ch.model_mapping,
-    base_url: ch.base_url,
-    api_key: ch.api_key,
-    weight: ch.weight,
+    id: row.id,
+    name: row.name,
+    model_mapping: row.model_mapping,
+    base_url: row.base_url,
+    api_key: row.api_key,
+    weight: row.weight,
+    status: row.status
   }
-  channelDialogOpen.value = true
+  channelDialogVisible.value = true
 }
 
 const handleSaveChannel = async () => {
-  const f = channelForm.value
-  if (!f.name || f.name.length < 2) { toast.error('渠道名称至少 2 个字符'); return }
-  if (!f.model_mapping) { toast.error('请输入模型映射'); return }
-  if (!f.base_url) { toast.error('请输入 Base URL'); return }
-  if (!f.api_key) { toast.error('请输入 API Key'); return }
-  if (!f.weight || f.weight < 1 || f.weight > 100) { toast.error('权重范围 1-100'); return }
+  const valid = await channelFormRef.value?.validate().catch(() => false)
+  if (!valid) return
 
   channelSubmitting.value = true
   try {
-    if (editingChannel.value) {
-      await channelStore.update(editingChannel.value.id, {
+    if (channelDialogType.value === 'edit') {
+      await channelStore.update(channelForm.value.id, {
         group_id: groupId.value,
-        ...f,
-        status: editingChannel.value.status,
+        name: channelForm.value.name,
+        model_mapping: channelForm.value.model_mapping,
+        base_url: channelForm.value.base_url,
+        api_key: channelForm.value.api_key,
+        weight: channelForm.value.weight,
+        status: channelForm.value.status
       })
-      toast.success('渠道更新成功')
+      ElMessage.success('渠道更新成功')
     } else {
-      await channelStore.create({ group_id: groupId.value, ...f })
-      toast.success('渠道创建成功')
+      await channelStore.create({
+        group_id: groupId.value,
+        name: channelForm.value.name,
+        model_mapping: channelForm.value.model_mapping,
+        base_url: channelForm.value.base_url,
+        api_key: channelForm.value.api_key,
+        weight: channelForm.value.weight
+      })
+      ElMessage.success('渠道创建成功')
     }
-    channelDialogOpen.value = false
+    channelDialogVisible.value = false
   } catch (e: any) {
-    toast.error(e.message || '操作失败')
+    ElMessage.error(e.message || '操作失败')
   } finally {
     channelSubmitting.value = false
   }
 }
 
-const openDeleteChannel = (ch: any) => {
-  deletingChannel.value = ch
-  deleteChannelDialogOpen.value = true
-}
-
-const handleDeleteChannel = async () => {
-  channelSubmitting.value = true
+const handleDeleteChannel = async (row: any) => {
   try {
-    await channelStore.remove(deletingChannel.value.id)
-    toast.success('渠道已删除')
-    deleteChannelDialogOpen.value = false
+    await ElMessageBox.confirm(`确定要删除渠道「${row.name}」吗？`, '确认删除', {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await channelStore.remove(row.id)
+    ElMessage.success('渠道已删除')
   } catch (e: any) {
-    toast.error(e.message || '删除失败')
-  } finally {
-    channelSubmitting.value = false
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
+    }
   }
 }
 
@@ -141,9 +144,9 @@ const handleCreateApiKey = async () => {
   try {
     const result = await apiKeyStore.create(groupId.value)
     newKeyValue.value = result.key
-    showNewKey.value = true
+    showNewKeyDialog.value = true
   } catch (e: any) {
-    toast.error(e.message || '创建失败')
+    ElMessage.error(e.message || '创建失败')
   } finally {
     apiKeySubmitting.value = false
   }
@@ -155,264 +158,258 @@ const copyKey = async () => {
     keyCopied.value = true
     setTimeout(() => { keyCopied.value = false }, 2000)
   } catch {
-    toast.error('复制失败')
+    ElMessage.error('复制失败')
   }
 }
 
-const openDeleteKey = (key: any) => {
-  deletingKey.value = key
-  deleteKeyDialogOpen.value = true
-}
-
-const handleDeleteKey = async () => {
-  apiKeySubmitting.value = true
+const handleDeleteKey = async (row: any) => {
   try {
-    await apiKeyStore.remove(deletingKey.value.key)
-    toast.success('API Key 已删除')
-    deleteKeyDialogOpen.value = false
+    await ElMessageBox.confirm('确定要删除此 API Key 吗？使用此 Key 的应用将立即无法访问网关。', '确认删除', {
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await apiKeyStore.remove(row.key)
+    ElMessage.success('API Key 已删除')
   } catch (e: any) {
-    toast.error(e.message || '删除失败')
-  } finally {
-    apiKeySubmitting.value = false
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
+    }
   }
 }
 
-const statusBadge = (status: number) => {
-  if (status === 1) return { label: '正常', variant: 'default' as const }
-  if (status === 2) return { label: '熔断', variant: 'destructive' as const }
-  return { label: '禁用', variant: 'secondary' as const }
+const statusType = (status: number) => {
+  if (status === 1) return 'success'
+  if (status === 2) return 'danger'
+  return 'info'
+}
+
+const statusLabel = (status: number) => {
+  if (status === 1) return '正常'
+  if (status === 2) return '熔断'
+  return '禁用'
 }
 
 const maskKey = (key: string) => {
   if (key.length > 12) return key.slice(0, 8) + '****' + key.slice(-4)
   return key
 }
+
+const formatDate = (date: string) => {
+  if (!date) return '-'
+  return date.slice(0, 19).replace('T', ' ')
+}
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="group-detail">
     <!-- Header -->
-    <div class="flex items-center gap-4">
-      <Button variant="ghost" size="icon" @click="router.push('/groups')">
-        <ArrowLeft class="h-4 w-4" />
-      </Button>
-      <div v-if="group">
-        <div class="flex items-center gap-2">
-          <h1 class="text-2xl font-bold tracking-tight">{{ group.name }}</h1>
-          <Badge :variant="group.status === 1 ? 'default' : 'secondary'">
-            {{ group.status === 1 ? '启用' : '停用' }}
-          </Badge>
+    <div class="page-header">
+      <div class="header-left">
+        <el-button text :icon="ArrowLeft" @click="router.push('/groups')">
+          返回
+        </el-button>
+        <div v-if="group" class="group-info">
+          <h2 class="group-name">
+            {{ group.name }}
+            <el-tag :type="group.status === 1 ? 'success' : 'info'" size="small">
+              {{ group.status === 1 ? '启用' : '停用' }}
+            </el-tag>
+          </h2>
+          <p class="group-id">项目组 ID: {{ group.id }}</p>
         </div>
-        <p class="text-sm text-muted-foreground">项目组 ID: {{ group.id }}</p>
+        <el-skeleton v-else :rows="1" style="width: 200px" />
       </div>
-      <Skeleton v-else class="h-8 w-48" />
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1 border-b">
-      <button
-        @click="activeTab = 'channels'"
-        class="px-4 py-2 text-sm font-medium transition-colors"
-        :class="activeTab === 'channels' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'"
-      >渠道 ({{ channelStore.channels.length }})</button>
-      <button
-        @click="activeTab = 'apikeys'"
-        class="px-4 py-2 text-sm font-medium transition-colors"
-        :class="activeTab === 'apikeys' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'"
-      >API Key ({{ apiKeyStore.apiKeys.length }})</button>
-    </div>
+    <el-tabs v-model="activeTab" type="border-card">
+      <!-- Channels Tab -->
+      <el-tab-pane label="渠道" name="channels">
+        <div class="tab-header">
+          <p class="tab-desc">管理此项目组下的上游渠道</p>
+          <el-button type="primary" size="small" :icon="Plus" @click="openCreateChannel">
+            添加渠道
+          </el-button>
+        </div>
 
-    <!-- Channels Tab -->
-    <div v-if="activeTab === 'channels'">
-      <div class="flex items-center justify-between mb-4">
-        <p class="text-sm text-muted-foreground">管理此项目组下的上游渠道</p>
-        <Button size="sm" @click="openCreateChannel">
-          <Plus class="h-4 w-4 mr-1" />添加渠道
-        </Button>
-      </div>
+        <el-table :data="channelStore.channels" stripe v-loading="loading">
+          <el-table-column prop="name" label="名称" min-width="150" />
+          <el-table-column prop="model_mapping" label="模型映射" min-width="150" />
+          <el-table-column prop="base_url" label="Base URL" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="weight" label="权重" width="80" />
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="statusType(row.status)" size="small">
+                {{ statusLabel(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="150" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" :icon="Edit" @click="openEditChannel(row)" />
+              <el-button link type="danger" :icon="Delete" @click="handleDeleteChannel(row)" />
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="暂无渠道" />
+          </template>
+        </el-table>
+      </el-tab-pane>
 
-      <Card>
-        <CardContent class="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>名称</TableHead>
-                <TableHead>模型映射</TableHead>
-                <TableHead>Base URL</TableHead>
-                <TableHead>权重</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead class="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-if="channelStore.channels.length === 0">
-                <TableCell colspan="6" class="text-center text-muted-foreground py-8">暂无渠道</TableCell>
-              </TableRow>
-              <TableRow v-for="ch in channelStore.channels" :key="ch.id">
-                <TableCell class="font-medium">{{ ch.name }}</TableCell>
-                <TableCell class="font-mono text-sm">{{ ch.model_mapping }}</TableCell>
-                <TableCell class="font-mono text-sm max-w-[200px] truncate">{{ ch.base_url }}</TableCell>
-                <TableCell>{{ ch.weight }}</TableCell>
-                <TableCell>
-                  <Badge :variant="statusBadge(ch.status).variant">{{ statusBadge(ch.status).label }}</Badge>
-                </TableCell>
-                <TableCell class="text-right">
-                  <div class="flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" @click="openEditChannel(ch)">
-                      <Pencil class="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" @click="openDeleteChannel(ch)">
-                      <Trash2 class="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+      <!-- API Keys Tab -->
+      <el-tab-pane :label="`API Key (${apiKeyStore.apiKeys.length})`" name="apikeys">
+        <div class="tab-header">
+          <p class="tab-desc">管理此项目组的 API Key</p>
+          <el-button type="primary" size="small" :icon="Plus" @click="handleCreateApiKey" :loading="apiKeySubmitting">
+            创建 Key
+          </el-button>
+        </div>
 
-    <!-- API Keys Tab -->
-    <div v-if="activeTab === 'apikeys'">
-      <div class="flex items-center justify-between mb-4">
-        <p class="text-sm text-muted-foreground">管理此项目组的 API Key</p>
-        <Button size="sm" @click="handleCreateApiKey" :disabled="apiKeySubmitting">
-          <Plus class="h-4 w-4 mr-1" />{{ apiKeySubmitting ? '创建中...' : '创建 Key' }}
-        </Button>
-      </div>
-
-      <Card>
-        <CardContent class="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>API Key</TableHead>
-                <TableHead>创建时间</TableHead>
-                <TableHead class="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-if="apiKeyStore.apiKeys.length === 0">
-                <TableCell colspan="3" class="text-center text-muted-foreground py-8">暂无 API Key</TableCell>
-              </TableRow>
-              <TableRow v-for="ak in apiKeyStore.apiKeys" :key="ak.key">
-                <TableCell class="font-mono text-sm">{{ maskKey(ak.key) }}</TableCell>
-                <TableCell class="text-muted-foreground">{{ ak.created_at?.slice(0, 19).replace('T', ' ') }}</TableCell>
-                <TableCell class="text-right">
-                  <Button variant="ghost" size="icon" @click="openDeleteKey(ak)">
-                    <Trash2 class="h-4 w-4 text-destructive" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <!-- New Key Dialog -->
-      <Dialog v-model:open="showNewKey">
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>API Key 已创建</DialogTitle>
-            <DialogDescription>
-              请立即复制并保存此 Key，关闭后将无法再次查看完整 Key。
-            </DialogDescription>
-          </DialogHeader>
-          <div class="flex items-center gap-2 rounded-md border bg-muted p-3">
-            <code class="flex-1 text-sm break-all font-mono">{{ newKeyValue }}</code>
-            <Button variant="outline" size="icon" @click="copyKey">
-              <Check v-if="keyCopied" class="h-4 w-4 text-green-500" />
-              <Copy v-else class="h-4 w-4" />
-            </Button>
-          </div>
-          <DialogFooter>
-            <DialogClose as-child>
-              <Button>我已保存</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <!-- Delete Key Dialog -->
-      <Dialog v-model:open="deleteKeyDialogOpen">
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
-            <DialogDescription>
-              确定要删除此 API Key 吗？使用此 Key 的应用将立即无法访问网关。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose as-child>
-              <Button variant="outline">取消</Button>
-            </DialogClose>
-            <Button variant="destructive" @click="handleDeleteKey" :disabled="apiKeySubmitting">
-              {{ apiKeySubmitting ? '删除中...' : '确认删除' }}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        <el-table :data="apiKeyStore.apiKeys" stripe>
+          <el-table-column prop="key" label="API Key" min-width="300">
+            <template #default="{ row }">
+              <code>{{ maskKey(row.key) }}</code>
+            </template>
+          </el-table-column>
+          <el-table-column label="创建时间" width="180">
+            <template #default="{ row }">
+              {{ formatDate(row.created_at) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="danger" :icon="Delete" @click="handleDeleteKey(row)" />
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="暂无 API Key" />
+          </template>
+        </el-table>
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- Channel Form Dialog -->
-    <Dialog v-model:open="channelDialogOpen">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{{ editingChannel ? '编辑渠道' : '添加渠道' }}</DialogTitle>
-          <DialogDescription>配置上游渠道的连接信息</DialogDescription>
-        </DialogHeader>
-        <form @submit.prevent="handleSaveChannel">
-          <div class="space-y-3 py-2">
-            <div class="space-y-1.5">
-              <Label>渠道名称</Label>
-              <Input v-model="channelForm.name" placeholder="例如：OpenAI 主通道" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>模型映射</Label>
-              <Input v-model="channelForm.model_mapping" placeholder="例如：gpt-4o,gpt-4o-mini" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>Base URL</Label>
-              <Input v-model="channelForm.base_url" placeholder="例如：https://api.openai.com" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>API Key</Label>
-              <Input v-model="channelForm.api_key" placeholder="上游供应商 API Key" type="password" />
-            </div>
-            <div class="space-y-1.5">
-              <Label>权重 (1-100)</Label>
-              <Input v-model.number="channelForm.weight" type="number" min="1" max="100" />
-            </div>
-          </div>
-          <DialogFooter class="mt-4">
-            <DialogClose as-child>
-              <Button variant="outline" type="button">取消</Button>
-            </DialogClose>
-            <Button type="submit" :disabled="channelSubmitting">
-              {{ channelSubmitting ? '保存中...' : '保存' }}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <el-dialog
+      v-model="channelDialogVisible"
+      :title="channelDialogType === 'create' ? '添加渠道' : '编辑渠道'"
+      width="600px"
+    >
+      <el-form ref="channelFormRef" :model="channelForm" :rules="channelRules" label-width="100px">
+        <el-form-item label="渠道名称" prop="name">
+          <el-input v-model="channelForm.name" placeholder="例如：OpenAI 主通道" />
+        </el-form-item>
+        <el-form-item label="模型映射" prop="model_mapping">
+          <el-input v-model="channelForm.model_mapping" placeholder="例如：gpt-4o,gpt-4o-mini" />
+        </el-form-item>
+        <el-form-item label="Base URL" prop="base_url">
+          <el-input v-model="channelForm.base_url" placeholder="例如：https://api.openai.com" />
+        </el-form-item>
+        <el-form-item label="API Key" prop="api_key">
+          <el-input v-model="channelForm.api_key" type="password" placeholder="上游供应商 API Key" show-password />
+        </el-form-item>
+        <el-form-item label="权重" prop="weight">
+          <el-input-number v-model="channelForm.weight" :min="1" :max="100" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="channelDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="channelSubmitting" @click="handleSaveChannel">
+          {{ channelSubmitting ? '保存中...' : '保存' }}
+        </el-button>
+      </template>
+    </el-dialog>
 
-    <!-- Delete Channel Dialog -->
-    <Dialog v-model:open="deleteChannelDialogOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>确认删除</DialogTitle>
-          <DialogDescription>确定要删除渠道「{{ deletingChannel?.name }}」吗？</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose as-child>
-            <Button variant="outline">取消</Button>
-          </DialogClose>
-          <Button variant="destructive" @click="handleDeleteChannel" :disabled="channelSubmitting">
-            {{ channelSubmitting ? '删除中...' : '确认删除' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <!-- New Key Dialog -->
+    <el-dialog v-model="showNewKeyDialog" title="API Key 已创建" width="500px" :close-on-click-modal="false">
+      <el-alert
+        title="请立即复制并保存此 Key，关闭后将无法再次查看完整 Key。"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+      <div class="key-display">
+        <code class="key-value">{{ newKeyValue }}</code>
+        <el-button :icon="keyCopied ? Check : CopyDocument" @click="copyKey">
+          {{ keyCopied ? '已复制' : '复制' }}
+        </el-button>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="showNewKeyDialog = false">我已保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.group-detail {
+  max-width: 1200px;
+}
+
+.page-header {
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.group-info {
+  flex: 1;
+}
+
+.group-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-id {
+  font-size: 13px;
+  color: #909399;
+  margin: 0;
+}
+
+.tab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tab-desc {
+  font-size: 14px;
+  color: #606266;
+  margin: 0;
+}
+
+.key-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.key-value {
+  flex: 1;
+  font-family: monospace;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+code {
+  font-family: monospace;
+  background: #f5f7fa;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+</style>

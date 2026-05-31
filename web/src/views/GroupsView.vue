@@ -2,257 +2,236 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGroupStore } from '@/stores/groups'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
-import { Card, CardContent } from '@/components/ui/card'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from 'vue-sonner'
-import { Plus, Pencil, Trash2 } from 'lucide-vue-next'
-import ErrorAlertDialog from '@/components/ErrorAlertDialog.vue'
+import { Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const groupStore = useGroupStore()
 
 const loading = ref(true)
-const createDialogOpen = ref(false)
-const editDialogOpen = ref(false)
-const deleteDialogOpen = ref(false)
-const editingGroup = ref<any>(null)
-const deletingGroup = ref<any>(null)
-const formName = ref('')
+const dialogVisible = ref(false)
+const dialogType = ref<'create' | 'edit'>('create')
+const formRef = ref()
 const submitting = ref(false)
 
-// 错误弹窗状态
-const errorDialog = ref({ open: false, title: '提示', message: '' })
-const showError = (message: string, title = '提示') => {
-  errorDialog.value = { open: true, title, message }
+const form = ref({
+  id: 0,
+  name: ''
+})
+
+const rules = {
+  name: [
+    { required: true, message: '请输入项目组名称', trigger: 'blur' },
+    { min: 2, max: 100, message: '长度需在 2-100 个字符之间', trigger: 'blur' }
+  ]
 }
 
 onMounted(async () => {
   try {
     await groupStore.fetchAll()
   } catch (e: any) {
-    showError(e?.message || '加载项目组列表失败')
+    ElMessage.error(e?.message || '加载项目组列表失败')
   } finally {
     loading.value = false
   }
 })
 
 const openCreate = () => {
-  formName.value = ''
-  createDialogOpen.value = true
+  dialogType.value = 'create'
+  form.value = { id: 0, name: '' }
+  dialogVisible.value = true
 }
 
-const validateName = () => {
-  if (!formName.value || formName.value.length < 2 || formName.value.length > 100) {
-    return '项目组名称长度需在 2-100 个字符之间'
-  }
-  return null
+const openEdit = (row: any) => {
+  dialogType.value = 'edit'
+  form.value = { id: row.id, name: row.name }
+  dialogVisible.value = true
 }
 
-const handleCreate = async () => {
-  const error = validateName()
-  if (error) {
-    showError(error)
-    return
-  }
+const handleSubmit = async () => {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
+
   submitting.value = true
   try {
-    await groupStore.create(formName.value)
-    toast.success('项目组创建成功')
-    createDialogOpen.value = false
+    if (dialogType.value === 'create') {
+      await groupStore.create(form.value.name)
+      ElMessage.success('项目组创建成功')
+    } else {
+      await groupStore.update(form.value.id, form.value.name)
+      ElMessage.success('项目组更新成功')
+    }
+    dialogVisible.value = false
   } catch (e: any) {
-    showError(e.message || '创建失败')
+    ElMessage.error(e.message || '操作失败')
   } finally {
     submitting.value = false
   }
 }
 
-const openEdit = (group: any) => {
-  editingGroup.value = group
-  formName.value = group.name
-  editDialogOpen.value = true
-}
-
-const handleEdit = async () => {
-  const error = validateName()
-  if (error) {
-    showError(error)
-    return
-  }
-  submitting.value = true
+const handleToggleStatus = async (row: any) => {
   try {
-    await groupStore.update(editingGroup.value.id, formName.value)
-    toast.success('项目组更新成功')
-    editDialogOpen.value = false
+    await groupStore.toggleStatus(row.id, row.status)
+    ElMessage.success(row.status === 1 ? '项目组已停用' : '项目组已启用')
   } catch (e: any) {
-    showError(e.message || '更新失败')
-  } finally {
-    submitting.value = false
+    ElMessage.error(e.message || '操作失败')
   }
 }
 
-const handleToggleStatus = async (group: any) => {
+const handleDelete = async (row: any) => {
   try {
-    await groupStore.toggleStatus(group.id, group.status)
-    toast.success(group.status === 1 ? '项目组已停用' : '项目组已启用')
+    await ElMessageBox.confirm(
+      `确定要删除项目组「${row.name}」吗？此操作不可撤销，但不会影响已创建的 API Key。`,
+      '确认删除',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await groupStore.remove(row.id)
+    ElMessage.success('项目组已删除')
   } catch (e: any) {
-    showError(e.message || '操作失败')
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
+    }
   }
 }
 
-const openDelete = (group: any) => {
-  deletingGroup.value = group
-  deleteDialogOpen.value = true
-}
-
-const handleDelete = async () => {
-  submitting.value = true
-  try {
-    await groupStore.remove(deletingGroup.value.id)
-    toast.success('项目组已删除')
-    deleteDialogOpen.value = false
-  } catch (e: any) {
-    showError(e.message || '删除失败')
-  } finally {
-    submitting.value = false
-  }
+const formatDate = (date: string) => {
+  if (!date) return '-'
+  return date.slice(0, 19).replace('T', ' ')
 }
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
+  <div class="groups-page">
+    <!-- 页面标题 -->
+    <div class="page-header">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight">项目组</h1>
-        <p class="text-muted-foreground">管理 API 项目组及其状态</p>
+        <h2 class="page-title">项目组</h2>
+        <p class="page-desc">管理 API 项目组及其状态</p>
       </div>
-      <Button @click="openCreate">
-        <Plus class="h-4 w-4 mr-1" />创建项目组
-      </Button>
+      <el-button type="primary" :icon="Plus" @click="openCreate">
+        创建项目组
+      </el-button>
     </div>
 
-    <Card>
-      <CardContent class="p-0">
-        <Table v-if="!loading">
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>名称</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>创建时间</TableHead>
-              <TableHead class="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-if="!groupStore.groups?.length">
-              <TableCell colspan="5" class="text-center text-muted-foreground py-8">
-                暂无项目组，点击上方按钮创建
-              </TableCell>
-            </TableRow>
-            <TableRow v-for="group in groupStore.groups" :key="group.id" class="cursor-pointer" @click="router.push(`/groups/${group.id}`)">
-              <TableCell class="font-mono text-sm">{{ group.id }}</TableCell>
-              <TableCell class="font-medium">{{ group.name }}</TableCell>
-              <TableCell>
-                <Badge :variant="group.status === 1 ? 'default' : 'secondary'">
-                  {{ group.status === 1 ? '启用' : '停用' }}
-                </Badge>
-              </TableCell>
-              <TableCell class="text-muted-foreground">{{ group.created_at?.slice(0, 19).replace('T', ' ') }}</TableCell>
-              <TableCell class="text-right" @click.stop>
-                <div class="flex items-center justify-end gap-2">
-                  <Switch :checked="group.status === 1" @update:checked="handleToggleStatus(group)" />
-                  <Button variant="ghost" size="icon" @click="openEdit(group)">
-                    <Pencil class="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" @click="openDelete(group)">
-                    <Trash2 class="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-        <div v-else class="p-6 space-y-3">
-          <Skeleton v-for="i in 3" :key="i" class="h-10 w-full" />
-        </div>
-      </CardContent>
-    </Card>
+    <!-- 数据表格 -->
+    <el-card shadow="never">
+      <el-table
+        v-loading="loading"
+        :data="groupStore.groups"
+        stripe
+        style="width: 100%"
+      >
+        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="name" label="名称" min-width="200">
+          <template #default="{ row }">
+            <el-link
+              type="primary"
+              @click="router.push(`/groups/${row.id}`)"
+            >
+              {{ row.name }}
+            </el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'info'">
+              {{ row.status === 1 ? '启用' : '停用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="创建时间" width="180">
+          <template #default="{ row }">
+            {{ formatDate(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" fixed="right">
+          <template #default="{ row }">
+            <el-switch
+              :model-value="row.status === 1"
+              @change="handleToggleStatus(row)"
+              style="margin-right: 12px"
+            />
+            <el-button
+              link
+              type="primary"
+              :icon="Edit"
+              @click="openEdit(row)"
+            />
+            <el-button
+              link
+              type="danger"
+              :icon="Delete"
+              @click="handleDelete(row)"
+            />
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="暂无项目组，点击上方按钮创建" />
+        </template>
+      </el-table>
+    </el-card>
 
-    <!-- Create Dialog -->
-    <Dialog v-model:open="createDialogOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>创建项目组</DialogTitle>
-          <DialogDescription>输入项目组名称，长度 2-100 个字符</DialogDescription>
-        </DialogHeader>
-        <form @submit.prevent="handleCreate">
-          <div class="space-y-4 py-4">
-            <div class="space-y-2">
-              <Label for="create-name">项目组名称</Label>
-              <Input id="create-name" v-model="formName" placeholder="输入名称" :maxlength="100" />
-            </div>
-          </div>
-          <DialogFooter>
-            <DialogClose as-child>
-              <Button variant="outline" type="button">取消</Button>
-            </DialogClose>
-            <Button type="submit" :disabled="submitting">{{ submitting ? '创建中...' : '创建' }}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Edit Dialog -->
-    <Dialog v-model:open="editDialogOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>编辑项目组</DialogTitle>
-          <DialogDescription>修改项目组名称</DialogDescription>
-        </DialogHeader>
-        <form @submit.prevent="handleEdit">
-          <div class="space-y-4 py-4">
-            <div class="space-y-2">
-              <Label for="edit-name">项目组名称</Label>
-              <Input id="edit-name" v-model="formName" placeholder="输入名称" :maxlength="100" />
-            </div>
-          </div>
-          <DialogFooter>
-            <DialogClose as-child>
-              <Button variant="outline" type="button">取消</Button>
-            </DialogClose>
-            <Button type="submit" :disabled="submitting">{{ submitting ? '保存中...' : '保存' }}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Delete Dialog -->
-    <Dialog v-model:open="deleteDialogOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>确认删除</DialogTitle>
-          <DialogDescription>
-            确定要删除项目组「{{ deletingGroup?.name }}」吗？此操作不可撤销，但不会影响已创建的 API Key。
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose as-child>
-            <Button variant="outline" type="button">取消</Button>
-          </DialogClose>
-          <Button variant="destructive" @click="handleDelete" :disabled="submitting">
-            {{ submitting ? '删除中...' : '确认删除' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Error Alert Dialog -->
-    <ErrorAlertDialog v-model:open="errorDialog.open" :title="errorDialog.title" :message="errorDialog.message" />
+    <!-- 创建/编辑对话框 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogType === 'create' ? '创建项目组' : '编辑项目组'"
+      width="500px"
+    >
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="100px"
+      >
+        <el-form-item label="项目组名称" prop="name">
+          <el-input
+            v-model="form.name"
+            placeholder="输入名称"
+            maxlength="100"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="submitting"
+          @click="handleSubmit"
+        >
+          {{ submitting ? '保存中...' : '保存' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.groups-page {
+  max-width: 1200px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.page-desc {
+  font-size: 14px;
+  color: #909399;
+  margin: 0;
+}
+</style>

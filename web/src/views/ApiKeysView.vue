@@ -2,36 +2,19 @@
 import { ref, onMounted, watch } from 'vue'
 import { useApiKeyStore } from '@/stores/apikeys'
 import { useGroupStore } from '@/stores/groups'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { toast } from 'vue-sonner'
-import { Plus, Trash2, Copy, Check } from 'lucide-vue-next'
-import ErrorAlertDialog from '@/components/ErrorAlertDialog.vue'
+import { Plus, Delete, CopyDocument, Check } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const apiKeyStore = useApiKeyStore()
 const groupStore = useGroupStore()
 
 const loading = ref(true)
 const selectedGroupId = ref<string>('')
-
-const newKeyValue = ref('')
-const showNewKey = ref(false)
-const keyCopied = ref(false)
 const creating = ref(false)
 
-const deleteDialogOpen = ref(false)
-const deletingKey = ref<any>(null)
-const deleting = ref(false)
-
-// 错误弹窗状态
-const errorDialog = ref({ open: false, title: '提示', message: '' })
-const showError = (message: string, title = '提示') => {
-  errorDialog.value = { open: true, title, message }
-}
+const newKeyValue = ref('')
+const showNewKeyDialog = ref(false)
+const keyCopied = ref(false)
 
 const loadKeys = async () => {
   loading.value = true
@@ -52,13 +35,13 @@ const loadKeys = async () => {
     }
 
     if (groupId === undefined) {
-      showError('请先创建项目组')
+      ElMessage.warning('请先创建项目组')
       return
     }
 
     await apiKeyStore.fetchAll(groupId)
   } catch (e: any) {
-    showError(e?.message || '加载 API Key 列表失败')
+    ElMessage.error(e?.message || '加载 API Key 列表失败')
   } finally {
     loading.value = false
   }
@@ -75,16 +58,16 @@ watch(selectedGroupId, () => loadKeys())
 
 const handleCreate = async () => {
   if (!selectedGroupId.value) {
-    showError('请先在筛选器中选择一个项目组')
+    ElMessage.warning('请先在筛选器中选择一个项目组')
     return
   }
   creating.value = true
   try {
     const result = await apiKeyStore.create(Number(selectedGroupId.value))
     newKeyValue.value = result.key
-    showNewKey.value = true
+    showNewKeyDialog.value = true
   } catch (e: any) {
-    showError(e.message || '创建失败')
+    ElMessage.error(e.message || '创建失败')
   } finally {
     creating.value = false
   }
@@ -96,25 +79,27 @@ const copyKey = async () => {
     keyCopied.value = true
     setTimeout(() => { keyCopied.value = false }, 2000)
   } catch {
-    showError('复制失败，请手动复制')
+    ElMessage.error('复制失败，请手动复制')
   }
 }
 
-const openDelete = (key: any) => {
-  deletingKey.value = key
-  deleteDialogOpen.value = true
-}
-
-const handleDelete = async () => {
-  deleting.value = true
+const handleDelete = async (row: any) => {
   try {
-    await apiKeyStore.remove(deletingKey.value.key)
-    toast.success('API Key 已删除')
-    deleteDialogOpen.value = false
+    await ElMessageBox.confirm(
+      '确定要删除此 API Key 吗？使用此 Key 的应用将立即无法访问网关。',
+      '确认删除',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await apiKeyStore.remove(row.key)
+    ElMessage.success('API Key 已删除')
   } catch (e: any) {
-    showError(e.message || '删除失败')
-  } finally {
-    deleting.value = false
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
+    }
   }
 }
 
@@ -126,110 +111,155 @@ const maskKey = (key: string) => {
 const groupName = (groupId: number) => {
   return groupStore.groups?.find((g: any) => g.id === groupId)?.name || `ID:${groupId}`
 }
+
+const formatDate = (date: string) => {
+  if (!date) return '-'
+  return date.slice(0, 19).replace('T', ' ')
+}
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
+  <div class="apikeys-page">
+    <!-- 页面标题 -->
+    <div class="page-header">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight">API Key 管理</h1>
-        <p class="text-muted-foreground">管理项目组的 API 访问密钥</p>
+        <h2 class="page-title">API Key 管理</h2>
+        <p class="page-desc">管理项目组的 API 访问密钥</p>
       </div>
-      <Button @click="handleCreate" :disabled="creating || !selectedGroupId">
-        <Plus class="h-4 w-4 mr-1" />{{ creating ? '创建中...' : '创建 API Key' }}
-      </Button>
+      <el-button
+        type="primary"
+        :icon="Plus"
+        @click="handleCreate"
+        :disabled="creating || !selectedGroupId"
+        :loading="creating"
+      >
+        创建 API Key
+      </el-button>
     </div>
 
-    <!-- Filter -->
-    <div class="w-64">
-      <Select v-model="selectedGroupId">
-        <SelectTrigger>
-          <SelectValue placeholder="选择项目组" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">全部项目组</SelectItem>
-          <SelectItem v-for="g in groupStore.groups" :key="g.id" :value="String(g.id)">{{ g.name }}</SelectItem>
-        </SelectContent>
-      </Select>
-    </div>
+    <!-- 筛选器 -->
+    <el-card shadow="never" class="filter-card">
+      <el-select v-model="selectedGroupId" placeholder="选择项目组" style="width: 240px">
+        <el-option label="全部项目组" value="all" />
+        <el-option
+          v-for="g in groupStore.groups"
+          :key="g.id"
+          :label="g.name"
+          :value="String(g.id)"
+        />
+      </el-select>
+    </el-card>
 
-    <Card>
-      <CardContent class="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>API Key</TableHead>
-              <TableHead>所属项目组</TableHead>
-              <TableHead>创建时间</TableHead>
-              <TableHead class="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-if="!apiKeyStore.apiKeys?.length">
-              <TableCell colspan="4" class="text-center text-muted-foreground py-8">
-                {{ loading ? '加载中...' : '暂无 API Key' }}
-              </TableCell>
-            </TableRow>
-            <TableRow v-for="ak in apiKeyStore.apiKeys" :key="ak.key">
-              <TableCell class="font-mono text-sm">{{ maskKey(ak.key) }}</TableCell>
-              <TableCell>{{ groupName(ak.group_id) }}</TableCell>
-              <TableCell class="text-muted-foreground">{{ ak.created_at?.slice(0, 19).replace('T', ' ') }}</TableCell>
-              <TableCell class="text-right">
-                <Button variant="ghost" size="icon" @click="openDelete(ak)">
-                  <Trash2 class="h-4 w-4 text-destructive" />
-                </Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+    <!-- 数据表格 -->
+    <el-card shadow="never">
+      <el-table
+        v-loading="loading"
+        :data="apiKeyStore.apiKeys"
+        stripe
+        style="width: 100%"
+      >
+        <el-table-column prop="key" label="API Key" min-width="350">
+          <template #default="{ row }">
+            <code>{{ maskKey(row.key) }}</code>
+          </template>
+        </el-table-column>
+        <el-table-column label="所属项目组" min-width="150">
+          <template #default="{ row }">
+            {{ groupName(row.group_id) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="创建时间" width="180">
+          <template #default="{ row }">
+            {{ formatDate(row.created_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="danger" :icon="Delete" @click="handleDelete(row)" />
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="暂无 API Key" />
+        </template>
+      </el-table>
+    </el-card>
 
     <!-- New Key Dialog -->
-    <Dialog v-model:open="showNewKey">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>API Key 已创建</DialogTitle>
-          <DialogDescription>
-            ⚠️ 请立即复制并保存此 Key。关闭对话框后将无法再次查看完整 Key。
-          </DialogDescription>
-        </DialogHeader>
-        <div class="flex items-center gap-2 rounded-md border bg-muted p-3">
-          <code class="flex-1 text-sm break-all font-mono">{{ newKeyValue }}</code>
-          <Button variant="outline" size="icon" @click="copyKey">
-            <Check v-if="keyCopied" class="h-4 w-4 text-green-500" />
-            <Copy v-else class="h-4 w-4" />
-          </Button>
-        </div>
-        <DialogFooter>
-          <DialogClose as-child>
-            <Button>我已保存</Button>
-          </DialogClose>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Delete Dialog -->
-    <Dialog v-model:open="deleteDialogOpen">
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>确认删除</DialogTitle>
-          <DialogDescription>
-            确定要删除此 API Key 吗？使用此 Key 的应用将立即无法访问网关。
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose as-child>
-            <Button variant="outline">取消</Button>
-          </DialogClose>
-          <Button variant="destructive" @click="handleDelete" :disabled="deleting">
-            {{ deleting ? '删除中...' : '确认删除' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- Error Alert Dialog -->
-    <ErrorAlertDialog v-model:open="errorDialog.open" :title="errorDialog.title" :message="errorDialog.message" />
+    <el-dialog
+      v-model="showNewKeyDialog"
+      title="API Key 已创建"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        title="⚠️ 请立即复制并保存此 Key。关闭对话框后将无法再次查看完整 Key。"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+      <div class="key-display">
+        <code class="key-value">{{ newKeyValue }}</code>
+        <el-button :icon="keyCopied ? Check : CopyDocument" @click="copyKey">
+          {{ keyCopied ? '已复制' : '复制' }}
+        </el-button>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="showNewKeyDialog = false">我已保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
+
+<style scoped>
+.apikeys-page {
+  max-width: 1200px;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #303133;
+  margin: 0 0 8px 0;
+}
+
+.page-desc {
+  font-size: 14px;
+  color: #909399;
+  margin: 0;
+}
+
+.filter-card {
+  margin-bottom: 20px;
+}
+
+.key-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.key-value {
+  flex: 1;
+  font-family: monospace;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+code {
+  font-family: monospace;
+  background: #f5f7fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+</style>

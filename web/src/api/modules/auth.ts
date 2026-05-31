@@ -1,24 +1,14 @@
-import apiClient, { handleApiResponse } from '@/api/client'
-import type {
-  LoginRequest,
-  LoginResponse,
-  UpdatePasswordRequest,
-  UpdateAccountRequest,
-} from '@/types/api'
+import apiClient, { handleApiResponse } from '../client'
+import type { LoginRequest, LoginResponse, UpdatePasswordRequest, UpdateAccountRequest } from '@/types/api'
 
-export async function login(data: LoginRequest): Promise<LoginResponse> {
-  const response = await apiClient.post('/v1/auth/login', data)
-  return handleApiResponse<LoginResponse>(response)
+export function login(data: LoginRequest) {
+  return apiClient.post('/v1/auth/login', data).then(res => handleApiResponse<LoginResponse>(res))
 }
 
-export async function updatePassword(
-  data: UpdatePasswordRequest,
-): Promise<void> {
-  const response = await apiClient.put('/v1/users/password', data)
-  handleApiResponse(response)
+export function updatePassword(data: UpdatePasswordRequest) {
+  return apiClient.put('/v1/users/password', data).then(res => handleApiResponse<null>(res))
 }
 
-export async function updateAccount(data: UpdateAccountRequest): Promise<void> {
-  const response = await apiClient.put('/v1/users/account', data)
-  handleApiResponse(response)
+export function updateAccount(data: UpdateAccountRequest) {
+  return apiClient.put('/v1/users/account', data).then(res => handleApiResponse<null>(res))
 }

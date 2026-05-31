@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosResponse } from 'axios'
 import type { AdminResponse } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/',
@@ -25,9 +26,8 @@ apiClient.interceptors.response.use(
   },
   (error: AxiosError<AdminResponse<unknown>>) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      window.location.href = '/login'
+      const authStore = useAuthStore()
+      authStore.logout()
     }
     const message =
       error.response?.data?.message || error.message || 'Network error'
