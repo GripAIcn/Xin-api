@@ -107,8 +107,11 @@ func (r *apiKeyRepo) Create(ctx context.Context, apiKey *model.ApiKey) error {
 
 func (r *apiKeyRepo) DeleteSoft(ctx context.Context, key string) error {
 	rows, err := gorm.G[model.ApiKey](r.db).Where("key = ?", key).Delete(ctx)
-	if err != nil || rows == 0 {
+	if err != nil {
 		return err
+	}
+	if rows == 0 {
+		return gorm.ErrRecordNotFound
 	}
 	return nil
 }

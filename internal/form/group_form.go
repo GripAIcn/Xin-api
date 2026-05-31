@@ -30,3 +30,8 @@ type ApiKeyResponse struct {
 	GroupID   int64     `json:"group_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// DeleteApiKeyReq 删除 API Key 请求入参
+type DeleteApiKeyReq struct {
+	Key string `json:"key" binding:"required" validate:"required"` // API Key 字符串
+}

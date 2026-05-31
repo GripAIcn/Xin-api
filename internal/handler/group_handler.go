@@ -205,14 +205,12 @@ func (h *ApiKeyHandler) CreateApiKey(c *gin.Context) {
 
 // DeleteApiKey 软删除指定的密钥凭证
 func (h *ApiKeyHandler) DeleteApiKey(c *gin.Context) {
-	// ⚡️ 生产细节：由于 Key 本身是字符串作为主键，直接使用 c.Query 或 c.Param 获取即可
-	key := c.Query("key")
-	if key == "" {
-		response.AdminFail(c, response.InvalidParams)
+	var req form.DeleteApiKeyReq
+	if !h.bindAndValidate(c, &req) {
 		return
 	}
 
-	if err := h.apiKeyRepo.DeleteSoft(c.Request.Context(), key); err != nil {
+	if err := h.apiKeyRepo.DeleteSoft(c.Request.Context(), req.Key); err != nil {
 		logger.Error(c.Request.Context(), "delete api key failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return
