@@ -63,9 +63,9 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			protected.PUT("/channels/:id", channelHandler.UpdateChannel)
 			protected.DELETE("/channels/:id", channelHandler.DeleteChannel)
 
-			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)   // 为组分发新 Key
-			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)     // 查询组名下的 Key 列表
-			protected.DELETE("/apikeys", apiKeyHandler.DeleteApiKey) // 吊销/软删除指定的 Key
+			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)        // 为组分发新 Key
+			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)          // 查询组名下的 Key 列表
+			protected.POST("/apikeys/delete", apiKeyHandler.DeleteApiKey) // 吊销/软删除指定的 Key（使用 POST 以便从 body 读取 key）
 		}
 
 		// ==========================================
