@@ -4,7 +4,7 @@
 
 ```
 build/
-├── Dockerfile              # Go 后端多阶段构建
+├── Dockerfile              # Go 后端多阶段构建（包含前端静态文件）
 ├── Dockerfile.nginx        # Nginx 反向代理配置
 ├── docker-compose.yml      # 服务编排
 ├── .dockerignore          # Docker 构建忽略文件
@@ -14,9 +14,10 @@ build/
 ├── scripts/
 │   └── deploy.sh          # 部署脚本
 └── README.md              # 本文件
-web/
-├── Dockerfile             # 前端多阶段构建
-└── .dockerignore          # 前端 Docker 构建忽略文件
+web/                        # 前端源码目录（已集成到后端构建）
+├── src/
+├── public/
+└── package.json
 ```
 
 ## 快速开始
