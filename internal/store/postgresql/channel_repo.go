@@ -78,32 +78,39 @@ func (r *channelRepo) ListByGroupID(ctx context.Context, groupID int64) ([]model
 }
 
 func (r *channelRepo) ListActiveByGroupAndModel(ctx context.Context, groupID int64, modelName string) ([]model.Channel, error) {
-	var channels []model.Channel
-
-	// ⚡️ 生产级语义：
-	// 1. group_id = ? 锁定项目组
-	// 2. status = 1 必须是正常态（过滤掉手动关闭和自动熔断的渠道）
-	// 3. model_mapping LIKE ? 模糊匹配支持的模型 (由于存储格式是逗号分隔，如 "gpt-4o,deepseek-chat"，使用 ILIKE 或 LIKE 进行安全匹配)
+	// 第一步：获取该项目组下所有正常状态的渠道（不限制模型）
+	var allChannels []model.Channel
 	err := r.db.WithContext(ctx).
-		Where("group_id = ? AND status = 1 AND model_mapping LIKE ?", groupID, "%"+modelName+"%").
-		Order("weight DESC"). // 按权重降序，方便上层配合算法进行负载均衡
-		Find(&channels).Error
-
+		Where("group_id = ? AND status = 1", groupID).
+		Order("weight DESC").
+		Find(&allChannels).Error
 	if err != nil {
 		return nil, err
 	}
 
-	// 内存二次精细化过滤（防范例如请求 "gpt-4" 却匹配到了 "gpt-4o" 的边界边缘情况）
-	var filtered []model.Channel
-	for _, ch := range channels {
+	if len(allChannels) == 0 {
+		return nil, nil
+	}
+
+	// 第二步：优先精确匹配指定模型的渠道
+	var matchedChannels []model.Channel
+	for _, ch := range allChannels {
 		models := strings.Split(ch.ModelMapping, ",")
 		for _, m := range models {
 			if strings.TrimSpace(m) == modelName {
-				filtered = append(filtered, ch)
+				matchedChannels = append(matchedChannels, ch)
 				break
 			}
 		}
 	}
 
-	return filtered, nil
+	// 第三步：若找到精确匹配，直接返回
+	if len(matchedChannels) > 0 {
+		return matchedChannels, nil
+	}
+
+	// 第四步：容错策略 - 返回所有可用渠道（让上层按权重选择）
+	// 场景：用户请求 "deepseek-v4-flash" 但渠道配置的是 "deepseek-chat"
+	// 避免直接报错，提高网关可用性
+	return allChannels, nil
 }
