@@ -30,6 +30,7 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 - **⚡ Rate Limiting**: Redis-based distributed rate limiter supporting RPM/TPM multi-dimensional limiting
 - **👥 Multi-Tenant Management**: Hierarchical management of users, groups, and channels
 - **🔑 API Key Management**: Flexible API key distribution and revocation
+- **🧪 Channel Health Check**: One-click manual channel testing, supporting single/batch testing of multi-model connectivity
 - **📊 Full-Link Tracing**: Complete request chain tracing and audit logging (extensible)
 - **🌐 Web Admin Dashboard**: Modern management UI built with Vue 3 + Tailwind CSS
 - **🐳 Containerized Deployment**: Out-of-the-box Docker Compose deployment
@@ -176,7 +177,7 @@ Try Xin API Admin Dashboard at [http://api.gripai.cn/](http://api.gripai.cn/)
 - **📊 Dashboard**: System overview, request statistics
 - **👥 User Management**: User accounts and permissions
 - **📁 Group Management**: Create and manage project groups with channels
-- **🔌 Channel Management**: Configure upstream LLM channels with weighted routing
+- **🔌 Channel Management**: Configure upstream LLM channels with weighted routing, one-click channel health testing
 - **🔑 API Key Management**: Distribute and manage API keys
 - **⚙️ System Settings**: Global configuration
 

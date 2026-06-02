@@ -51,52 +51,60 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="login-page">
+  <div style="display: flex; min-height: 100vh; width: 100%;">
     <!-- 左侧装饰区域 -->
-    <div class="login-left">
-      <div class="brand-section">
-        <div class="brand-logo">
-          <span class="logo-icon">X</span>
-          <span class="logo-text">Xin-api</span>
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 64px 80px; color: white; position: relative; overflow: hidden; background: linear-gradient(145deg, #1a2a3a 0%, #2d4a5e 100%);">
+      <!-- 背景光晕 -->
+      <div style="position: absolute; top: -50%; right: -20%; width: 80%; height: 200%; pointer-events: none; background: radial-gradient(ellipse, rgba(64, 158, 255, 0.08) 0%, transparent 70%);"></div>
+
+      <div style="position: relative; z-index: 10;">
+        <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 40px;">
+          <div style="width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; color: white; background: #409eff; box-shadow: 0 8px 24px rgba(64, 158, 255, 0.3);">
+            X
+          </div>
+          <span style="font-size: 24px; font-weight: 600; letter-spacing: 1px;">Xin-api</span>
         </div>
-        <h1 class="brand-title">API 网关管理控制台</h1>
-        <p class="brand-desc">
+        <h1 style="font-size: 36px; font-weight: 600; margin-bottom: 20px; line-height: 1.3;">
+          API 网关管理控制台
+        </h1>
+        <p style="font-size: 16px; line-height: 1.6; opacity: 0.8; margin-bottom: 64px; max-width: 400px;">
           统一管理项目组、上游渠道和 API Key，<br>
           轻松构建高性能的 AI 服务接入层
         </p>
       </div>
-      <div class="feature-list">
-        <div class="feature-item">
-          <div class="feature-dot"></div>
+
+      <div style="position: relative; z-index: 10; display: flex; flex-direction: column; gap: 20px;">
+        <div style="display: flex; align-items: center; gap: 16px; font-size: 15px; opacity: 0.9;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #409eff; box-shadow: 0 0 12px rgba(64, 158, 255, 0.5);"></div>
           <span>多项目组隔离管理</span>
         </div>
-        <div class="feature-item">
-          <div class="feature-dot"></div>
+        <div style="display: flex; align-items: center; gap: 16px; font-size: 15px; opacity: 0.9;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #409eff; box-shadow: 0 0 12px rgba(64, 158, 255, 0.5);"></div>
           <span>智能负载均衡与熔断</span>
         </div>
-        <div class="feature-item">
-          <div class="feature-dot"></div>
+        <div style="display: flex; align-items: center; gap: 16px; font-size: 15px; opacity: 0.9;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: #409eff; box-shadow: 0 0 12px rgba(64, 158, 255, 0.5);"></div>
           <span>实时流量监控与统计</span>
         </div>
       </div>
     </div>
 
     <!-- 右侧登录表单 -->
-    <div class="login-right">
-      <el-card class="login-card" shadow="never">
-        <div class="login-header">
-          <h2 class="title">欢迎登录</h2>
-          <p class="subtitle">请使用管理员账号登录系统</p>
+    <div style="width: 480px; display: flex; align-items: center; justify-content: center; padding: 40px; background: white;">
+      <el-card style="width: 360px; border: none; box-shadow: none;" shadow="never">
+        <div style="margin-bottom: 40px;">
+          <h2 style="font-size: 28px; font-weight: 600; color: #303133; margin-bottom: 8px;">欢迎登录</h2>
+          <p style="font-size: 14px; color: #909399;">请使用管理员账号登录系统</p>
         </div>
 
         <el-form
           ref="loginFormRef"
           :model="loginForm"
           :rules="rules"
-          class="login-form"
+          style="margin-bottom: 40px;"
           @keyup.enter="handleLogin"
         >
-          <el-form-item prop="username">
+          <el-form-item prop="username" style="margin-bottom: 24px;">
             <el-input
               v-model="loginForm.username"
               placeholder="请输入用户名"
@@ -106,7 +114,7 @@ const handleLogin = async () => {
             />
           </el-form-item>
 
-          <el-form-item prop="password">
+          <el-form-item prop="password" style="margin-bottom: 24px;">
             <el-input
               v-model="loginForm.password"
               type="password"
@@ -122,7 +130,7 @@ const handleLogin = async () => {
             <el-button
               type="primary"
               size="large"
-              class="login-button"
+              style="width: 100%; height: 44px; font-size: 16px; margin-top: 8px;"
               :loading="loading"
               @click="handleLogin"
             >
@@ -131,7 +139,7 @@ const handleLogin = async () => {
           </el-form-item>
         </el-form>
 
-        <div class="login-footer">
+        <div style="text-align: center; font-size: 12px; color: #c0c4cc;">
           <p>© 2026 Xin-api. All rights reserved.</p>
         </div>
       </el-card>
@@ -140,191 +148,27 @@ const handleLogin = async () => {
 </template>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  background: #f5f7fa;
-}
-
-/* 左侧区域 */
-.login-left {
-  flex: 1;
-  background: linear-gradient(145deg, #1a2a3a 0%, #2d4a5e 100%);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 60px 80px;
-  color: white;
-  position: relative;
-  overflow: hidden;
-}
-
-.login-left::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -20%;
-  width: 80%;
-  height: 200%;
-  background: radial-gradient(ellipse, rgba(64, 158, 255, 0.08) 0%, transparent 70%);
-  pointer-events: none;
-}
-
-.brand-section {
-  position: relative;
-  z-index: 1;
-}
-
-.brand-logo {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 40px;
-}
-
-.logo-icon {
-  width: 56px;
-  height: 56px;
-  background: #409eff;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: bold;
-  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.3);
-}
-
-.logo-text {
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: 1px;
-}
-
-.brand-title {
-  font-size: 36px;
-  font-weight: 600;
-  margin: 0 0 20px 0;
-  line-height: 1.3;
-}
-
-.brand-desc {
-  font-size: 16px;
-  line-height: 1.8;
-  opacity: 0.8;
-  margin: 0 0 60px 0;
-  max-width: 480px;
-}
-
-.feature-list {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 15px;
-  opacity: 0.9;
-}
-
-.feature-dot {
-  width: 8px;
-  height: 8px;
-  background: #409eff;
-  border-radius: 50%;
-  box-shadow: 0 0 12px rgba(64, 158, 255, 0.5);
-}
-
-/* 右侧区域 */
-.login-right {
-  width: 480px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  background: white;
-}
-
-.login-card {
-  width: 100%;
-  max-width: 360px;
-  border: none;
-  box-shadow: none;
-}
-
-.login-header {
-  margin-bottom: 40px;
-}
-
-.title {
-  font-size: 28px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px 0;
-}
-
-.subtitle {
-  font-size: 14px;
-  color: #909399;
-  margin: 0;
-}
-
-.login-form {
-  margin-bottom: 40px;
-}
-
-.login-form :deep(.el-form-item) {
-  margin-bottom: 24px;
-}
-
-.login-button {
-  width: 100%;
-  height: 44px;
-  font-size: 16px;
-  margin-top: 8px;
-}
-
-.login-footer {
-  text-align: center;
-  font-size: 12px;
-  color: #c0c4cc;
-}
-
-.login-footer p {
-  margin: 0;
-}
-
-/* 响应式 */
-@media (max-width: 992px) {
-  .login-left {
+/* 响应式 - 移动端 */
+@media (max-width: 1024px) {
+  div > div:first-child {
     display: none;
   }
 
-  .login-right {
+  div > div:last-child {
     width: 100%;
     background: linear-gradient(145deg, #1a2a3a 0%, #2d4a5e 100%);
   }
 
-  .login-card {
-    background: white;
-    padding: 40px 32px;
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  }
-}
-
-@media (max-width: 576px) {
-  .login-right {
-    padding: 20px;
+  .el-card {
+    background: transparent;
   }
 
-  .login-card {
-    padding: 32px 24px;
+  h2, p {
+    color: white !important;
+  }
+
+  p:last-child {
+    color: rgba(255, 255, 255, 0.5) !important;
   }
 }
 </style>

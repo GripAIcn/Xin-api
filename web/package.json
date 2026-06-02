@@ -23,11 +23,13 @@
     "vue-router": "^5.0.4"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.0",
     "@tsconfig/node24": "^24.0.4",
     "@types/node": "^24.12.2",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/eslint-config-typescript": "^14.7.0",
     "@vue/tsconfig": "^0.9.1",
+    "autoprefixer": "^10.5.0",
     "eslint": "^10.2.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-oxlint": "~1.60.0",
@@ -35,7 +37,9 @@
     "jiti": "^2.6.1",
     "npm-run-all2": "^8.0.4",
     "oxlint": "~1.60.0",
+    "postcss": "^8.5.15",
     "prettier": "3.8.3",
+    "tailwindcss": "^4.3.0",
     "typescript": "~6.0.0",
     "unplugin-auto-import": "^21.0.0",
     "unplugin-vue-components": "^32.1.0",

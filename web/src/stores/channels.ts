@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { Channel, CreateChannelRequest, UpdateChannelRequest } from '@/types/api'
+import type { Channel, CreateChannelRequest, UpdateChannelRequest, ChannelTestResult } from '@/types/api'
 import * as channelsApi from '@/api/modules/channels'
 
 export const useChannelStore = defineStore('channels', () => {
@@ -32,11 +32,25 @@ export const useChannelStore = defineStore('channels', () => {
     channels.value = channels.value.filter(c => c.id !== id)
   }
 
+  // 测试单个渠道
+  async function testChannel(channelId: number, model?: string) {
+    const result = await channelsApi.testChannel(channelId, model ? { model } : undefined)
+    return result
+  }
+
+  // 测试项目组所有渠道
+  async function testGroupChannels(groupId: number) {
+    const results = await channelsApi.testGroupChannels(groupId)
+    return results
+  }
+
   return {
     channels,
     fetchByGroup,
     create,
     update,
     remove,
+    testChannel,
+    testGroupChannels,
   }
 })

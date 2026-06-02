@@ -20,13 +20,52 @@ const apiKeyStore = useApiKeyStore()
 
 const loading = ref(true)
 
+// 统计数据
+const totalGroups = ref(0)
+const totalChannels = ref(0)
+const totalApiKeys = ref(0)
+
 onMounted(async () => {
   try {
-    await Promise.all([
-      groupStore.fetchAll(),
-      channelStore.fetchByGroup(),
-      apiKeyStore.fetchAll(),
-    ])
+    // 1. 先获取所有项目组
+    const groups = await groupStore.fetchAll()
+    totalGroups.value = groups?.length ?? 0
+
+    // 2. 获取所有渠道（不传 group_id 获取全部）
+    try {
+      const channels = await channelStore.fetchByGroup()
+      totalChannels.value = channels?.length ?? 0
+    } catch {
+      // 如果失败，尝试逐个获取
+      if (groups && groups.length > 0) {
+        let count = 0
+        for (const g of groups) {
+          try {
+            const data = await channelStore.fetchByGroup(g.id)
+            count += data?.length ?? 0
+          } catch { /* ignore */ }
+        }
+        totalChannels.value = count
+      }
+    }
+
+    // 3. 获取所有 API Keys（不传 group_id 获取全部）
+    try {
+      const keys = await apiKeyStore.fetchAll()
+      totalApiKeys.value = keys?.length ?? 0
+    } catch {
+      // 如果失败，尝试逐个获取
+      if (groups && groups.length > 0) {
+        let count = 0
+        for (const g of groups) {
+          try {
+            const data = await apiKeyStore.fetchAll(g.id)
+            count += data?.length ?? 0
+          } catch { /* ignore */ }
+        }
+        totalApiKeys.value = count
+      }
+    }
   } catch {
     // silently fail
   } finally {
@@ -34,11 +73,11 @@ onMounted(async () => {
   }
 })
 
-// 使用计算属性确保响应式更新，添加空数组保护
+// 使用计算属性确保响应式更新
 const statsCards = computed(() => [
   {
     title: '项目组',
-    value: groupStore.groups?.length ?? 0,
+    value: totalGroups.value,
     icon: Folder,
     path: '/groups',
     color: '#409EFF',
@@ -46,7 +85,7 @@ const statsCards = computed(() => [
   },
   {
     title: '渠道',
-    value: channelStore.channels?.length ?? 0,
+    value: totalChannels.value,
     icon: Connection,
     path: '/channels',
     color: '#67C23A',
@@ -54,7 +93,7 @@ const statsCards = computed(() => [
   },
   {
     title: 'API Key',
-    value: apiKeyStore.apiKeys?.length ?? 0,
+    value: totalApiKeys.value,
     icon: Key,
     path: '/apikeys',
     color: '#E6A23C',
@@ -70,172 +109,64 @@ const quickActions = [
 </script>
 
 <template>
-  <div class="dashboard">
+  <div style="max-width: 1200px;">
     <!-- 欢迎区域 -->
-    <div class="welcome-section">
-      <h1 class="welcome-title">
+    <div style="margin-bottom: 24px;">
+      <h1 style="font-size: 22px; font-weight: 600; color: #303133; margin-bottom: 8px;">
         欢迎回来，{{ authStore.username || '管理员' }}
       </h1>
-      <p class="welcome-desc">
+      <p style="font-size: 14px; color: #909399;">
         这是 Xin-api 网关控制面板，在这里管理你的项目组、渠道和 API Key。
       </p>
     </div>
 
     <!-- 统计卡片 -->
-    <el-row :gutter="20" class="stats-row">
-      <el-col :xs="24" :sm="8" v-for="card in statsCards" :key="card.title">
-        <el-card
-          class="stat-card"
-          shadow="hover"
-          @click="router.push(card.path)"
-        >
-          <el-skeleton :rows="2" animated v-if="loading" />
-          <div v-else class="stat-content">
-            <div class="stat-info">
-              <p class="stat-title">{{ card.title }}</p>
-              <p class="stat-value" :style="{ color: card.color }">
-                {{ card.value }}
-              </p>
-            </div>
-            <div
-              class="stat-icon"
-              :style="{ background: card.bg, color: card.color }"
-            >
-              <el-icon :size="24">
-                <component :is="card.icon" />
-              </el-icon>
-            </div>
+    <div style="display: flex; gap: 20px; margin-bottom: 24px;">
+      <el-card
+        v-for="card in statsCards"
+        :key="card.title"
+        style="flex: 1; cursor:pointer;"
+        shadow="hover"
+        @click="router.push(card.path)"
+      >
+        <el-skeleton :rows="2" animated v-if="loading" />
+        <div v-else style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="flex: 1;">
+            <p style="font-size: 14px; color: #909399; margin-bottom: 8px;">{{ card.title }}</p>
+            <p style="font-size: 32px; font-weight: 600; line-height: 1;" :style="{ color: card.color }">
+              {{ card.value }}
+            </p>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+          <div
+            style="width: 56px; height: 56px; border-radius: 12px; display: flex; align-items: center; justify-content: center;"
+            :style="{ background: card.bg, color: card.color }"
+          >
+            <el-icon :size="24">
+              <component :is="card.icon" />
+            </el-icon>
+          </div>
+        </div>
+      </el-card>
+    </div>
 
     <!-- 快速操作 -->
-    <el-card class="quick-actions" shadow="never">
+    <el-card shadow="never">
       <template #header>
-        <div class="card-header">
-          <span>快速操作</span>
-          <span class="header-desc">常用管理入口</span>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 16px; font-weight: 600; color: #303133;">快速操作</span>
+          <span style="font-size: 13px; color: #909399; font-weight: normal;">常用管理入口</span>
         </div>
       </template>
-      <div class="actions-list">
+      <div style="display: flex; gap: 12px; flex-wrap: wrap;">
         <el-button
           v-for="action in quickActions"
           :key="action.path"
-          class="action-btn"
           @click="router.push(action.path)"
         >
           {{ action.label }}
-          <el-icon class="action-icon"><ArrowRight /></el-icon>
+          <el-icon style="font-size: 12px;"><ArrowRight /></el-icon>
         </el-button>
       </div>
     </el-card>
   </div>
 </template>
-
-<style scoped>
-.dashboard {
-  max-width: 1200px;
-}
-
-.welcome-section {
-  margin-bottom: 24px;
-}
-
-.welcome-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px 0;
-}
-
-.welcome-desc {
-  font-size: 14px;
-  color: #909399;
-  margin: 0;
-}
-
-.stats-row {
-  margin-bottom: 24px;
-}
-
-.stat-card {
-  cursor: pointer;
-  transition: transform 0.2s;
-  margin-bottom: 20px;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-}
-
-.stat-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-title {
-  font-size: 14px;
-  color: #909399;
-  margin: 0 0 8px 0;
-}
-
-.stat-value {
-  font-size: 32px;
-  font-weight: 600;
-  margin: 0;
-  line-height: 1;
-}
-
-.stat-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.quick-actions {
-  margin-top: 8px;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.card-header span:first-child {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.header-desc {
-  font-size: 13px;
-  color: #909399;
-  font-weight: normal;
-}
-
-.actions-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.action-icon {
-  font-size: 12px;
-}
-</style>

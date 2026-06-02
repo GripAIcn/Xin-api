@@ -83,6 +83,26 @@ export interface UpdateChannelRequest {
   status: number
 }
 
+// === Channel Test ===
+
+export interface TestChannelRequest {
+  model?: string
+}
+
+export interface ModelTestResult {
+  model: string
+  success: boolean
+  response_time_ms: number
+  error_msg?: string
+}
+
+export interface ChannelTestResult {
+  channel_id: number
+  channel_name: string
+  base_url: string
+  results: ModelTestResult[]
+}
+
 // === API Key ===
 
 export interface ApiKey {

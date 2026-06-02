@@ -4,8 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { useGroupStore } from '@/stores/groups'
 import { useChannelStore } from '@/stores/channels'
 import { useApiKeyStore } from '@/stores/apikeys'
-import { Plus, Edit, Delete, CopyDocument, Check, ArrowLeft } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, CopyDocument, Check, ArrowLeft, VideoPlay, CircleCheck, CircleClose, Warning } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import ChannelTestResult from '@/components/ChannelTestResult.vue'
+import type { ChannelTestResult as ChannelTestResultType } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -40,6 +42,13 @@ const channelForm = ref({
 
 // API Key
 const apiKeySubmitting = ref(false)
+
+// 测试结果相关
+const testResults = ref<Map<number, ChannelTestResultType>>(new Map())
+const testingChannels = ref<Set<number>>(new Set())
+const testingAllChannels = ref(false)
+const showTestResultDialog = ref(false)
+const selectedTestResult = ref<ChannelTestResultType | null>(null)
 
 onMounted(async () => {
   try {
@@ -130,10 +139,112 @@ const handleDeleteChannel = async (row: any) => {
       type: 'warning'
     })
     await channelStore.remove(row.id)
+    // 清除该渠道的测试结果
+    testResults.value.delete(row.id)
     ElMessage.success('渠道已删除')
   } catch (e: any) {
     if (e !== 'cancel') {
       ElMessage.error(e.message || '删除失败')
+    }
+  }
+}
+
+// === Channel Test Handlers ===
+// 测试单个渠道
+const handleTestChannel = async (row: any) => {
+  testingChannels.value.add(row.id)
+  try {
+    const result = await channelStore.testChannel(row.id)
+    testResults.value.set(row.id, result)
+    ElMessage.success('测试完成')
+  } catch (e: any) {
+    ElMessage.error(e.message || '测试失败')
+  } finally {
+    testingChannels.value.delete(row.id)
+  }
+}
+
+// 测试所有渠道
+const handleTestAllChannels = async () => {
+  testingAllChannels.value = true
+  try {
+    const results = await channelStore.testGroupChannels(groupId.value)
+    // 更新所有渠道的测试结果
+    results.forEach(result => {
+      testResults.value.set(result.channel_id, result)
+    })
+    ElMessage.success(`已完成 ${results.length} 个渠道的测试`)
+  } catch (e: any) {
+    ElMessage.error(e.message || '批量测试失败')
+  } finally {
+    testingAllChannels.value = false
+  }
+}
+
+// 查看测试详情
+const viewTestDetail = (row: any) => {
+  const result = testResults.value.get(row.id)
+  if (result) {
+    selectedTestResult.value = result
+    showTestResultDialog.value = true
+  }
+}
+
+// 格式化时间
+const formatTime = (ms: number) => {
+  if (ms < 1000) {
+    return `${ms}ms`
+  }
+  return `${(ms / 1000).toFixed(2)}s`
+}
+
+// 获取测试结果显示
+const getTestResultDisplay = (row: any) => {
+  const result = testResults.value.get(row.id)
+  if (!result) return null
+
+  const successCount = result.results.filter(r => r.success).length
+  const totalCount = result.results.length
+
+  if (totalCount === 1) {
+    // 单模型
+    const singleResult = result.results[0]
+    if (singleResult.success) {
+      return {
+        type: 'success',
+        text: formatTime(singleResult.response_time_ms),
+        icon: CircleCheck
+      }
+    } else {
+      return {
+        type: 'danger',
+        text: '失败',
+        icon: CircleClose
+      }
+    }
+  } else {
+    // 多模型
+    if (successCount === totalCount) {
+      return {
+        type: 'success',
+        text: `${totalCount}个模型`,
+        icon: CircleCheck,
+        isMulti: true
+      }
+    } else if (successCount === 0) {
+      return {
+        type: 'danger',
+        text: `${totalCount}个模型`,
+        icon: CircleClose,
+        isMulti: true
+      }
+    } else {
+      return {
+        type: 'warning',
+        text: `${successCount}/${totalCount}个`,
+        icon: Warning,
+        isMulti: true
+      }
     }
   }
 }
@@ -165,11 +276,11 @@ const copyKey = async () => {
 const handleDeleteKey = async (row: any) => {
   try {
     await ElMessageBox.confirm(
-      `<div class="delete-confirm-content">
-        <p class="delete-warning">删除后，使用此 Key 的应用将<strong>立即无法访问</strong>网关。</p>
-        <div class="delete-key-info">
-          <span class="delete-key-label">API Key：</span>
-          <code class="delete-key-value">${maskKey(row.key)}</code>
+      `<div style="padding: 8px 0;">
+        <p style="color: #e6a23c; margin-bottom: 12px;">删除后，使用此 Key 的应用将<strong>立即无法访问</strong>网关。</p>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="color: #606266; font-size: 14px;">API Key：</span>
+          <code style="font-family: monospace; background: #f5f7fa; padding: 2px 6px; border-radius: 4px; font-size: 13px;">${maskKey(row.key)}</code>
         </div>
       </div>`,
       '确认删除 API Key',
@@ -214,21 +325,21 @@ const formatDate = (date: string) => {
 </script>
 
 <template>
-  <div class="group-detail">
+  <div style="max-width: 1200px;">
     <!-- Header -->
-    <div class="page-header">
-      <div class="header-left">
+    <div style="margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; gap: 16px;">
         <el-button text :icon="ArrowLeft" @click="router.push('/groups')">
           返回
         </el-button>
-        <div v-if="group" class="group-info">
-          <h2 class="group-name">
+        <div v-if="group" style="flex: 1;">
+          <h2 style="font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
             {{ group.name }}
             <el-tag :type="group.status === 1 ? 'success' : 'info'" size="small">
               {{ group.status === 1 ? '启用' : '停用' }}
             </el-tag>
           </h2>
-          <p class="group-id">项目组 ID: {{ group.id }}</p>
+          <p style="font-size: 14px; color: #909399;">项目组 ID: {{ group.id }}</p>
         </div>
         <el-skeleton v-else :rows="1" style="width: 200px" />
       </div>
@@ -238,11 +349,23 @@ const formatDate = (date: string) => {
     <el-tabs v-model="activeTab" type="border-card">
       <!-- Channels Tab -->
       <el-tab-pane label="渠道" name="channels">
-        <div class="tab-header">
-          <p class="tab-desc">管理此项目组下的上游渠道</p>
-          <el-button type="primary" size="small" :icon="Plus" @click="openCreateChannel">
-            添加渠道
-          </el-button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <p style="font-size: 14px; color: #606266;">管理此项目组下的上游渠道</p>
+          <div style="display: flex; gap: 8px;">
+            <el-button
+              type="success"
+              size="small"
+              :icon="VideoPlay"
+              @click="handleTestAllChannels"
+              :loading="testingAllChannels"
+              :disabled="channelStore.channels.length === 0"
+            >
+              测试所有渠道
+            </el-button>
+            <el-button type="primary" size="small" :icon="Plus" @click="openCreateChannel">
+              添加渠道
+            </el-button>
+          </div>
         </div>
 
         <el-table :data="channelStore.channels" stripe v-loading="loading">
@@ -257,7 +380,37 @@ const formatDate = (date: string) => {
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <!-- 测试结果列 -->
+          <el-table-column label="测试结果" width="150" fixed="right">
+            <template #default="{ row }">
+              <div style="display: flex; align-items: center; justify-content: flex-start;">
+                <el-button
+                  v-if="!testResults.has(row.id)"
+                  link
+                  type="primary"
+                  :icon="VideoPlay"
+                  :loading="testingChannels.has(row.id)"
+                  :disabled="row.status !== 1 || testingChannels.has(row.id)"
+                  @click="handleTestChannel(row)"
+                >
+                  测试
+                </el-button>
+                <div
+                  v-else
+                  style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; cursor-pointer; transition: background-color 0.2s;"
+                  :style="{ color: getTestResultDisplay(row)?.type === 'success' ? '#67c23a' : getTestResultDisplay(row)?.type === 'danger' ? '#f56c6c' : '#e6a23c' }"
+                  @mouseenter="(e: MouseEvent) => (e.currentTarget as HTMLElement).style.backgroundColor = '#f5f7fa'"
+                  @mouseleave="(e: MouseEvent) => (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'"
+                  @click="viewTestDetail(row)"
+                >
+                  <el-icon><component :is="getTestResultDisplay(row)?.icon" /></el-icon>
+                  <span>{{ getTestResultDisplay(row)?.text }}</span>
+                  <el-tag v-if="getTestResultDisplay(row)?.isMulti" size="small" type="info">详情</el-tag>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" :icon="Edit" @click="openEditChannel(row)" />
               <el-button link type="danger" :icon="Delete" @click="handleDeleteChannel(row)" />
@@ -271,8 +424,8 @@ const formatDate = (date: string) => {
 
       <!-- API Keys Tab -->
       <el-tab-pane :label="`API Key (${apiKeyStore.apiKeys.length})`" name="apikeys">
-        <div class="tab-header">
-          <p class="tab-desc">管理此项目组的 API Key</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <p style="font-size: 14px; color: #606266;">管理此项目组的 API Key</p>
           <el-button type="primary" size="small" :icon="Plus" @click="handleCreateApiKey" :loading="apiKeySubmitting">
             创建 Key
           </el-button>
@@ -281,7 +434,7 @@ const formatDate = (date: string) => {
         <el-table :data="apiKeyStore.apiKeys" stripe>
           <el-table-column prop="key" label="API Key" min-width="300">
             <template #default="{ row }">
-              <code>{{ maskKey(row.key) }}</code>
+              <code style="font-family: monospace; background: #f5f7fa; padding: 2px 6px; border-radius: 4px; font-size: 13px;">{{ maskKey(row.key) }}</code>
             </template>
           </el-table-column>
           <el-table-column label="创建时间" width="180">
@@ -338,10 +491,10 @@ const formatDate = (date: string) => {
         title="请立即复制并保存此 Key，关闭后将无法再次查看完整 Key。"
         type="warning"
         :closable="false"
-        style="margin-bottom: 16px"
+        style="margin-bottom: 16px;"
       />
-      <div class="key-display">
-        <code class="key-value">{{ newKeyValue }}</code>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 8px; background: #f5f7fa;">
+        <code style="flex: 1; font-family: monospace; font-size: 13px; word-break: break-all;">{{ newKeyValue }}</code>
         <el-button :icon="keyCopied ? Check : CopyDocument" @click="copyKey">
           {{ keyCopied ? '已复制' : '复制' }}
         </el-button>
@@ -350,78 +503,14 @@ const formatDate = (date: string) => {
         <el-button type="primary" @click="showNewKeyDialog = false">我已保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 测试结果详情弹窗 -->
+    <el-dialog
+      v-model="showTestResultDialog"
+      title="渠道测试结果"
+      width="700px"
+    >
+      <ChannelTestResult v-if="selectedTestResult" :result="selectedTestResult" />
+    </el-dialog>
   </div>
 </template>
-
-<style scoped>
-.group-detail {
-  max-width: 1200px;
-}
-
-.page-header {
-  margin-bottom: 20px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.group-info {
-  flex: 1;
-}
-
-.group-name {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 4px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.group-id {
-  font-size: 13px;
-  color: #909399;
-  margin: 0;
-}
-
-.tab-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.tab-desc {
-  font-size: 14px;
-  color: #606266;
-  margin: 0;
-}
-
-.key-display {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
-}
-
-.key-value {
-  flex: 1;
-  font-family: monospace;
-  font-size: 14px;
-  word-break: break-all;
-}
-
-code {
-  font-family: monospace;
-  background: #f5f7fa;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-</style>

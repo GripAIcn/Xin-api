@@ -105,12 +105,12 @@ const formatDate = (date: string) => {
 </script>
 
 <template>
-  <div class="groups-page">
+  <div style="max-width: 1200px;">
     <!-- 页面标题 -->
-    <div class="page-header">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <div>
-        <h2 class="page-title">项目组</h2>
-        <p class="page-desc">管理 API 项目组及其状态</p>
+        <h2 style="font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px;">项目组</h2>
+        <p style="font-size: 14px; color: #909399;">管理 API 项目组及其状态</p>
       </div>
       <el-button type="primary" :icon="Plus" @click="openCreate">
         创建项目组
@@ -153,7 +153,7 @@ const formatDate = (date: string) => {
             <el-switch
               :model-value="row.status === 1"
               @change="handleToggleStatus(row)"
-              style="margin-right: 12px"
+              style="margin-right: 12px;"
             />
             <el-button
               link
@@ -209,29 +209,3 @@ const formatDate = (date: string) => {
     </el-dialog>
   </div>
 </template>
-
-<style scoped>
-.groups-page {
-  max-width: 1200px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px 0;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #909399;
-  margin: 0;
-}
-</style>

@@ -86,24 +86,24 @@ const handleUpdatePassword = async () => {
 </script>
 
 <template>
-  <div class="settings-page">
+  <div style="max-width: 1200px;">
     <!-- 页面标题 -->
-    <div class="page-header">
-      <h2 class="page-title">账户设置</h2>
-      <p class="page-desc">管理你的账户信息和登录密码</p>
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 22px; font-weight: 600; color: #303133; margin-bottom: 8px;">账户设置</h2>
+      <p style="font-size: 14px; color: #909399;">管理你的账户信息和登录密码</p>
     </div>
 
     <!-- 两列布局 -->
     <el-row :gutter="24">
       <!-- 修改用户名 -->
       <el-col :xs="24" :md="12">
-        <el-card shadow="hover" class="setting-card">
+        <el-card shadow="hover" style="height: 100%; margin-bottom: 20px;">
           <template #header>
-            <div class="card-header">
-              <el-icon :size="18" class="header-icon"><User /></el-icon>
-              <div class="header-title">
-                <span class="title-text">修改用户名</span>
-                <span class="header-desc">当前：{{ authStore.username }}</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <el-icon :size="18" style="color: #409eff; background: #ecf5ff; padding: 8px; border-radius: 8px;"><User /></el-icon>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 16px; font-weight: 600; color: #303133;">修改用户名</span>
+                <span style="font-size: 14px; color: #909399; font-weight: normal;">当前：{{ authStore.username }}</span>
               </div>
             </div>
           </template>
@@ -128,7 +128,7 @@ const handleUpdatePassword = async () => {
                 size="large"
                 :loading="usernameLoading"
                 @click="handleUpdateUsername"
-                class="submit-btn"
+                style="width: 100%;"
               >
                 {{ usernameLoading ? '保存中...' : '保存修改' }}
               </el-button>
@@ -139,13 +139,13 @@ const handleUpdatePassword = async () => {
 
       <!-- 修改密码 -->
       <el-col :xs="24" :md="12">
-        <el-card shadow="hover" class="setting-card">
+        <el-card shadow="hover" style="height: 100%; margin-bottom: 20px;">
           <template #header>
-            <div class="card-header">
-              <el-icon :size="18" class="header-icon"><Lock /></el-icon>
-              <div class="header-title">
-                <span class="title-text">修改密码</span>
-                <span class="header-desc">密码长度 8-20 位</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <el-icon :size="18" style="color: #409eff; background: #ecf5ff; padding: 8px; border-radius: 8px;"><Lock /></el-icon>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 16px; font-weight: 600; color: #303133;">修改密码</span>
+                <span style="font-size: 14px; color: #909399; font-weight: normal;">密码长度 8-20 位</span>
               </div>
             </div>
           </template>
@@ -188,7 +188,7 @@ const handleUpdatePassword = async () => {
                 size="large"
                 :loading="passwordLoading"
                 @click="handleUpdatePassword"
-                class="submit-btn"
+                style="width: 100%;"
               >
                 {{ passwordLoading ? '保存中...' : '修改密码' }}
               </el-button>
@@ -201,67 +201,6 @@ const handleUpdatePassword = async () => {
 </template>
 
 <style scoped>
-.settings-page {
-  max-width: 100%;
-}
-
-.page-header {
-  margin-bottom: 24px;
-}
-
-.page-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px 0;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #909399;
-  margin: 0;
-}
-
-.setting-card {
-  height: 100%;
-  margin-bottom: 20px;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-icon {
-  color: #409eff;
-  background: #ecf5ff;
-  padding: 8px;
-  border-radius: 8px;
-}
-
-.header-title {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.title-text {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.header-desc {
-  font-size: 13px;
-  color: #909399;
-  font-weight: normal;
-}
-
-.submit-btn {
-  width: 100%;
-}
-
 :deep(.el-form-item__label) {
   font-weight: 500;
   color: #606266;

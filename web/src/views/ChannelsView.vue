@@ -2,8 +2,10 @@
 import { ref, onMounted, watch } from 'vue'
 import { useChannelStore } from '@/stores/channels'
 import { useGroupStore } from '@/stores/groups'
-import { Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, VideoPlay, CircleCheck, CircleClose, Warning } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import ChannelTestResult from '@/components/ChannelTestResult.vue'
+import type { ChannelTestResult as ChannelTestResultType } from '@/types/api'
 
 const channelStore = useChannelStore()
 const groupStore = useGroupStore()
@@ -14,6 +16,12 @@ const dialogVisible = ref(false)
 const dialogType = ref<'create' | 'edit'>('create')
 const formRef = ref()
 const submitting = ref(false)
+
+// 测试结果相关
+const testResults = ref<Map<number, ChannelTestResultType>>(new Map())
+const testingChannels = ref<Set<number>>(new Set())
+const showTestResultDialog = ref(false)
+const selectedTestResult = ref<ChannelTestResultType | null>(null)
 
 const form = ref({
   id: 0,
@@ -59,6 +67,8 @@ const loadChannels = async () => {
     }
 
     await channelStore.fetchByGroup(groupId)
+    // 清空之前的测试结果
+    testResults.value.clear()
   } catch (e: any) {
     ElMessage.error(e?.message || '加载渠道列表失败')
   } finally {
@@ -158,6 +168,63 @@ const handleDelete = async (row: any) => {
   }
 }
 
+// 测试单个渠道
+const handleTestChannel = async (row: any) => {
+  testingChannels.value.add(row.id)
+  try {
+    const result = await channelStore.testChannel(row.id)
+    testResults.value.set(row.id, result)
+    ElMessage.success('测试完成')
+  } catch (e: any) {
+    ElMessage.error(e.message || '测试失败')
+  } finally {
+    testingChannels.value.delete(row.id)
+  }
+}
+
+// 查看测试详情
+const viewTestDetail = (row: any) => {
+  const result = testResults.value.get(row.id)
+  if (result) {
+    selectedTestResult.value = result
+    showTestResultDialog.value = true
+  }
+}
+
+// 格式化时间
+const formatTime = (ms: number) => {
+  if (ms < 1000) {
+    return `${ms}ms`
+  }
+  return `${(ms / 1000).toFixed(2)}s`
+}
+
+// 获取测试结果显示
+const getTestResultDisplay = (row: any) => {
+  const result = testResults.value.get(row.id)
+  if (!result) return null
+
+  const successCount = result.results.filter(r => r.success).length
+  const totalCount = result.results.length
+
+  if (totalCount === 1) {
+    const singleResult = result.results[0]
+    if (singleResult.success) {
+      return { type: 'success', text: formatTime(singleResult.response_time_ms), icon: CircleCheck }
+    } else {
+      return { type: 'danger', text: '失败', icon: CircleClose }
+    }
+  } else {
+    if (successCount === totalCount) {
+      return { type: 'success', text: `${totalCount}个模型`, icon: CircleCheck, isMulti: true }
+    } else if (successCount === 0) {
+      return { type: 'danger', text: `${totalCount}个模型`, icon: CircleClose, isMulti: true }
+    } else {
+      return { type: 'warning', text: `${successCount}/${totalCount}个`, icon: Warning, isMulti: true }
+    }
+  }
+}
+
 const statusType = (status: number) => {
   if (status === 1) return 'success'
   if (status === 2) return 'danger'
@@ -176,12 +243,12 @@ const groupName = (groupId: number) => {
 </script>
 
 <template>
-  <div class="channels-page">
+  <div style="max-width: 1200px;">
     <!-- 页面标题 -->
-    <div class="page-header">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <div>
-        <h2 class="page-title">渠道管理</h2>
-        <p class="page-desc">管理所有上游供应商渠道</p>
+        <h2 style="font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px;">渠道管理</h2>
+        <p style="font-size: 14px; color: #909399;">管理所有上游供应商渠道</p>
       </div>
       <el-button type="primary" :icon="Plus" @click="openCreate" :disabled="!groupStore.groups?.length">
         添加渠道
@@ -189,7 +256,7 @@ const groupName = (groupId: number) => {
     </div>
 
     <!-- 筛选器 -->
-    <el-card shadow="never" class="filter-card">
+    <el-card shadow="never" style="margin-bottom: 20px;">
       <el-select v-model="selectedGroupId" placeholder="选择项目组" style="width: 240px">
         <el-option label="全部项目组" value="all" />
         <el-option
@@ -226,7 +293,38 @@ const groupName = (groupId: number) => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <!-- 测试结果列 -->
+        <el-table-column label="测试结果" width="150" fixed="right">
+          <template #default="{ row }">
+            <div style="display: flex; align-items: center; justify-content: flex-start;">
+              <el-button
+                v-if="!testResults.has(row.id)"
+                link
+                type="primary"
+                :icon="VideoPlay"
+                :loading="testingChannels.has(row.id)"
+                :disabled="row.status !== 1 || testingChannels.has(row.id)"
+                @click="handleTestChannel(row)"
+              >
+                测试
+              </el-button>
+              <div
+                v-else
+                style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; cursor-pointer;"
+                :style="{ 
+                  color: getTestResultDisplay(row)?.type === 'success' ? '#67c23a' : 
+                        getTestResultDisplay(row)?.type === 'danger' ? '#f56c6c' : '#e6a23c'
+                }"
+                @click="viewTestDetail(row)"
+              >
+                <el-icon><component :is="getTestResultDisplay(row)?.icon" /></el-icon>
+                <span>{{ getTestResultDisplay(row)?.text }}</span>
+                <el-tag v-if="getTestResultDisplay(row)?.isMulti" size="small" type="info">详情</el-tag>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" :icon="Edit" @click="openEdit(row)" />
             <el-button link type="danger" :icon="Delete" @click="handleDelete(row)" />
@@ -278,35 +376,20 @@ const groupName = (groupId: number) => {
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 测试结果详情弹窗 -->
+    <el-dialog
+      v-model="showTestResultDialog"
+      title="渠道测试结果"
+      width="700px"
+    >
+      <ChannelTestResult v-if="selectedTestResult" :result="selectedTestResult" />
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
-.channels-page {
-  max-width: 1200px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px 0;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #909399;
-  margin: 0;
-}
-
-.filter-card {
-  margin-bottom: 20px;
-}
+.text-success { color: #67c23a; }
+.text-danger { color: #f56c6c; }
+.text-warning { color: #e6a23c; }
 </style>

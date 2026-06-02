@@ -120,12 +120,12 @@ const formatDate = (date: string) => {
 </script>
 
 <template>
-  <div class="apikeys-page">
+  <div class="max-w-[1200px]">
     <!-- 页面标题 -->
-    <div class="page-header">
+    <div class="flex justify-between items-center mb-5">
       <div>
-        <h2 class="page-title">API Key 管理</h2>
-        <p class="page-desc">管理项目组的 API 访问密钥</p>
+        <h2 class="text-xl font-semibold text-gray-800 mb-2">API Key 管理</h2>
+        <p class="text-sm text-gray-500">管理项目组的 API 访问密钥</p>
       </div>
       <el-button
         type="primary"
@@ -139,7 +139,7 @@ const formatDate = (date: string) => {
     </div>
 
     <!-- 筛选器 -->
-    <el-card shadow="never" class="filter-card">
+    <el-card shadow="never" class="mb-5">
       <el-select v-model="selectedGroupId" placeholder="选择项目组" style="width: 240px">
         <el-option label="全部项目组" value="all" />
         <el-option
@@ -161,7 +161,7 @@ const formatDate = (date: string) => {
       >
         <el-table-column prop="key" label="API Key" min-width="350">
           <template #default="{ row }">
-            <code>{{ maskKey(row.key) }}</code>
+            <code class="font-mono bg-page-light px-2 py-1 rounded text-sm">{{ maskKey(row.key) }}</code>
           </template>
         </el-table-column>
         <el-table-column label="所属项目组" min-width="150">
@@ -196,10 +196,10 @@ const formatDate = (date: string) => {
         title="⚠️ 请立即复制并保存此 Key。关闭对话框后将无法再次查看完整 Key。"
         type="warning"
         :closable="false"
-        style="margin-bottom: 16px"
+        class="mb-4"
       />
-      <div class="key-display">
-        <code class="key-value">{{ newKeyValue }}</code>
+      <div class="flex items-center gap-3 p-4 bg-page-light rounded-lg">
+        <code class="flex-1 font-mono text-sm break-all">{{ newKeyValue }}</code>
         <el-button :icon="keyCopied ? Check : CopyDocument" @click="copyKey">
           {{ keyCopied ? '已复制' : '复制' }}
         </el-button>
@@ -220,11 +220,11 @@ const formatDate = (date: string) => {
         title="删除后，使用此 Key 的应用将立即无法访问网关。"
         type="warning"
         :closable="false"
-        style="margin-bottom: 16px"
+        class="mb-4"
       />
-      <div class="delete-key-display" v-if="deleteKeyInfo">
-        <span class="delete-key-label">API Key：</span>
-        <code class="delete-key-value">{{ maskKey(deleteKeyInfo.key) }}</code>
+      <div class="flex items-center gap-2 px-4 py-3 rounded-lg" style="background: #f5f7fa; border-left: 3px solid #409eff;" v-if="deleteKeyInfo">
+        <span class="text-sm text-gray-500 flex-shrink-0">API Key：</span>
+        <code class="font-mono text-sm text-gray-700 break-all">{{ maskKey(deleteKeyInfo.key) }}</code>
       </div>
       <template #footer>
         <el-button @click="showDeleteDialog = false">取消</el-button>
@@ -233,80 +233,3 @@ const formatDate = (date: string) => {
     </el-dialog>
   </div>
 </template>
-
-<style scoped>
-.apikeys-page {
-  max-width: 1200px;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #303133;
-  margin: 0 0 8px 0;
-}
-
-.page-desc {
-  font-size: 14px;
-  color: #909399;
-  margin: 0;
-}
-
-.filter-card {
-  margin-bottom: 20px;
-}
-
-.key-display {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
-}
-
-.key-value {
-  flex: 1;
-  font-family: monospace;
-  font-size: 14px;
-  word-break: break-all;
-}
-
-.delete-key-display {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #f5f7fa;
-  border-radius: 8px;
-  border-left: 3px solid #409eff;
-}
-
-.delete-key-label {
-  font-size: 13px;
-  color: #909399;
-  flex-shrink: 0;
-}
-
-.delete-key-value {
-  font-family: monospace;
-  font-size: 14px;
-  color: #606266;
-  word-break: break-all;
-}
-
-code {
-  font-family: monospace;
-  background: #f5f7fa;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 13px;
-}
-</style>
