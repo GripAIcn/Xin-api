@@ -42,7 +42,7 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | Vue 3 + TypeScript + Vite + Tailwind CSS + Radix UI |
+| **Frontend** | Vue 3 + TypeScript + Vite + Tailwind CSS + Element Plus |
 | **Backend** | Go 1.25 + Gin + GORM + JWT |
 | **Database** | PostgreSQL 16 (metadata storage) |
 | **Cache** | Redis 7 (rate limiting, circuit breaker, sessions) |

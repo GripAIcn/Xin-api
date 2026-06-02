@@ -42,7 +42,7 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 
 | 层级 | 技术 |
 |------|------|
-| **前端** | Vue 3 + TypeScript + Vite + Tailwind CSS + Radix UI |
+| **前端** | Vue 3 + TypeScript + Vite + Tailwind CSS + Element Plus |
 | **后端** | Go 1.25 + Gin + GORM + JWT |
 | **数据库** | PostgreSQL 16（元数据存储） |
 | **缓存** | Redis 7（限流、熔断、会话） |
