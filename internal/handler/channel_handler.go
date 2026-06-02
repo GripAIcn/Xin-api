@@ -9,19 +9,22 @@ import (
 
 	"Xin-api/internal/form"
 	"Xin-api/internal/model"
+	"Xin-api/internal/service"
 	"Xin-api/internal/store/postgresql"
 	"Xin-api/pkg/response"
 )
 
 type ChannelHandler struct {
-	channelRepo postgresql.ChannelRepo
-	validate    *validator.Validate
+	channelRepo   postgresql.ChannelRepo
+	channelTester *service.ChannelTester
+	validate      *validator.Validate
 }
 
 func NewChannelHandler(repo postgresql.ChannelRepo) *ChannelHandler {
 	return &ChannelHandler{
-		channelRepo: repo,
-		validate:    validator.New(),
+		channelRepo:   repo,
+		channelTester: service.NewChannelTester(repo),
+		validate:      validator.New(),
 	}
 }
 
@@ -121,6 +124,50 @@ func (h *ChannelHandler) ListChannelsByGroup(c *gin.Context) {
 	}
 
 	response.AdminSuccess(c, channels)
+}
+
+// TestChannel 测试单个渠道
+func (h *ChannelHandler) TestChannel(c *gin.Context) {
+	idStr := c.Param("id")
+	channelID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	var req form.TestChannelReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// 允许空 body，此时测试所有模型
+		req.Model = ""
+	}
+
+	result, err := h.channelTester.TestChannel(c.Request.Context(), channelID, req.Model)
+	if err != nil {
+		logger.Error(c.Request.Context(), "test channel failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	response.AdminSuccess(c, result)
+}
+
+// TestGroupChannels 测试项目组下所有渠道
+func (h *ChannelHandler) TestGroupChannels(c *gin.Context) {
+	idStr := c.Param("id")
+	groupID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	results, err := h.channelTester.TestGroupAllChannels(c.Request.Context(), groupID)
+	if err != nil {
+		logger.Error(c.Request.Context(), "test group channels failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	response.AdminSuccess(c, results)
 }
 
 // bindAndValidate 参数校验辅助方法

@@ -20,3 +20,8 @@ type UpdateChannelReq struct {
 	Weight       int    `json:"weight" binding:"required" validate:"required,min=1,max=100"`
 	Status       int    `json:"status" binding:"oneof=0 1 2" validate:"oneof=0 1 2"` // 状态允许修改为 0-手动关闭, 1-正常, 2-自动熔断
 }
+
+// TestChannelReq 测试单个渠道请求入参
+type TestChannelReq struct {
+	Model string `json:"model"` // 可选，指定测试某个模型；为空则测试该渠道支持的所有模型
+}

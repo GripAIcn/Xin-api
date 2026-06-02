@@ -62,6 +62,10 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			protected.GET("/channels", channelHandler.ListChannelsByGroup)
 			protected.PUT("/channels/:id", channelHandler.UpdateChannel)
 			protected.DELETE("/channels/:id", channelHandler.DeleteChannel)
+			protected.POST("/channels/:id/test", channelHandler.TestChannel) // 测试单个渠道
+
+			// 项目组渠道批量测试
+			protected.POST("/groups/:id/test-channels", channelHandler.TestGroupChannels) // 测试项目组所有渠道
 
 			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)        // 为组分发新 Key
 			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)          // 查询组名下的 Key 列表
