@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -21,6 +21,14 @@ const router = useRouter()
 const isCollapse = ref(false)
 const isMobile = ref(false)
 const drawerVisible = ref(false)
+
+// 组件挂载时验证 token 是否有效
+onMounted(async () => {
+  // 如果有 token，验证其有效性
+  if (authStore.token) {
+    await authStore.validateToken()
+  }
+})
 
 // 检测是否为移动端
 const checkMobile = () => {
