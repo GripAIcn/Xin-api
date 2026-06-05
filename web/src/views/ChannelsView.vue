@@ -209,7 +209,7 @@ const getTestResultDisplay = (row: any) => {
 
   if (totalCount === 1) {
     const singleResult = result.results[0]
-    if (singleResult.success) {
+    if (singleResult && singleResult.success) {
       return { type: 'success', text: formatTime(singleResult.response_time_ms), icon: CircleCheck }
     } else {
       return { type: 'danger', text: '失败', icon: CircleClose }
