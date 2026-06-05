@@ -120,12 +120,12 @@ const formatDate = (date: string) => {
 </script>
 
 <template>
-  <div class="max-w-[1200px]">
+  <div style="max-width: 1200px;">
     <!-- 页面标题 -->
-    <div class="flex justify-between items-center mb-5">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <div>
-        <h2 class="text-xl font-semibold text-gray-800 mb-2">API Key 管理</h2>
-        <p class="text-sm text-gray-500">管理项目组的 API 访问密钥</p>
+        <h2 style="font-size: 20px; font-weight: 600; color: #303133; margin-bottom: 8px;">API Key 管理</h2>
+        <p style="font-size: 14px; color: #909399;">管理项目组的 API 访问密钥</p>
       </div>
       <el-button
         type="primary"
@@ -139,7 +139,7 @@ const formatDate = (date: string) => {
     </div>
 
     <!-- 筛选器 -->
-    <el-card shadow="never" class="mb-5">
+    <el-card shadow="never" style="margin-bottom: 20px;">
       <el-select v-model="selectedGroupId" placeholder="选择项目组" style="width: 240px">
         <el-option label="全部项目组" value="all" />
         <el-option
@@ -161,7 +161,7 @@ const formatDate = (date: string) => {
       >
         <el-table-column prop="key" label="API Key" min-width="350">
           <template #default="{ row }">
-            <code class="font-mono bg-page-light px-2 py-1 rounded text-sm">{{ maskKey(row.key) }}</code>
+            <code style="font-family: monospace; background: #f5f7fa; padding: 2px 6px; border-radius: 4px; font-size: 13px;">{{ maskKey(row.key) }}</code>
           </template>
         </el-table-column>
         <el-table-column label="所属项目组" min-width="150">
@@ -193,13 +193,13 @@ const formatDate = (date: string) => {
       :close-on-click-modal="false"
     >
       <el-alert
-        title="⚠️ 请立即复制并保存此 Key。关闭对话框后将无法再次查看完整 Key。"
+        title="请立即复制并保存此 Key，关闭后将无法再次查看完整 Key。"
         type="warning"
         :closable="false"
-        class="mb-4"
+        style="margin-bottom: 16px;"
       />
-      <div class="flex items-center gap-3 p-4 bg-page-light rounded-lg">
-        <code class="flex-1 font-mono text-sm break-all">{{ newKeyValue }}</code>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 8px; background: #f5f7fa;">
+        <code style="flex: 1; font-family: monospace; font-size: 13px; word-break: break-all;">{{ newKeyValue }}</code>
         <el-button :icon="keyCopied ? Check : CopyDocument" @click="copyKey">
           {{ keyCopied ? '已复制' : '复制' }}
         </el-button>
@@ -220,11 +220,14 @@ const formatDate = (date: string) => {
         title="删除后，使用此 Key 的应用将立即无法访问网关。"
         type="warning"
         :closable="false"
-        class="mb-4"
+        style="margin-bottom: 16px;"
       />
-      <div class="flex items-center gap-2 px-4 py-3 rounded-lg" style="background: #f5f7fa; border-left: 3px solid #409eff;" v-if="deleteKeyInfo">
-        <span class="text-sm text-gray-500 flex-shrink-0">API Key：</span>
-        <code class="font-mono text-sm text-gray-700 break-all">{{ maskKey(deleteKeyInfo.key) }}</code>
+      <div 
+        v-if="deleteKeyInfo"
+        style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-radius: 8px; background: #f5f7fa; border-left: 3px solid #409eff;"
+      >
+        <span style="font-size: 14px; color: #909399; flex-shrink: 0;">API Key：</span>
+        <code style="font-family: monospace; font-size: 13px; color: #606266; word-break: break-all;">{{ maskKey(deleteKeyInfo.key) }}</code>
       </div>
       <template #footer>
         <el-button @click="showDeleteDialog = false">取消</el-button>
