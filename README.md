@@ -137,7 +137,7 @@ npm run dev
 | `GIN_MODE` | `release`      | 运行模式（debug/release）|
 | `LOG_LEVEL` | `info`         | 日志级别 |
 | `POSTGRES_HOST` | `127.0.0.1`    | PostgreSQL 主机 |
-| `POSTGRES_USER` | `root`           | PostgreSQL 用户名 |
+| `POSTGRES_USER` | `root`         | PostgreSQL 用户名 |
 | `POSTGRES_PASSWORD` | `123456`       | PostgreSQL 密码 |
 | `POSTGRES_DB` | `gateway`      | PostgreSQL 数据库名 |
 | `POSTGRES_PORT` | `5432`         | PostgreSQL 端口 |
@@ -150,7 +150,7 @@ npm run dev
 | `JWT_EXPIRE` | `24h`          | JWT 过期时间 |
 | `CB_FAILURE_THRESHOLD` | `5`            | 熔断失败阈值 |
 | `CB_RECOVERY_INTERVAL` | `60s`          | 熔断恢复间隔 |
-| `CACHE_CHANNEL_EXPIRE` | `5min`         | 渠道缓存过期时间 |
+| `CACHE_CHANNEL_EXPIRE` | `300s`         | 渠道缓存过期时间 |
 | `PROXY_REQUEST_TIMEOUT` | `180s`         | 上游请求超时 |
 | `PROXY_MAX_BODY_MB` | `10`           | 最大请求体大小（MB） |
 | `DEFAULT_RPM` | `60`           | 默认每分钟请求数限制（Docker Compose 使用） |

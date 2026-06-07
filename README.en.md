@@ -150,7 +150,7 @@ The frontend dev server runs on `http://localhost:5173` by default.
 | `JWT_EXPIRE` | `24h`          | JWT expiration time |
 | `CB_FAILURE_THRESHOLD` | `5`            | Circuit breaker failure threshold |
 | `CB_RECOVERY_INTERVAL` | `60s`          | Circuit breaker recovery interval |
-| `CACHE_CHANNEL_EXPIRE` | `5min`         | Channel cache expiration time |
+| `CACHE_CHANNEL_EXPIRE` | `300s`         | Channel cache expiration time |
 | `PROXY_REQUEST_TIMEOUT` | `180s`         | Upstream request timeout |
 | `PROXY_MAX_BODY_MB` | `10`           | Max request body size (MB) |
 | `DEFAULT_RPM` | `60`           | Default requests per minute limit (Docker Compose only) |
