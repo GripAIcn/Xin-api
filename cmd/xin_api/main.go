@@ -57,7 +57,7 @@ func main() {
 	}))
 
 	// 6. 【控制面】动态路由与核心鉴权切面总装
-	router.SetupRouter(r, db, *cfg, breaker)
+	router.SetupRouter(r, db, *cfg, breaker, rdb)
 
 	// 7. 静态前端 SPA (生产模式)
 	r.StaticFile("/", "./web/dist/index.html")

@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"Xin-api/config"
@@ -14,7 +15,7 @@ import (
 
 // SetupRouter 统一注册控制面管理后台路由
 func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
-	breaker *service.CircuitBreaker) {
+	breaker *service.CircuitBreaker, rdb *redis.Client) {
 	// 1. 初始化 Handler（注入底层的 DB 仓库和配置）
 	userRepo := postgresql.NewUserRepo(db)
 	userHandler := handler.NewUserHandler(userRepo, cfg.JWT)
@@ -23,7 +24,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	groupRepo := postgresql.NewGroupRepo(db)
 	groupHandler := handler.NewGroupHandler(groupRepo)
 	channelRepo := postgresql.NewChannelRepo(db)
-	channelHandler := handler.NewChannelHandler(channelRepo)
+	channelHandler := handler.NewChannelHandler(channelRepo, rdb)
 	balancer := service.NewWeightedRRBalancer()
 	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout)
 
@@ -79,7 +80,9 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		adapterGroup.Register(adapter.NewOpenAIAdapter())
 
 		chatHandler := handler.NewChatHandler(
-			postgresql.NewChannelRepo(db),
+			channelRepo,
+			rdb,
+			cfg.Cache.ChannelExpireTime,
 			balancer, breaker, streamProxy,
 			adapterGroup,
 		)
