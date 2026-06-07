@@ -129,31 +129,32 @@ npm run dev
 
 ### 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `PROXY_PORT` | `8080` | 后端服务端口 |
-| `NGINX_HTTP_PORT` | `80` | Nginx HTTP 端口（Docker Compose 使用） |
-| `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS 端口（Docker Compose 使用） |
-| `GIN_MODE` | `release` | 运行模式（debug/release）|
-| `LOG_LEVEL` | `info` | 日志级别 |
-| `POSTGRES_HOST` | `127.0.0.1` | PostgreSQL 主机 |
-| `POSTGRES_USER` | `root` | PostgreSQL 用户名 |
-| `POSTGRES_PASSWORD` | `123456` | PostgreSQL 密码 |
-| `POSTGRES_DB` | `gateway` | PostgreSQL 数据库名 |
-| `POSTGRES_PORT` | `5432` | PostgreSQL 端口 |
-| `REDIS_HOST` | `127.0.0.1` | Redis 主机 |
-| `REDIS_PORT` | `6379` | Redis 端口 |
-| `REDIS_PASSWORD` | `123456` | Redis 密码 |
-| `REDIS_DB` | `0` | Redis 数据库编号 |
-| `REDIS_POOL_SIZE` | `20` | Redis 连接池大小 |
+| 变量 | 默认值            | 说明 |
+|------|----------------|------|
+| `PROXY_PORT` | `8080`         | 后端服务端口 |
+| `NGINX_HTTP_PORT` | `80`           | Nginx HTTP 端口（Docker Compose 使用） |
+| `NGINX_HTTPS_PORT` | `443`          | Nginx HTTPS 端口（Docker Compose 使用） |
+| `GIN_MODE` | `release`      | 运行模式（debug/release）|
+| `LOG_LEVEL` | `info`         | 日志级别 |
+| `POSTGRES_HOST` | `127.0.0.1`    | PostgreSQL 主机 |
+| `POSTGRES_USER` | `root`           | PostgreSQL 用户名 |
+| `POSTGRES_PASSWORD` | `123456`       | PostgreSQL 密码 |
+| `POSTGRES_DB` | `gateway`      | PostgreSQL 数据库名 |
+| `POSTGRES_PORT` | `5432`         | PostgreSQL 端口 |
+| `REDIS_HOST` | `127.0.0.1`    | Redis 主机 |
+| `REDIS_PORT` | `6379`         | Redis 端口 |
+| `REDIS_PASSWORD` | `123456`       | Redis 密码 |
+| `REDIS_DB` | `1`            | Redis 数据库编号 |
+| `REDIS_POOL_SIZE` | `20`           | Redis 连接池大小 |
 | `JWT_SECRET` | `123456zbcd+-` | JWT 签名密钥（生产务必更换） |
-| `JWT_EXPIRE` | `24h` | JWT 过期时间 |
-| `CB_FAILURE_THRESHOLD` | `5` | 熔断失败阈值 |
-| `CB_RECOVERY_INTERVAL` | `60s` | 熔断恢复间隔 |
-| `PROXY_REQUEST_TIMEOUT` | `180s` | 上游请求超时 |
-| `PROXY_MAX_BODY_MB` | `10` | 最大请求体大小（MB） |
-| `DEFAULT_RPM` | `60` | 默认每分钟请求数限制（Docker Compose 使用） |
-| `DEFAULT_TPM` | `100000` | 默认每分钟 Token 数限制（Docker Compose 使用） |
+| `JWT_EXPIRE` | `24h`          | JWT 过期时间 |
+| `CB_FAILURE_THRESHOLD` | `5`            | 熔断失败阈值 |
+| `CB_RECOVERY_INTERVAL` | `60s`          | 熔断恢复间隔 |
+| `CACHE_CHANNEL_EXPIRE` | `5min`         | 渠道缓存过期时间 |
+| `PROXY_REQUEST_TIMEOUT` | `180s`         | 上游请求超时 |
+| `PROXY_MAX_BODY_MB` | `10`           | 最大请求体大小（MB） |
+| `DEFAULT_RPM` | `60`           | 默认每分钟请求数限制（Docker Compose 使用） |
+| `DEFAULT_TPM` | `100000`       | 默认每分钟 Token 数限制（Docker Compose 使用） |
 
 ---
 
