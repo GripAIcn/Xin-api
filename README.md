@@ -1,6 +1,6 @@
 # Xin API 🚀
 
-[English](./README-en.md) | 中文
+[English](./README.en.md) | 中文
 
 <p align="center">
   <strong>集大模型 API 统一管理、全链路追踪、智能分发于一体的高性能网关服务</strong>
@@ -46,7 +46,7 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 | **前端** | Vue 3 + TypeScript + Vite + Tailwind CSS + Element Plus |
 | **后端** | Go 1.25 + Gin + GORM + JWT |
 | **数据库** | PostgreSQL 16（元数据存储） |
-| **缓存** | Redis 7（限流、熔断、会话） |
+| **缓存** | Redis 7（限流、熔断、渠道查询缓存） |
 | **代理** | Nginx（反向代理、静态资源） |
 | **部署** | Docker + Docker Compose |
 
