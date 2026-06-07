@@ -1,10 +1,14 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 
 	"Xin-api/internal/adapter"
 	"Xin-api/internal/model"
@@ -16,6 +20,8 @@ import (
 // ChatHandler 数据面聊天补全处理器
 type ChatHandler struct {
 	channelRepo  postgresql.ChannelRepo
+	redis        *redis.Client
+	cacheExpire  time.Duration
 	balancer     service.ChannelBalancer
 	breaker      service.ChannelBreaker
 	proxy        *service.StreamProxy
@@ -25,6 +31,8 @@ type ChatHandler struct {
 // NewChatHandler 创建聊天补全处理器
 func NewChatHandler(
 	channelRepo postgresql.ChannelRepo,
+	rdb *redis.Client,
+	cacheExpire time.Duration,
 	balancer service.ChannelBalancer,
 	breaker service.ChannelBreaker,
 	streamProxy *service.StreamProxy,
@@ -32,11 +40,39 @@ func NewChatHandler(
 ) *ChatHandler {
 	return &ChatHandler{
 		channelRepo:  channelRepo,
+		redis:        rdb,
+		cacheExpire:  cacheExpire,
 		balancer:     balancer,
 		breaker:      breaker,
 		proxy:        streamProxy,
 		adapterGroup: adapterGroup,
 	}
+}
+
+// getChannelsWithCache 优先从缓存获取渠道，未命中则查数据库
+func (h *ChatHandler) getChannelsWithCache(ctx context.Context, groupID int64, modelName string) ([]model.Channel, error) {
+	cacheKey := fmt.Sprintf("xin:channels:active:%d:%s", groupID, modelName)
+
+	// 1. 尝试从缓存获取
+	if cached, err := h.redis.Get(ctx, cacheKey).Bytes(); err == nil {
+		var channels []model.Channel
+		if jsonErr := json.Unmarshal(cached, &channels); jsonErr == nil {
+			return channels, nil
+		}
+	}
+
+	// 2. 缓存未命中，查询数据库
+	channels, err := h.channelRepo.ListActiveByGroupAndModel(ctx, groupID, modelName)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 写入缓存（不阻塞主流程）
+	if data, marshalErr := json.Marshal(channels); marshalErr == nil {
+		h.redis.Set(ctx, cacheKey, data, h.cacheExpire)
+	}
+
+	return channels, nil
 }
 
 // HandleDataPlane 通用数据面请求处理
@@ -70,8 +106,8 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 	}
 	gid := groupID.(int64)
 
-	// 4. 查询可用渠道
-	channels, err := h.channelRepo.ListActiveByGroupAndModel(c.Request.Context(), gid, modelName)
+	// 4. 查询可用渠道（使用缓存）
+	channels, err := h.getChannelsWithCache(c.Request.Context(), gid, modelName)
 	if err != nil {
 		logger.Error(c.Request.Context(), "list channels failed: %v", err)
 		response.DataPlaneError(c, response.InternalError)

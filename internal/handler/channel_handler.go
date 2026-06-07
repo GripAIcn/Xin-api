@@ -1,11 +1,14 @@
 package handler
 
 import (
+	"context"
+	"fmt"
 	"strconv"
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/redis/go-redis/v9"
 
 	"Xin-api/internal/form"
 	"Xin-api/internal/model"
@@ -17,13 +20,15 @@ import (
 type ChannelHandler struct {
 	channelRepo   postgresql.ChannelRepo
 	channelTester *service.ChannelTester
+	redis         *redis.Client
 	validate      *validator.Validate
 }
 
-func NewChannelHandler(repo postgresql.ChannelRepo) *ChannelHandler {
+func NewChannelHandler(repo postgresql.ChannelRepo, rdb *redis.Client) *ChannelHandler {
 	return &ChannelHandler{
 		channelRepo:   repo,
 		channelTester: service.NewChannelTester(repo),
+		redis:         rdb,
 		validate:      validator.New(),
 	}
 }
@@ -51,6 +56,9 @@ func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 		return
 	}
 
+	// 清除缓存
+	h.invalidateChannelCache(c.Request.Context(), channel.GroupID)
+
 	response.AdminSuccess(c, channel)
 }
 
@@ -63,10 +71,18 @@ func (h *ChannelHandler) DeleteChannel(c *gin.Context) {
 		return
 	}
 
+	// 先获取 groupID 用于清除缓存
+	channel, _ := h.channelRepo.GetByID(c.Request.Context(), id)
+
 	if err := h.channelRepo.DeleteSoft(c.Request.Context(), id); err != nil {
 		logger.Error(c.Request.Context(), "delete channel failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return
+	}
+
+	// 清除缓存
+	if channel != nil {
+		h.invalidateChannelCache(c.Request.Context(), channel.GroupID)
 	}
 
 	response.AdminSuccess(c, "渠道删除成功")
@@ -104,6 +120,9 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 		return
 	}
 
+	// 清除缓存
+	h.invalidateChannelCache(c.Request.Context(), channel.GroupID)
+
 	response.AdminSuccess(c, channel)
 }
 
@@ -124,6 +143,15 @@ func (h *ChannelHandler) ListChannelsByGroup(c *gin.Context) {
 	}
 
 	response.AdminSuccess(c, channels)
+}
+
+// invalidateChannelCache 清除指定项目组的渠道缓存
+func (h *ChannelHandler) invalidateChannelCache(ctx context.Context, groupID int64) {
+	pattern := fmt.Sprintf("xin:channels:active:%d:*", groupID)
+	iter := h.redis.Scan(ctx, 0, pattern, 0).Iterator()
+	for iter.Next(ctx) {
+		h.redis.Del(ctx, iter.Val())
+	}
 }
 
 // TestChannel 测试单个渠道
