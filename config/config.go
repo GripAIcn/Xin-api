@@ -29,8 +29,14 @@ type Config struct {
 	JWT            JWTConfig
 	Server         ServerConfig
 	Redis          RedisConfig
+	Cache          CacheConfig
 	CircuitBreaker CircuitBreakerConfig
 	Proxy          ProxyConfig
+}
+
+// CacheConfig 缓存配置
+type CacheConfig struct {
+	ChannelExpireTime time.Duration // 渠道缓存过期时间
 }
 
 // JWTConfig JWT 专有配置
@@ -79,6 +85,9 @@ func Load() *Config {
 			Password: getEnv("REDIS_PASSWORD", ""),
 			DB:       getEnvToInt("REDIS_DB", 0),
 			PoolSize: getEnvToInt("REDIS_POOL_SIZE", 20),
+		},
+		Cache: CacheConfig{
+			ChannelExpireTime: getEnvToTimeDuration("CACHE_CHANNEL_EXPIRE", 5*time.Minute),
 		},
 		CircuitBreaker: CircuitBreakerConfig{
 			FailureThreshold: getEnvToInt("CB_FAILURE_THRESHOLD", 5),
