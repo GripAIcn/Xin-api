@@ -1,6 +1,6 @@
 module Xin-api
 
-go 1.25.8
+go 1.25.0
 
 require (
 	github.com/bytedance/gopkg v0.1.3
