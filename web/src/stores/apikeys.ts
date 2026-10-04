@@ -1,33 +1,32 @@
-import { ref } from 'vue'
-import { defineStore } from 'pinia'
+import { create } from 'zustand'
 import type { ApiKey } from '@/types/api'
 import * as apiKeysApi from '@/api/modules/apikeys'
 
-export const useApiKeyStore = defineStore('apikeys', () => {
-  const apiKeys = ref<ApiKey[]>([])
+interface ApiKeyState {
+  apiKeys: ApiKey[]
+  fetchAll: (groupId?: number) => Promise<ApiKey[]>
+  create: (groupId: number) => Promise<ApiKey>
+  remove: (key: string) => Promise<void>
+}
 
-  async function fetchAll(groupId?: number) {
+export const useApiKeyStore = create<ApiKeyState>()((set) => ({
+  apiKeys: [],
+
+  fetchAll: async (groupId) => {
     const data = await apiKeysApi.fetchApiKeys(groupId)
-    apiKeys.value = data || []
+    set({ apiKeys: data || [] })
     return data
-  }
+  },
 
-  async function create(groupId: number) {
+  create: async (groupId) => {
     const data = await apiKeysApi.createApiKey({ group_id: groupId })
-    apiKeys.value.push(data)
+    set((state) => ({ apiKeys: [...state.apiKeys, data] }))
     return data
-  }
+  },
 
-  async function remove(key: string) {
+  remove: async (key) => {
     // 根据 API 文档，key 通过请求体传递
     await apiKeysApi.deleteApiKey({ key })
-    apiKeys.value = apiKeys.value.filter(k => k.key !== key)
-  }
-
-  return {
-    apiKeys,
-    fetchAll,
-    create,
-    remove,
-  }
-})
+    set((state) => ({ apiKeys: state.apiKeys.filter((k) => k.key !== key) }))
+  },
+}))

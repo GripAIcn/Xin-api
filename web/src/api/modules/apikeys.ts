@@ -1,4 +1,4 @@
-import apiClient, { handleApiResponse } from '../client'
+import apiClient, { handleApiResponse } from '@/lib/api-client'
 import type { ApiKey, CreateApiKeyRequest, DeleteApiKeyRequest } from '@/types/api'
 
 export function fetchApiKeys(groupId?: number) {

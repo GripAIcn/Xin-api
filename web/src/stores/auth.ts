@@ -1,93 +1,100 @@
-import { ref, computed } from 'vue'
-import { defineStore } from 'pinia'
+import { create } from 'zustand'
 import type { LoginResponse } from '@/types/api'
 import * as authApi from '@/api/modules/auth'
-import apiClient from '@/api/client'
-import router from '@/router'
+import apiClient from '@/lib/api-client'
 
-export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('token'))
-  const username = ref<string | null>(localStorage.getItem('username'))
-  const isValidating = ref(false)
+interface AuthState {
+  token: string | null
+  username: string | null
+  isValidating: boolean
+  isAuthenticated: boolean
+  login: (username: string, password: string) => Promise<void>
+  logout: () => void
+  updateUsername: (username: string) => void
+  updatePassword: (data: {
+    old_password: string
+    new_password: string
+  }) => Promise<void>
+  updateAccount: (data: { username: string }) => Promise<void>
+  recoverFromStorage: () => void
+  validateToken: () => Promise<boolean>
+}
 
-  const isAuthenticated = computed<boolean>(() => !!token.value)
+// SSR 安全：构建期预渲染（非浏览器环境）无 localStorage，回退为 null；
+// 浏览器环境下行为与直接读取完全一致，不影响水合
+function readStoredAuth(key: string): string | null {
+  return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null
+}
 
-  async function login(usernameVal: string, password: string) {
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  token: readStoredAuth('token'),
+  username: readStoredAuth('username'),
+  isValidating: false,
+  isAuthenticated: !!readStoredAuth('token'),
+
+  login: async (usernameVal, password) => {
     const res: LoginResponse = await authApi.login({
       username: usernameVal,
       password,
     })
-    token.value = res.token
-    username.value = res.username
     localStorage.setItem('token', res.token)
     localStorage.setItem('username', res.username)
-  }
+    set({ token: res.token, username: res.username, isAuthenticated: true })
+  },
 
-  function logout() {
-    token.value = null
-    username.value = null
+  logout: () => {
     localStorage.removeItem('token')
     localStorage.removeItem('username')
-    router.push('/login')
-  }
+    set({ token: null, username: null, isAuthenticated: false })
+    if (window.location.pathname !== '/login') {
+      window.location.assign('/login')
+    }
+  },
 
-  function updateUsername(newUsername: string) {
-    username.value = newUsername
+  updateUsername: (newUsername) => {
     localStorage.setItem('username', newUsername)
-  }
+    set({ username: newUsername })
+  },
 
-  function recoverFromStorage() {
+  updatePassword: async (data) => {
+    await authApi.updatePassword(data)
+  },
+
+  updateAccount: async (data) => {
+    await authApi.updateAccount(data)
+    localStorage.setItem('username', data.username)
+    set({ username: data.username })
+  },
+
+  recoverFromStorage: () => {
     const storedToken = localStorage.getItem('token')
     const storedUsername = localStorage.getItem('username')
     if (storedToken && storedUsername) {
-      token.value = storedToken
-      username.value = storedUsername
+      set({
+        token: storedToken,
+        username: storedUsername,
+        isAuthenticated: true,
+      })
     }
-  }
-
-  async function updatePassword(data: { old_password: string; new_password: string }) {
-    await authApi.updatePassword(data)
-  }
-
-  async function updateAccount(data: { username: string }) {
-    await authApi.updateAccount(data)
-    username.value = data.username
-    localStorage.setItem('username', data.username)
-  }
+  },
 
   // 验证 token 是否有效（调用需要认证的 API）
-  async function validateToken(): Promise<boolean> {
-    // 如果没有 token，直接返回 false
-    if (!token.value) {
+  validateToken: async () => {
+    if (!get().token) {
       return false
     }
 
-    isValidating.value = true
+    set({ isValidating: true })
     try {
-      // 调用需要认证的 API 来验证 token 是否有效
       // 使用 GET /v1/groups 作为验证接口
       await apiClient.get('/v1/groups')
       return true
-    } catch (error) {
+    } catch {
       // 验证失败（包括网络错误、401 等），清除 token 并跳转到登录页
-      logout()
+      get().logout()
       return false
     } finally {
-      isValidating.value = false
+      set({ isValidating: false })
     }
-  }
-
-  return {
-    token,
-    username,
-    isAuthenticated,
-    isValidating,
-    login,
-    logout,
-    updateUsername,
-    updatePassword,
-    updateAccount,
-    recoverFromStorage,
-    validateToken,
-  }
-})
+  },
+}))

@@ -1,4 +1,4 @@
-import apiClient, { handleApiResponse } from '../client'
+import apiClient, { handleApiResponse } from '@/lib/api-client'
 import type { Group, CreateGroupRequest, UpdateGroupRequest, UpdateGroupStatusRequest } from '@/types/api'
 
 export function fetchGroups() {

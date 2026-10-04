@@ -63,7 +63,7 @@ func main() {
 	r.StaticFile("/", "./web/dist/index.html")
 	r.Static("/assets", "./web/dist/assets")
 	r.NoRoute(func(c *gin.Context) {
-		c.File("./web/dist/index.html")
+		c.File("./web/dist/app.html")
 	})
 
 	// ==========================================

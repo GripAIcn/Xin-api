@@ -1,53 +1,50 @@
-import { ref } from 'vue'
-import { defineStore } from 'pinia'
+import { create } from 'zustand'
 import type { Group } from '@/types/api'
 import * as groupsApi from '@/api/modules/groups'
 
-export const useGroupStore = defineStore('groups', () => {
-  const groups = ref<Group[]>([])
+interface GroupState {
+  groups: Group[]
+  fetchAll: () => Promise<Group[]>
+  create: (name: string) => Promise<Group>
+  update: (id: number, name: string) => Promise<Group>
+  toggleStatus: (id: number, currentStatus: number) => Promise<Group>
+  remove: (id: number) => Promise<void>
+}
 
-  async function fetchAll() {
+export const useGroupStore = create<GroupState>()((set) => ({
+  groups: [],
+
+  fetchAll: async () => {
     const data = await groupsApi.fetchGroups()
-    groups.value = data || []
+    set({ groups: data || [] })
     return data
-  }
+  },
 
-  async function create(name: string) {
+  create: async (name) => {
     const data = await groupsApi.createGroup({ name })
-    groups.value.push(data)
+    set((state) => ({ groups: [...state.groups, data] }))
     return data
-  }
+  },
 
-  async function update(id: number, name: string) {
+  update: async (id, name) => {
     const data = await groupsApi.updateGroup(id, { name })
-    const index = groups.value.findIndex(g => g.id === id)
-    if (index !== -1) {
-      groups.value[index] = data
-    }
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === id ? data : g)),
+    }))
     return data
-  }
+  },
 
-  async function toggleStatus(id: number, currentStatus: number) {
+  toggleStatus: async (id, currentStatus) => {
     const newStatus = currentStatus === 1 ? 0 : 1
     const data = await groupsApi.updateGroupStatus(id, { status: newStatus })
-    const index = groups.value.findIndex(g => g.id === id)
-    if (index !== -1) {
-      groups.value[index] = data
-    }
+    set((state) => ({
+      groups: state.groups.map((g) => (g.id === id ? data : g)),
+    }))
     return data
-  }
+  },
 
-  async function remove(id: number) {
+  remove: async (id) => {
     await groupsApi.deleteGroup(id)
-    groups.value = groups.value.filter(g => g.id !== id)
-  }
-
-  return {
-    groups,
-    fetchAll,
-    create,
-    update,
-    toggleStatus,
-    remove,
-  }
-})
+    set((state) => ({ groups: state.groups.filter((g) => g.id !== id) }))
+  },
+}))

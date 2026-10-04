@@ -64,7 +64,7 @@ func Load() *Config {
 	// 1. 尝试加载 .env 文件
 	// 生产级细节：在 K8s 云原生部署时，配置通常以环境变量直接注入，不一定有 .env 文件
 	// 因此这里使用 Warn 提示，而不是直接 Fatal 挂断进程，提高容器兼容性
-	if err := godotenv.Load(); err != nil {
+	if err := godotenv.Load("../../.env"); err != nil {
 		log.Println("[CONFIG] [WARN] No .env file found, reading from system environments directly.")
 	} else {
 		log.Println("[CONFIG] [INFO] Successfully loaded .env file")

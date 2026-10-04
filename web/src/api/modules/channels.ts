@@ -1,4 +1,4 @@
-import apiClient, { handleApiResponse } from '../client'
+import apiClient, { handleApiResponse } from '@/lib/api-client'
 import type { Channel, CreateChannelRequest, UpdateChannelRequest, TestChannelRequest, ChannelTestResult } from '@/types/api'
 
 export function fetchChannelsByGroup(groupId?: number) {

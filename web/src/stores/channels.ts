@@ -1,56 +1,57 @@
-import { ref } from 'vue'
-import { defineStore } from 'pinia'
-import type { Channel, CreateChannelRequest, UpdateChannelRequest, ChannelTestResult } from '@/types/api'
+import { create } from 'zustand'
+import type {
+  Channel,
+  ChannelTestResult,
+  CreateChannelRequest,
+  UpdateChannelRequest,
+} from '@/types/api'
 import * as channelsApi from '@/api/modules/channels'
 
-export const useChannelStore = defineStore('channels', () => {
-  const channels = ref<Channel[]>([])
+interface ChannelState {
+  channels: Channel[]
+  fetchByGroup: (groupId?: number) => Promise<Channel[]>
+  create: (data: CreateChannelRequest) => Promise<Channel>
+  update: (id: number, data: UpdateChannelRequest) => Promise<Channel>
+  remove: (id: number) => Promise<void>
+  testChannel: (id: number, model?: string) => Promise<ChannelTestResult>
+  testGroupChannels: (groupId: number) => Promise<ChannelTestResult[]>
+}
 
-  async function fetchByGroup(groupId?: number) {
+export const useChannelStore = create<ChannelState>()((set) => ({
+  channels: [],
+
+  fetchByGroup: async (groupId) => {
     const data = await channelsApi.fetchChannelsByGroup(groupId)
-    channels.value = data || []
+    set({ channels: data || [] })
     return data
-  }
+  },
 
-  async function create(data: CreateChannelRequest) {
+  create: async (data) => {
     const result = await channelsApi.createChannel(data)
-    channels.value.push(result)
+    set((state) => ({ channels: [...state.channels, result] }))
     return result
-  }
+  },
 
-  async function update(id: number, data: UpdateChannelRequest) {
+  update: async (id, data) => {
     const result = await channelsApi.updateChannel(id, data)
-    const index = channels.value.findIndex(c => c.id === id)
-    if (index !== -1) {
-      channels.value[index] = result
-    }
+    set((state) => ({
+      channels: state.channels.map((c) => (c.id === id ? result : c)),
+    }))
     return result
-  }
+  },
 
-  async function remove(id: number) {
+  remove: async (id) => {
     await channelsApi.deleteChannel(id)
-    channels.value = channels.value.filter(c => c.id !== id)
-  }
+    set((state) => ({ channels: state.channels.filter((c) => c.id !== id) }))
+  },
 
   // 测试单个渠道
-  async function testChannel(channelId: number, model?: string) {
-    const result = await channelsApi.testChannel(channelId, model ? { model } : undefined)
-    return result
-  }
+  testChannel: async (channelId, model) => {
+    return channelsApi.testChannel(channelId, model ? { model } : undefined)
+  },
 
   // 测试项目组所有渠道
-  async function testGroupChannels(groupId: number) {
-    const results = await channelsApi.testGroupChannels(groupId)
-    return results
-  }
-
-  return {
-    channels,
-    fetchByGroup,
-    create,
-    update,
-    remove,
-    testChannel,
-    testGroupChannels,
-  }
-})
+  testGroupChannels: async (groupId) => {
+    return channelsApi.testGroupChannels(groupId)
+  },
+}))

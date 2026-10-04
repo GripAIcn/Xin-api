@@ -1,19 +1,17 @@
 # ============================================
 # 阶段一：前端构建
 # ============================================
-FROM node:22-alpine AS frontend-builder
+FROM oven/bun:1-alpine AS frontend-builder
 
 WORKDIR /web
 
-COPY web/package.json web/package-lock.json ./
+COPY web/package.json web/bun.lock ./
 
-# 💡 顺手优化：设置淘宝 npm 镜像源，加速前端依赖下载
-RUN npm config set registry https://registry.npmmirror.com && \
-    npm ci --ignore-scripts
+RUN bun install --frozen-lockfile
 
 COPY web/ .
 
-RUN npm run build
+RUN bun run build
 
 # ============================================
 # 阶段二：Go 后端构建

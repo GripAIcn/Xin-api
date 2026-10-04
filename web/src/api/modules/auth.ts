@@ -1,4 +1,4 @@
-import apiClient, { handleApiResponse } from '../client'
+import apiClient, { handleApiResponse } from '@/lib/api-client'
 import type { LoginRequest, LoginResponse, UpdatePasswordRequest, UpdateAccountRequest } from '@/types/api'
 
 export function login(data: LoginRequest) {

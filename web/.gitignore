@@ -37,3 +37,6 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# 构建脚本（仓库根 .gitignore 忽略任意层级 scripts/ 目录，这里为 web 取白名单）
+!scripts/
