@@ -33,3 +33,6 @@ go.sum
 # .vscode/
 docs/
 scripts/
+
+# docs (local only, not committed)
+doc/
