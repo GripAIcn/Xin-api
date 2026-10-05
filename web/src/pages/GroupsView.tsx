@@ -10,8 +10,9 @@ import { useGroupStore } from '@/stores/groups'
 import type { Group } from '@/types/api'
 import { formatDate } from '@/lib/format'
 import { groupStatusLabel } from '@/lib/status'
+import { DotBadge } from '@/components/StatusBadge'
+import PageHeader from '@/components/PageHeader'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -119,16 +120,17 @@ export default function GroupsView() {
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h2 className="mb-2 text-xl font-semibold text-foreground">项目组</h2>
-          <p className="text-sm text-muted-foreground">管理 API 项目组及其状态</p>
-        </div>
-        <Button onClick={openCreate}>
-          <Plus />
-          创建项目组
-        </Button>
-      </div>
+      <PageHeader
+        className="mb-5"
+        title="项目组"
+        description="管理 API 项目组及其状态"
+        actions={
+          <Button onClick={openCreate}>
+            <Plus />
+            创建项目组
+          </Button>
+        }
+      />
 
       <Card>
         <CardContent>
@@ -171,9 +173,9 @@ export default function GroupsView() {
                       </Button>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={row.status === 1 ? 'default' : 'secondary'}>
+                      <DotBadge tone={row.status === 1 ? 'success' : 'muted'}>
                         {groupStatusLabel(row.status)}
-                      </Badge>
+                      </DotBadge>
                     </TableCell>
                     <TableCell>{formatDate(row.created_at)}</TableCell>
                     <TableCell className="text-right">

@@ -3,6 +3,7 @@ import { AlertTriangle, Check, Copy, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Alert, AlertTitle } from '@/components/ui/alert'
+import PageHeader from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -144,16 +145,17 @@ export default function ApiKeysView() {
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h2 className="mb-2 text-xl font-semibold text-foreground">API Key 管理</h2>
-          <p className="text-sm text-muted-foreground">管理项目组的 API 访问密钥</p>
-        </div>
-        <Button onClick={handleCreate} disabled={creating || !selectedGroupId}>
-          <Plus />
-          {creating ? '创建中...' : '创建 API Key'}
-        </Button>
-      </div>
+      <PageHeader
+        className="mb-5"
+        title="API Key"
+        description="管理项目组的 API 访问密钥"
+        actions={
+          <Button onClick={handleCreate} disabled={creating || !selectedGroupId}>
+            <Plus />
+            {creating ? '创建中...' : '创建 API Key'}
+          </Button>
+        }
+      />
 
       <Card className="mb-5">
         <CardContent>

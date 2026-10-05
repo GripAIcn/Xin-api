@@ -63,12 +63,12 @@ export default function LoginView() {
   return (
     <div className="flex min-h-screen w-full">
       {/* 左侧装饰区域 */}
-      <div className="relative hidden flex-col justify-center overflow-hidden bg-[linear-gradient(145deg,#1a2a3a_0%,#2d4a5e_100%)] p-16 text-white lg:flex lg:flex-1">
-        <div className="pointer-events-none absolute -top-1/2 -right-1/5 h-[200%] w-4/5 bg-[radial-gradient(ellipse,rgba(64,158,255,0.08)_0%,transparent_70%)]" />
+      <div className="relative hidden flex-col justify-center overflow-hidden bg-primary p-16 text-primary-foreground lg:flex lg:flex-1">
+        <div className="pointer-events-none absolute -top-1/2 -right-1/5 h-[200%] w-4/5 bg-[radial-gradient(ellipse,rgb(255_255_255/0.1)_0%,transparent_70%)]" />
 
         <div className="relative z-10">
           <div className="mb-10 flex items-center gap-4">
-            <div className="flex size-14 items-center justify-center rounded-xl bg-[#409eff] text-2xl font-bold text-white shadow-[0_8px_24px_rgba(64,158,255,0.3)]">
+            <div className="flex size-14 items-center justify-center rounded-xl bg-white/15 text-2xl font-bold text-white shadow-lg shadow-black/25">
               X
             </div>
             <span className="text-2xl font-semibold tracking-wide">Xin-api</span>
@@ -89,7 +89,7 @@ export default function LoginView() {
               key={feature}
               className="flex items-center gap-4 text-[15px] opacity-90"
             >
-              <div className="size-2 rounded-full bg-[#409eff] shadow-[0_0_12px_rgba(64,158,255,0.5)]" />
+              <div className="size-2 rounded-full bg-white/90 shadow-[0_0_12px_rgb(255_255_255/0.45)]" />
               <span>{feature}</span>
             </div>
           ))}
@@ -97,13 +97,13 @@ export default function LoginView() {
       </div>
 
       {/* 右侧登录表单 */}
-      <div className="flex w-full flex-1 items-center justify-center bg-white p-10 lg:w-[480px] lg:flex-none">
+      <div className="flex w-full flex-1 items-center justify-center bg-background p-10 lg:w-[480px] lg:flex-none">
         <div className="w-full max-w-[360px]">
           <div className="mb-10">
-            <h2 className="mb-2 text-[28px] font-semibold text-[#303133]">
+            <h2 className="mb-2 text-[28px] font-semibold text-foreground">
               欢迎登录
             </h2>
-            <p className="text-sm text-[#909399]">请使用管理员账号登录系统</p>
+            <p className="text-sm text-muted-foreground">请使用管理员账号登录系统</p>
           </div>
 
           <Form {...form}>
@@ -177,7 +177,7 @@ export default function LoginView() {
             </form>
           </Form>
 
-          <div className="mt-10 text-center text-xs text-[#c0c4cc]">
+          <div className="mt-10 text-center text-xs text-muted-foreground/70">
             <p>© 2026 Xin-api. All rights reserved.</p>
           </div>
         </div>

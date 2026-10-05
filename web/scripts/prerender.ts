@@ -30,7 +30,7 @@ const SITE_URL = (process.env.SITE_URL || 'http://localhost:8080').replace(
 
 // 与 index.html 中 meta[name=description] / og:description 保持一致
 const SITE_DESCRIPTION =
-  'Xin API 是高性能大模型 API 网关：统一接入 OpenAI、Claude、DeepSeek，提供权重负载均衡、分布式熔断、RPM/TPM 限流、多租户与 API Key 管理，并规划请求审计、Token 用量计费与多维感知智能路由。'
+  'Xin API 是高性能大模型 API 网关：统一接入 OpenAI、Claude、DeepSeek，提供权重负载均衡、分布式熔断、RPM/TPM 限流、多租户与 API Key 管理，并内置请求审计、Token 用量计费与多维感知智能路由。'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 // 默认处理 dist/；可通过 PRERENDER_DIST_DIR 覆盖（便于以非生产构建做调试）

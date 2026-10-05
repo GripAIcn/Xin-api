@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      // 首帧前应用持久化主题，避免明暗闪烁（与 next-themes 存储键保持一致）
+      ;(function () {
+        try {
+          var t = localStorage.getItem('xin-api-theme') || 'dark'
+          if (t === 'system') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+          }
+          document.documentElement.classList.toggle('dark', t === 'dark')
+          document.documentElement.style.colorScheme = t
+        } catch (e) {}
+      })()
+    </script>
     <title>Xin-api 控制面板</title>
     <meta name="robots" content="noindex,nofollow">
   </head>

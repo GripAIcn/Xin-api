@@ -15,6 +15,8 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 
 import ChannelTestResultCard from '@/components/ChannelTestResult'
+import { DotBadge } from '@/components/StatusBadge'
+import PageHeader from '@/components/PageHeader'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -328,19 +330,17 @@ export default function ChannelsView() {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <h2 className="text-xl font-semibold">渠道管理</h2>
-          <p className="text-sm text-muted-foreground">
-            管理所有上游供应商渠道
-          </p>
-        </div>
-        <Button onClick={openCreate} disabled={groups.length === 0}>
-          <Plus />
-          添加渠道
-        </Button>
-      </div>
+      <PageHeader
+        className="mb-5"
+        title="渠道管理"
+        description="管理所有上游供应商渠道"
+        actions={
+          <Button onClick={openCreate} disabled={groups.length === 0}>
+            <Plus />
+            添加渠道
+          </Button>
+        }
+      />
 
       {/* 筛选器 */}
       <Card className="py-4">
@@ -414,22 +414,9 @@ export default function ChannelsView() {
                       </TableCell>
                       <TableCell>{row.weight}</TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
-                            tone === 'danger'
-                              ? 'destructive'
-                              : tone === 'muted'
-                                ? 'secondary'
-                                : 'default'
-                          }
-                          className={
-                            tone === 'success'
-                              ? 'border-transparent bg-green-600 text-white'
-                              : undefined
-                          }
-                        >
+                        <DotBadge tone={tone}>
                           {channelStatusLabel(row.status)}
-                        </Badge>
+                        </DotBadge>
                       </TableCell>
                       <TableCell>{renderTestResult(row)}</TableCell>
                       <TableCell>

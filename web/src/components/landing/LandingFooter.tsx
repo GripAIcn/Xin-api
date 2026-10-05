@@ -5,7 +5,6 @@ const GITHUB_URL = 'https://github.com/GripAIcn/Xin-api'
 const navItems = [
   { label: '功能特性', href: '#features' },
   { label: '工作原理', href: '#how-it-works' },
-  { label: '演进路线', href: '#roadmap' },
   { label: '常见问题', href: '#faq' },
 ]
 

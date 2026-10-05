@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
+import { ThemeProvider } from 'next-themes'
 
 import App from './App'
 import './assets/main.css'
@@ -7,7 +8,15 @@ import './assets/main.css'
 const container = document.getElementById('root')!
 const app = (
   <StrictMode>
-    <App />
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem
+      storageKey="xin-api-theme"
+      disableTransitionOnChange
+    >
+      <App />
+    </ThemeProvider>
   </StrictMode>
 )
 

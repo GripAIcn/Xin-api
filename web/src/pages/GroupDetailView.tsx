@@ -19,6 +19,8 @@ import {
 } from 'lucide-react'
 
 import ChannelTestResult from '@/components/ChannelTestResult'
+import { DotBadge } from '@/components/StatusBadge'
+import PageHeader from '@/components/PageHeader'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,20 +95,6 @@ function errMessage(e: unknown): string {
   if (e instanceof Error) return e.message
   if (typeof e === 'string') return e
   return ''
-}
-
-function StatusBadge({ status }: { status: number }) {
-  const tone = channelStatusTone(status)
-  const label = channelStatusLabel(status)
-  if (tone === 'success') {
-    return (
-      <Badge className="border-transparent bg-green-600 text-white">{label}</Badge>
-    )
-  }
-  if (tone === 'danger') {
-    return <Badge variant="destructive">{label}</Badge>
-  }
-  return <Badge variant="secondary">{label}</Badge>
 }
 
 export default function GroupDetailView() {
@@ -326,34 +314,27 @@ export default function GroupDetailView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl p-6">
+    <div className="mx-auto w-full max-w-6xl">
       {/* 头部 */}
-      <div className="mb-5 flex items-center gap-4">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/groups')}>
+      <div className="mb-5 flex items-start gap-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate('/groups')} aria-label="返回项目组列表">
           <ArrowLeft />
-          返回
         </Button>
         {group ? (
-          <div className="flex-1">
-            <h2 className="flex items-center gap-2 text-xl font-semibold">
-              {group.name}
-              <Badge
-                className={
-                  group.status === 1
-                    ? 'border-transparent bg-green-600 text-white'
-                    : undefined
-                }
-                variant={group.status === 1 ? undefined : 'secondary'}
-              >
-                {groupStatusLabel(group.status)}
-              </Badge>
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              项目组 ID: {group.id}
-            </p>
-          </div>
+          <PageHeader
+            className="flex-1"
+            title={
+              <>
+                {group.name}
+                <DotBadge tone={group.status === 1 ? 'success' : 'muted'}>
+                  {groupStatusLabel(group.status)}
+                </DotBadge>
+              </>
+            }
+            description={`项目组 ID: ${group.id}`}
+          />
         ) : (
-          <Skeleton className="h-10 w-[200px]" />
+          <Skeleton className="mt-1 h-10 w-[200px]" />
         )}
       </div>
 
@@ -443,7 +424,9 @@ export default function GroupDetailView() {
                           </TableCell>
                           <TableCell>{channel.weight}</TableCell>
                           <TableCell>
-                            <StatusBadge status={channel.status} />
+                            <DotBadge tone={channelStatusTone(channel.status)}>
+                              {channelStatusLabel(channel.status)}
+                            </DotBadge>
                           </TableCell>
                           <TableCell>
                             {summary ? (

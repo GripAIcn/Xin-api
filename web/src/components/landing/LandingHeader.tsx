@@ -17,7 +17,6 @@ const GITHUB_URL = 'https://github.com/GripAIcn/Xin-api'
 const navItems = [
   { label: '功能特性', href: '#features' },
   { label: '工作原理', href: '#how-it-works' },
-  { label: '演进路线', href: '#roadmap' },
   { label: '常见问题', href: '#faq' },
 ]
 
@@ -39,10 +38,10 @@ export default function LandingHeader() {
   const [open, setOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-50 bg-transparent">
       <nav
         aria-label="主导航"
-        className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8"
+        className="mx-auto mt-3 flex h-14 w-full max-w-5xl items-center justify-between gap-4 rounded-full border bg-background/70 px-4 backdrop-blur-md sm:px-5"
       >
         <Link
           to="/"

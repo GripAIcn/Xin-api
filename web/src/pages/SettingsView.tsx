@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { Lock, User } from 'lucide-react'
 import { toast } from 'sonner'
 
+import PageHeader from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -93,10 +94,11 @@ export default function SettingsView() {
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <div className="mb-6">
-        <h2 className="mb-2 text-[22px] font-semibold text-foreground">账户设置</h2>
-        <p className="text-sm text-muted-foreground">管理你的账户信息和登录密码</p>
-      </div>
+      <PageHeader
+        className="mb-6"
+        title="账户设置"
+        description="管理你的账户信息和登录密码"
+      />
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="h-full">

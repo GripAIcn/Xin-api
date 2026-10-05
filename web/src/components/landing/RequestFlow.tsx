@@ -19,7 +19,10 @@ export default function RequestFlow() {
     <section id="how-it-works" className="scroll-mt-20 bg-muted/30 py-20">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight">工作原理</h2>
+          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            工作原理
+          </span>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight">工作原理</h2>
           <p className="mt-3 text-muted-foreground">
             一次请求在网关中的完整生命周期
           </p>
@@ -32,7 +35,7 @@ export default function RequestFlow() {
               <Fragment key={step}>
                 <div
                   className={cn(
-                    'flex flex-1 items-center justify-center rounded-lg border px-3 py-3 text-center text-sm leading-snug',
+                    'flex flex-1 items-center justify-center rounded-2xl border px-3 py-3 text-center text-sm leading-snug',
                     isEndpoint
                       ? 'border-primary bg-primary font-medium text-primary-foreground'
                       : 'bg-card text-card-foreground'
@@ -73,12 +76,12 @@ export default function RequestFlow() {
         <div className="mt-8 grid gap-6 md:grid-cols-3">
           {quickSteps.map((step, index) => (
             <div key={step.title} className="relative">
-              <Card className="h-full gap-3">
+              <Card className="h-full gap-3 rounded-2xl">
                 <span
                   aria-hidden="true"
-                  className="text-3xl font-bold text-primary/30"
+                  className="flex size-9 items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-sm font-semibold text-primary"
                 >
-                  {`0${index + 1}`}
+                  {index + 1}
                 </span>
                 <h3 className="text-lg font-semibold">{step.title}</h3>
                 <p className="text-sm leading-relaxed text-muted-foreground">

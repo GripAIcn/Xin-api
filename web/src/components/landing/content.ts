@@ -4,8 +4,10 @@ import {
   Calculator,
   Gauge,
   KeyRound,
+  Network,
   PlugZap,
   Scale,
+  ScanLine,
   ScrollText,
   ShieldCheck,
   Users,
@@ -48,6 +50,16 @@ export const features: FeatureItem[] = [
     icon: KeyRound,
     title: 'API Key 与健康检测',
     desc: '灵活的 API Key 分发与吊销；支持单渠道与批量多模型连通性一键测试。',
+  },
+  {
+    icon: Network,
+    title: '多维感知智能路由',
+    desc: '可插拔路由架构，按渠道健康度、成功率、延迟 / TTFT / TPS、成本与 RPM / TPM 等多维指标打分，加权智能选路。',
+  },
+  {
+    icon: ScanLine,
+    title: '全链路请求追溯',
+    desc: '每次请求携带 xin_req_* Request ID 并关联上游供应商 Request ID，客户端到供应商双向追溯，故障定位一查到底。',
   },
 ]
 
@@ -109,53 +121,6 @@ export const v2Features: FeatureItem[] = [
   },
 ]
 
-export type RoadmapTone = 'default' | 'secondary' | 'outline'
-
-export interface RoadmapStage {
-  version: string
-  name: string
-  badge: string
-  tone: RoadmapTone
-  items: string[]
-}
-
-export const roadmapStages: RoadmapStage[] = [
-  {
-    version: 'V1',
-    name: '统一 API 网关',
-    badge: '已具备',
-    tone: 'default',
-    items: features.map((feature) => feature.title),
-  },
-  {
-    version: 'V2',
-    name: '审计 · 用量 · 计费',
-    badge: '规划中',
-    tone: 'secondary',
-    items: [
-      '请求日志与 Request ID 追踪',
-      'Token 用量与 TTFT / TPS 性能指标',
-      '模型定价与价格快照',
-      '用量账单与余额原子扣费',
-      '运营 Dashboard',
-      '渠道 Metrics 指标沉淀',
-    ],
-  },
-  {
-    version: 'V3',
-    name: '多维感知智能路由',
-    badge: '远景',
-    tone: 'outline',
-    items: [
-      '可插拔 Router 路由接口',
-      '健康度与成功率打分',
-      '延迟、TTFT、TPS 性能维度',
-      '成本与 RPM / TPM 维度',
-      '多维加权智能选路',
-    ],
-  },
-]
-
 export interface FaqItem {
   q: string
   a: string
@@ -176,6 +141,6 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: '是否支持用量统计与计费？',
-    a: '请求审计、Token 用量统计、模型定价与按用量扣费属于 Xin API V2 的规划能力，将提供输入 / 输出 Token 分别计量、价格快照与清晰的账单记录；V3 进一步基于这些运行数据实现多维感知智能路由。',
+    a: '支持。Xin API 提供请求审计日志、输入 / 输出 Token 分别计量与价格快照，按用量原子扣费，账单清晰可对账；多维感知智能路由基于这些运行数据持续优化选路决策。',
   },
 ]

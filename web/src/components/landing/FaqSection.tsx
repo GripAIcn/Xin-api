@@ -7,13 +7,16 @@ export default function FaqSection() {
     <section id="faq" className="scroll-mt-20 py-20">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-3xl font-bold tracking-tight">常见问题</h2>
+          <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            常见问题
+          </span>
+          <h2 className="mt-4 text-3xl font-bold tracking-tight">常见问题</h2>
         </div>
         <div className="mx-auto mt-10 max-w-3xl space-y-3">
           {faqItems.map((item) => (
             <details
               key={item.q}
-              className="group rounded-lg border bg-card"
+              className="group rounded-2xl border bg-card"
             >
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-medium marker:hidden [&::-webkit-details-marker]:hidden">
                 <span>{item.q}</span>

@@ -6,7 +6,6 @@ import LandingHeader from '@/components/landing/LandingHeader'
 import LandingHero from '@/components/landing/LandingHero'
 import ObservabilitySection from '@/components/landing/ObservabilitySection'
 import RequestFlow from '@/components/landing/RequestFlow'
-import Roadmap from '@/components/landing/Roadmap'
 
 export default function LandingView() {
   return (
@@ -17,7 +16,6 @@ export default function LandingView() {
         <FeatureGrid />
         <RequestFlow />
         <ObservabilitySection />
-        <Roadmap />
         <FaqSection />
         <LandingCta />
       </main>
