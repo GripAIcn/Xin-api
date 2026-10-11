@@ -13,23 +13,23 @@ Xin-api 控制面板前端，基于 React 19 + Vite + shadcn/ui 构建。
 ## 项目设置
 
 ```sh
-bun install
+npm install
 ```
 
 ### 编译并热重载开发
 
 ```sh
-bun run dev
+npm run dev
 ```
 
 ### 类型检查、编译并压缩用于生产环境
 
 ```sh
-bun run build
+npm run build
 ```
 
 ### 使用 [ESLint](https://eslint.org/) 进行代码检查
 
 ```sh
-bun run lint
+npm run lint
 ```

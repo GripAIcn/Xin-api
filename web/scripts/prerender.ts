@@ -7,7 +7,7 @@
  * 4. 生成 robots.txt 与 sitemap.xml
  *
  * 幂等：可对已预渲染的 dist/index.html 重复执行（例如带不同 SITE_URL 重跑）。
- * 由 bun 直接执行：`bun scripts/prerender.ts`
+ * 由 tsx 执行：`npm run build`（或 `npx tsx scripts/prerender.ts`）
  */
 import { mkdirSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -48,7 +48,7 @@ const PLACEHOLDER = '__SITE_URL__'
 
 /**
  * 渲染首页为 HTML 字符串。
- * 使用 createElement 而非 JSX，以便本脚本以 .ts 扩展名被 bun 直接执行。
+ * 使用 createElement 而非 JSX，以便本脚本以 .ts 扩展名被 tsx 直接执行。
  * 不渲染 <App/>：其自带 RouterProvider 与 Toaster，只需要纯静态首页；
  * 但必须用与 main.tsx 完全相同参数的 ThemeProvider 包裹，保持 SSR/客户端树形状一致
  * （ThemeProvider 会在 children 前输出引导 <script>，缺失会导致水合 #418）。

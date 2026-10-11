@@ -33,6 +33,9 @@ go.sum
 # .vscode/
 docs/
 scripts/
+CLAUDE.md
+.trae
+.vscode
 
 # docs (local only, not committed)
 doc/

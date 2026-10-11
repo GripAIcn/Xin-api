@@ -1,8 +1,10 @@
 import axios, { AxiosError, type AxiosResponse } from 'axios'
 import type { AdminResponse } from '@/types/api'
 
+// import.meta.env 是 Vite 注入的；SSR 预渲染脚本（tsx 直接执行）中为 undefined，
+// 用可选链兜底为 '/'
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/',
+  baseURL: import.meta.env?.VITE_API_URL || '/',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' },
 })

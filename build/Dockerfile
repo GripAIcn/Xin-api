@@ -1,17 +1,17 @@
 # ============================================
 # 阶段一：前端构建
 # ============================================
-FROM oven/bun:1-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 WORKDIR /web
 
-COPY web/package.json web/bun.lock ./
+COPY web/package.json web/package-lock.json ./
 
-RUN bun install --frozen-lockfile
+RUN npm ci --registry=https://registry.npmmirror.com
 
 COPY web/ .
 
-RUN bun run build
+RUN npm run build
 
 # ============================================
 # 阶段二：Go 后端构建

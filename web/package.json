@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && bun scripts/prerender.ts",
+    "build": "tsc -b && vite build && tsx --tsconfig tsconfig.app.json scripts/prerender.ts",
     "type-check": "tsc -b",
     "lint": "oxlint . --fix && eslint . --fix",
     "format": "prettier --write src/",
@@ -49,6 +49,7 @@
     "oxlint": "^1.86.0",
     "prettier": "^3.9.9",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.0",
     "typescript-eslint": "^8.71.0",
     "vite": "^8.3.2"
