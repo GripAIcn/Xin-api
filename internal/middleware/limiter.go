@@ -50,17 +50,11 @@ func NewDistributedLimiter(rdb *redis.Client) *DistributedLimiter {
 	return &DistributedLimiter{rdb: rdb}
 }
 
-// LimitMiddleware 返回一个 Gin 中间件，按业务组进行分布式令牌桶限流。
+// LimitMiddleware 返回一个 Gin 中间件，进行分布式令牌桶限流。
 // maxTokens：桶容量；refillRate：每秒补充令牌数；reqTokens：每次请求消耗令牌数。
 func (dl *DistributedLimiter) LimitMiddleware(maxTokens, refillRate, reqTokens int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		groupID := c.GetString("group_id")
-		if groupID == "" {
-			response.DataPlaneError(c, response.InternalError)
-			return
-		}
-
-		redisKey := "XinAPI:limiter:group:" + groupID
+		redisKey := "XinAPI:limiter:global"
 		now := time.Now().Unix()
 		args := []any{maxTokens, refillRate, reqTokens, now}
 

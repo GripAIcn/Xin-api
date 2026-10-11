@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 
 	"github.com/bytedance/gopkg/util/logger"
@@ -35,13 +34,12 @@ func NewChannelHandler(repo postgresql.ChannelRepo, rdb *redis.Client) *ChannelH
 
 // CreateChannel 添加上游渠道供应商
 func (h *ChannelHandler) CreateChannel(c *gin.Context) {
-	var req form.CreateChannelReq // 包含 GroupID, Name, ModelMapping, BaseURL, APIKey, Weight
+	var req form.CreateChannelReq // 包含 Name, ModelMapping, BaseURL, APIKey, Weight
 	if !h.bindAndValidate(c, &req) {
 		return
 	}
 
 	channel := &model.Channel{
-		GroupID:      req.GroupID,
 		Name:         req.Name,
 		ModelMapping: req.ModelMapping,
 		BaseURL:      req.BaseURL,
@@ -57,7 +55,7 @@ func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 	}
 
 	// 清除缓存
-	h.invalidateChannelCache(c.Request.Context(), channel.GroupID)
+	h.invalidateChannelCache(c.Request.Context())
 
 	response.AdminSuccess(c, channel)
 }
@@ -71,9 +69,6 @@ func (h *ChannelHandler) DeleteChannel(c *gin.Context) {
 		return
 	}
 
-	// 先获取 groupID 用于清除缓存
-	channel, _ := h.channelRepo.GetByID(c.Request.Context(), id)
-
 	if err := h.channelRepo.DeleteSoft(c.Request.Context(), id); err != nil {
 		logger.Error(c.Request.Context(), "delete channel failed: %v", err)
 		response.AdminFail(c, response.InternalError)
@@ -81,9 +76,7 @@ func (h *ChannelHandler) DeleteChannel(c *gin.Context) {
 	}
 
 	// 清除缓存
-	if channel != nil {
-		h.invalidateChannelCache(c.Request.Context(), channel.GroupID)
-	}
+	h.invalidateChannelCache(c.Request.Context())
 
 	response.AdminSuccess(c, "渠道删除成功")
 }
@@ -105,7 +98,6 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 	// 先获取老数据进行校验，或直接覆盖
 	channel := &model.Channel{
 		ID:           id,
-		GroupID:      req.GroupID,
 		Name:         req.Name,
 		ModelMapping: req.ModelMapping,
 		BaseURL:      req.BaseURL,
@@ -121,21 +113,14 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 	}
 
 	// 清除缓存
-	h.invalidateChannelCache(c.Request.Context(), channel.GroupID)
+	h.invalidateChannelCache(c.Request.Context())
 
 	response.AdminSuccess(c, channel)
 }
 
-// ListChannelsByGroup 获取项目组名下的全量渠道
-func (h *ChannelHandler) ListChannelsByGroup(c *gin.Context) {
-	groupIDStr := c.Query("group_id")
-	groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-	if err != nil {
-		response.AdminFail(c, response.InvalidParams)
-		return
-	}
-
-	channels, err := h.channelRepo.ListByGroupID(c.Request.Context(), groupID)
+// ListChannels 获取全量渠道
+func (h *ChannelHandler) ListChannels(c *gin.Context) {
+	channels, err := h.channelRepo.ListAll(c.Request.Context())
 	if err != nil {
 		logger.Error(c.Request.Context(), "list channels failed: %v", err)
 		response.AdminFail(c, response.InternalError)
@@ -145,9 +130,9 @@ func (h *ChannelHandler) ListChannelsByGroup(c *gin.Context) {
 	response.AdminSuccess(c, channels)
 }
 
-// invalidateChannelCache 清除指定项目组的渠道缓存
-func (h *ChannelHandler) invalidateChannelCache(ctx context.Context, groupID int64) {
-	pattern := fmt.Sprintf("xin:channels:active:%d:*", groupID)
+// invalidateChannelCache 清除全部渠道缓存
+func (h *ChannelHandler) invalidateChannelCache(ctx context.Context) {
+	pattern := "xin:channels:active:*"
 	iter := h.redis.Scan(ctx, 0, pattern, 0).Iterator()
 	for iter.Next(ctx) {
 		h.redis.Del(ctx, iter.Val())
@@ -179,18 +164,11 @@ func (h *ChannelHandler) TestChannel(c *gin.Context) {
 	response.AdminSuccess(c, result)
 }
 
-// TestGroupChannels 测试项目组下所有渠道
-func (h *ChannelHandler) TestGroupChannels(c *gin.Context) {
-	idStr := c.Param("id")
-	groupID, err := strconv.ParseInt(idStr, 10, 64)
+// TestAllChannels 测试所有渠道
+func (h *ChannelHandler) TestAllChannels(c *gin.Context) {
+	results, err := h.channelTester.TestAllChannels(c.Request.Context())
 	if err != nil {
-		response.AdminFail(c, response.InvalidParams)
-		return
-	}
-
-	results, err := h.channelTester.TestGroupAllChannels(c.Request.Context(), groupID)
-	if err != nil {
-		logger.Error(c.Request.Context(), "test group channels failed: %v", err)
+		logger.Error(c.Request.Context(), "test all channels failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return
 	}

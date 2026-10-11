@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ChevronsUpDown,
-  FolderKanban,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -49,7 +48,6 @@ const navGroups: NavGroup[] = [
   {
     label: '资源',
     items: [
-      { name: '项目组', path: '/groups', icon: FolderKanban },
       { name: '渠道', path: '/channels', icon: Waypoints },
       { name: 'API Key', path: '/apikeys', icon: KeyRound },
     ],
@@ -62,14 +60,7 @@ const navGroups: NavGroup[] = [
 
 const allNavItems = navGroups.flatMap((group) => group.items)
 
-const titleOverrides: [RegExp, string][] = [
-  [/^\/groups\/\d+$/, '项目组详情'],
-]
-
 function pageTitle(pathname: string): string {
-  for (const [pattern, title] of titleOverrides) {
-    if (pattern.test(pathname)) return title
-  }
   const exact =
     pathname.length > 1 && pathname.endsWith('/')
       ? pathname.slice(0, -1)

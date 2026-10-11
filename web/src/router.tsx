@@ -5,8 +5,6 @@ import AppLayout from '@/layouts/AppLayout'
 import ApiKeysView from '@/pages/ApiKeysView'
 import ChannelsView from '@/pages/ChannelsView'
 import DashboardView from '@/pages/DashboardView'
-import GroupDetailView from '@/pages/GroupDetailView'
-import GroupsView from '@/pages/GroupsView'
 import LandingView from '@/pages/LandingView'
 import LoginView from '@/pages/LoginView'
 import SettingsView from '@/pages/SettingsView'
@@ -78,22 +76,6 @@ export const router = createBrowserRouter([
             element: (
               <Page title="仪表盘">
                 <DashboardView />
-              </Page>
-            ),
-          },
-          {
-            path: 'groups',
-            element: (
-              <Page title="项目组">
-                <GroupsView />
-              </Page>
-            ),
-          },
-          {
-            path: 'groups/:id',
-            element: (
-              <Page title="项目组详情">
-                <GroupDetailView />
               </Page>
             ),
           },

@@ -45,7 +45,7 @@ func computeFingerprint(channels []model.Channel) string {
 	return sb.String()
 }
 
-// Select 按 "groupID:model" 维度加权轮询选择渠道
+// Select 按 model 维度加权轮询选择渠道
 // 返回 nil 表示无可选渠道
 func (b *WeightedRRBalancer) Select(key string, channels []model.Channel) *model.Channel {
 	if len(channels) == 0 {

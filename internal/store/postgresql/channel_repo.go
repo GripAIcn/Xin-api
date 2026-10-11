@@ -21,10 +21,10 @@ type ChannelRepo interface {
 	UpdateStatus(ctx context.Context, id int64, status int) error
 	// GetByID 根据 ID 查询渠道详情
 	GetByID(ctx context.Context, id int64) (*model.Channel, error)
-	// ListByGroupID 获取某个项目组名下的所有渠道（包含关闭和熔断的，供管理后台列表展示）
-	ListByGroupID(ctx context.Context, groupID int64) ([]model.Channel, error)
-	// ListActiveByGroupAndModel ⚡️核心流量方法：根据项目组和请求的模型，捞出所有当前可用的物理渠道（状态为 1-正常）
-	ListActiveByGroupAndModel(ctx context.Context, groupID int64, modelName string) ([]model.Channel, error)
+	// ListAll 获取所有渠道（包含关闭和熔断的，供管理后台列表展示）
+	ListAll(ctx context.Context) ([]model.Channel, error)
+	// ListActiveByModel ⚡️核心流量方法：根据请求的模型，捞出所有当前可用的物理渠道（状态为 1-正常）
+	ListActiveByModel(ctx context.Context, modelName string) ([]model.Channel, error)
 }
 
 type channelRepo struct {
@@ -72,16 +72,16 @@ func (r *channelRepo) GetByID(ctx context.Context, id int64) (*model.Channel, er
 	return &channel, nil
 }
 
-func (r *channelRepo) ListByGroupID(ctx context.Context, groupID int64) ([]model.Channel, error) {
-	channels, err := gorm.G[model.Channel](r.db).Where("group_id = ?", groupID).Find(ctx)
+func (r *channelRepo) ListAll(ctx context.Context) ([]model.Channel, error) {
+	channels, err := gorm.G[model.Channel](r.db).Find(ctx)
 	return channels, err
 }
 
-func (r *channelRepo) ListActiveByGroupAndModel(ctx context.Context, groupID int64, modelName string) ([]model.Channel, error) {
-	// 第一步：获取该项目组下所有正常状态的渠道（不限制模型）
+func (r *channelRepo) ListActiveByModel(ctx context.Context, modelName string) ([]model.Channel, error) {
+	// 第一步：获取所有正常状态的渠道（不限制模型）
 	var allChannels []model.Channel
 	err := r.db.WithContext(ctx).
-		Where("group_id = ? AND status = 1", groupID).
+		Where("status = 1").
 		Order("weight DESC").
 		Find(&allChannels).Error
 	if err != nil {

@@ -43,8 +43,8 @@ export const features: FeatureItem[] = [
   },
   {
     icon: Users,
-    title: '多租户管理',
-    desc: '用户、项目组、渠道多层级管理，资源按项目组隔离，团队协作清晰有序。',
+    title: '统一渠道管理',
+    desc: '集中管理多家上游供应商渠道，配置、权重与状态一目了然。',
   },
   {
     icon: KeyRound,
@@ -85,16 +85,12 @@ export interface QuickStep {
 
 export const quickSteps: QuickStep[] = [
   {
-    title: '创建项目组',
-    desc: '按业务或团队建立项目组，完成资源隔离与成员规划。',
-  },
-  {
     title: '添加渠道并测试',
     desc: '配置模型渠道，一键测试单渠道或批量多模型连通性。',
   },
   {
     title: '生成 API Key 接入',
-    desc: '在项目组下生成 API Key，使用统一端点即刻接入应用。',
+    desc: '生成 API Key，使用统一端点即刻接入应用。',
   },
 ]
 
@@ -129,7 +125,7 @@ export interface FaqItem {
 export const faqItems: FaqItem[] = [
   {
     q: 'Xin API 是什么？',
-    a: 'Xin API 是一个高性能的大语言模型（LLM）API 网关，统一管理多家大模型渠道，提供标准化接入、负载均衡、熔断限流与多租户管理能力。',
+    a: 'Xin API 是一个高性能的大语言模型（LLM）API 网关，统一管理多家大模型渠道，提供标准化接入、负载均衡、熔断限流与统一渠道管理能力。',
   },
   {
     q: '支持哪些模型与协议？',

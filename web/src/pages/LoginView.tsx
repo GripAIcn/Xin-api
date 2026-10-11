@@ -32,7 +32,7 @@ const loginSchema = z.object({
 
 type LoginForm = z.infer<typeof loginSchema>
 
-const features = ['多项目组隔离管理', '智能负载均衡与熔断', '实时流量监控与统计']
+const features = ['统一渠道与密钥管理', '智能负载均衡与熔断', '实时流量监控与统计']
 
 export default function LoginView() {
   const navigate = useNavigate()
@@ -77,7 +77,7 @@ export default function LoginView() {
             API 网关管理控制台
           </h1>
           <p className="mb-16 max-w-[400px] text-base leading-relaxed opacity-80">
-            统一管理项目组、上游渠道和 API Key，
+            统一管理上游渠道和 API Key，
             <br />
             轻松构建高性能的 AI 服务接入层
           </p>

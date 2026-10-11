@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
-  Folder,
-  FolderKanban,
   KeyRound,
   Waypoints,
 } from 'lucide-react'
@@ -23,8 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useApiKeyStore } from '@/stores/apikeys'
 import { useAuthStore } from '@/stores/auth'
 import { useChannelStore } from '@/stores/channels'
-import { useGroupStore } from '@/stores/groups'
-import type { ApiKey, Channel, Group } from '@/types/api'
+import type { ApiKey, Channel } from '@/types/api'
 
 interface StatCard {
   title: string
@@ -35,7 +32,6 @@ interface StatCard {
 }
 
 const quickActions: { label: string; path: string }[] = [
-  { label: '创建项目组', path: '/groups' },
   { label: '查看渠道', path: '/channels' },
   { label: '创建 API Key', path: '/apikeys' },
 ]
@@ -69,12 +65,10 @@ const distributionRows: {
 export default function DashboardView() {
   const navigate = useNavigate()
   const username = useAuthStore((s) => s.username)
-  const fetchGroups = useGroupStore((s) => s.fetchAll)
-  const fetchChannels = useChannelStore((s) => s.fetchByGroup)
+  const fetchChannels = useChannelStore((s) => s.fetchAll)
   const fetchApiKeys = useApiKeyStore((s) => s.fetchAll)
 
   const [loading, setLoading] = useState(true)
-  const [groups, setGroups] = useState<Group[]>([])
   const [channels, setChannels] = useState<Channel[]>([])
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
 
@@ -83,46 +77,19 @@ export default function DashboardView() {
 
     const load = async () => {
       try {
-        // 1. 先获取所有项目组
-        const groupList = (await fetchGroups()) ?? []
-        if (!active) return
-        setGroups(groupList)
-
-        // 2. 获取所有渠道（不传 groupId 获取全部），失败则逐组累加
         try {
           const list = (await fetchChannels()) ?? []
           if (active) setChannels(list)
         } catch {
-          const collected: Channel[] = []
-          for (const g of groupList) {
-            try {
-              const data = await fetchChannels(g.id)
-              collected.push(...(data ?? []))
-            } catch {
-              /* ignore */
-            }
-          }
-          if (active) setChannels(collected)
+          /* silently fail */
         }
 
-        // 3. 获取所有 API Key（不传 groupId 获取全部），失败则逐组累加
         try {
           const list = (await fetchApiKeys()) ?? []
           if (active) setApiKeys(list)
         } catch {
-          const collected: ApiKey[] = []
-          for (const g of groupList) {
-            try {
-              const data = await fetchApiKeys(g.id)
-              collected.push(...(data ?? []))
-            } catch {
-              /* ignore */
-            }
-          }
-          if (active) setApiKeys(collected)
+          /* silently fail */
         }
-      } catch {
-        /* silently fail */
       } finally {
         if (active) setLoading(false)
       }
@@ -133,9 +100,8 @@ export default function DashboardView() {
     return () => {
       active = false
     }
-  }, [fetchGroups, fetchChannels, fetchApiKeys])
+  }, [fetchChannels, fetchApiKeys])
 
-  const totalGroups = groups.length
   const totalChannels = channels.length
   const totalApiKeys = apiKeys.length
 
@@ -149,27 +115,7 @@ export default function DashboardView() {
     [channels],
   )
 
-  // 各项目组渠道数量与占比（客户端按 groupId 聚合）
-  const groupOverview = useMemo(() => {
-    const counts = new Map<number, number>()
-    for (const c of channels) {
-      counts.set(c.group_id, (counts.get(c.group_id) ?? 0) + 1)
-    }
-    return groups.map((g) => ({
-      group: g,
-      channelCount: counts.get(g.id) ?? 0,
-      percent: totalChannels > 0 ? ((counts.get(g.id) ?? 0) / totalChannels) * 100 : 0,
-    }))
-  }, [groups, channels, totalChannels])
-
   const statsCards: StatCard[] = [
-    {
-      title: '项目组',
-      value: totalGroups,
-      icon: FolderKanban,
-      path: '/groups',
-      iconClass: 'bg-primary/10 text-primary',
-    },
     {
       title: '渠道',
       value: totalChannels,
@@ -194,12 +140,12 @@ export default function DashboardView() {
           欢迎回来，{username || '管理员'}
         </h1>
         <p className="text-sm text-muted-foreground">
-          这是 Xin-api 网关控制台，在这里管理你的项目组、渠道和 API Key。
+          这是 Xin-api 网关控制台，在这里管理你的渠道和 API Key。
         </p>
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         {statsCards.map((card) => {
           const Icon = card.icon
           return (
@@ -237,108 +183,51 @@ export default function DashboardView() {
         })}
       </div>
 
-      {/* 分布与概览 */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* 渠道状态分布 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">渠道状态分布</CardTitle>
-            <CardDescription>全部渠道按状态统计</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-6 w-full" />
-                <Skeleton className="h-6 w-full" />
-                <Skeleton className="h-6 w-full" />
-              </div>
-            ) : totalChannels === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                暂无渠道数据
-              </p>
-            ) : (
-              <div className="space-y-4">
-                {distribution.map((row) => (
-                  <div key={row.label}>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <DotBadge tone={row.tone}>{row.label}</DotBadge>
-                      <span className="text-sm text-muted-foreground tabular-nums">
-                        {row.count} 个 ·{' '}
-                        {totalChannels > 0
-                          ? Math.round((row.count / totalChannels) * 100)
-                          : 0}
-                        %
-                      </span>
-                    </div>
-                    <Progress
-                      value={
-                        totalChannels > 0
-                          ? (row.count / totalChannels) * 100
-                          : 0
-                      }
-                      indicatorClassName={row.barClass}
-                    />
+      {/* 渠道状态分布 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">渠道状态分布</CardTitle>
+          <CardDescription>全部渠道按状态统计</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-6 w-full" />
+            </div>
+          ) : totalChannels === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              暂无渠道数据
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {distribution.map((row) => (
+                <div key={row.label}>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <DotBadge tone={row.tone}>{row.label}</DotBadge>
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      {row.count} 个 ·{' '}
+                      {totalChannels > 0
+                        ? Math.round((row.count / totalChannels) * 100)
+                        : 0}
+                      %
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 项目组概览 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">项目组概览</CardTitle>
-            <CardDescription>各项目组渠道数量与占比</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-6 w-full" />
-                <Skeleton className="h-6 w-full" />
-                <Skeleton className="h-6 w-full" />
-              </div>
-            ) : groupOverview.length === 0 ? (
-              <div className="py-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  暂无项目组，从创建第一个项目组开始
-                </p>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="mt-1"
-                  onClick={() => navigate('/groups')}
-                >
-                  前往创建
-                  <ArrowRight className="size-3.5" />
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {groupOverview.map(({ group, channelCount, percent }) => (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => navigate(`/groups/${group.id}`)}
-                    className="block w-full text-left"
-                  >
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-                        <Folder className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="truncate">{group.name}</span>
-                      </span>
-                      <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
-                        {channelCount} 个 · {Math.round(percent)}%
-                      </span>
-                    </div>
-                    <Progress value={percent} />
-                  </button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                  <Progress
+                    value={
+                      totalChannels > 0
+                        ? (row.count / totalChannels) * 100
+                        : 0
+                    }
+                    indicatorClassName={row.barClass}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 快速操作 */}
       <Card>

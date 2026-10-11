@@ -2,7 +2,6 @@ package form
 
 // CreateChannelReq 添加上游渠道请求入参
 type CreateChannelReq struct {
-	GroupID      int64  `json:"group_id" binding:"required" validate:"required,gt=0"`         // 必须大于 0
 	Name         string `json:"name" binding:"required" validate:"required,min=2,max=100"`    // 渠道名称
 	ModelMapping string `json:"model_mapping" binding:"required" validate:"required"`         // 模型列表，如 "gpt-4o,deepseek-chat"
 	BaseURL      string `json:"base_url" binding:"required" validate:"required,url"`          // 必须符合标准的 URL 格式
@@ -12,7 +11,6 @@ type CreateChannelReq struct {
 
 // UpdateChannelReq 覆盖更新渠道请求入参
 type UpdateChannelReq struct {
-	GroupID      int64  `json:"group_id" binding:"required" validate:"required,gt=0"`
 	Name         string `json:"name" binding:"required" validate:"required,min=2,max=100"`
 	ModelMapping string `json:"model_mapping" binding:"required" validate:"required"`
 	BaseURL      string `json:"base_url" binding:"required" validate:"required,url"`

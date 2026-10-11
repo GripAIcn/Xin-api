@@ -4,22 +4,22 @@ import * as apiKeysApi from '@/api/modules/apikeys'
 
 interface ApiKeyState {
   apiKeys: ApiKey[]
-  fetchAll: (groupId?: number) => Promise<ApiKey[]>
-  create: (groupId: number) => Promise<ApiKey>
+  fetchAll: () => Promise<ApiKey[]>
+  create: () => Promise<ApiKey>
   remove: (key: string) => Promise<void>
 }
 
 export const useApiKeyStore = create<ApiKeyState>()((set) => ({
   apiKeys: [],
 
-  fetchAll: async (groupId) => {
-    const data = await apiKeysApi.fetchApiKeys(groupId)
+  fetchAll: async () => {
+    const data = await apiKeysApi.fetchApiKeys()
     set({ apiKeys: data || [] })
     return data
   },
 
-  create: async (groupId) => {
-    const data = await apiKeysApi.createApiKey({ group_id: groupId })
+  create: async () => {
+    const data = await apiKeysApi.createApiKey()
     set((state) => ({ apiKeys: [...state.apiKeys, data] }))
     return data
   },

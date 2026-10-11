@@ -69,7 +69,7 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 }
 
 // ApiKeyAuth 数据面 API Key 认证中间件
-// 从 Authorization: Bearer sk-xin-xxx 提取 key，查库获取 GroupID
+// 从 Authorization: Bearer sk-xin-xxx 提取 key，校验其有效性
 func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		auth := c.GetHeader("Authorization")
@@ -79,19 +79,12 @@ func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 		}
 
 		key := strings.TrimPrefix(auth, "Bearer ")
-		apiKey, err := apiKeyRepo.GetWithGroup(c.Request.Context(), key)
+		apiKey, err := apiKeyRepo.GetByKey(c.Request.Context(), key)
 		if err != nil || apiKey == nil {
 			response.DataPlaneError(c, response.Unauthorized)
 			return
 		}
 
-		// 检查分组是否启用
-		if apiKey.Group.Status != 1 {
-			response.DataPlaneError(c, response.Forbidden)
-			return
-		}
-
-		c.Set("group_id", apiKey.GroupID)
 		c.Next()
 	}
 }

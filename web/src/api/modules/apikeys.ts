@@ -1,13 +1,12 @@
 import apiClient, { handleApiResponse } from '@/lib/api-client'
-import type { ApiKey, CreateApiKeyRequest, DeleteApiKeyRequest } from '@/types/api'
+import type { ApiKey, DeleteApiKeyRequest } from '@/types/api'
 
-export function fetchApiKeys(groupId?: number) {
-  const url = groupId ? `/v1/apikeys?group_id=${groupId}` : '/v1/apikeys'
-  return apiClient.get(url).then(res => handleApiResponse<ApiKey[]>(res))
+export function fetchApiKeys() {
+  return apiClient.get('/v1/apikeys').then(res => handleApiResponse<ApiKey[]>(res))
 }
 
-export function createApiKey(data: CreateApiKeyRequest) {
-  return apiClient.post('/v1/apikeys', data).then(res => handleApiResponse<ApiKey>(res))
+export function createApiKey() {
+  return apiClient.post('/v1/apikeys', {}).then(res => handleApiResponse<ApiKey>(res))
 }
 
 export function deleteApiKey(data: DeleteApiKeyRequest) {

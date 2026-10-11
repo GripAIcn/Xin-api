@@ -108,7 +108,6 @@ func NewPostgres() *gorm.DB {
 	// 第三步：自动迁移（建表）
 	if err := db.AutoMigrate(
 		&model.User{},
-		&model.Group{},
 		&model.Channel{},
 		&model.ApiKey{},
 	); err != nil {

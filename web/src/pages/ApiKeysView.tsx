@@ -13,13 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -31,7 +24,6 @@ import {
 } from '@/components/ui/table'
 import { formatDate, maskKey } from '@/lib/format'
 import { useApiKeyStore } from '@/stores/apikeys'
-import { useGroupStore } from '@/stores/groups'
 import type { ApiKey } from '@/types/api'
 
 export default function ApiKeysView() {
@@ -39,77 +31,33 @@ export default function ApiKeysView() {
   const fetchKeys = useApiKeyStore((s) => s.fetchAll)
   const create = useApiKeyStore((s) => s.create)
   const remove = useApiKeyStore((s) => s.remove)
-  const groups = useGroupStore((s) => s.groups)
-  const fetchGroups = useGroupStore((s) => s.fetchAll)
 
   const [loading, setLoading] = useState(true)
-  const [selectedGroupId, setSelectedGroupId] = useState('')
   const [creating, setCreating] = useState(false)
   const [newKeyValue, setNewKeyValue] = useState('')
   const [keyDialogOpen, setKeyDialogOpen] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<ApiKey | null>(null)
 
-  const loadKeys = useCallback(
-    async (gid: string) => {
-      setLoading(true)
-      try {
-        let groupId: number | undefined
-        if (gid && gid !== 'all' && gid !== '') {
-          const parsed = Number(gid)
-          if (!Number.isNaN(parsed) && parsed > 0) {
-            groupId = parsed
-          }
-        }
-
-        if (groupId === undefined) {
-          const currentGroups = useGroupStore.getState().groups
-          if (currentGroups.length > 0) {
-            groupId = currentGroups[0]!.id
-            setSelectedGroupId(String(groupId))
-          }
-        }
-
-        if (groupId === undefined) {
-          toast.warning('请先创建项目组')
-          return
-        }
-
-        await fetchKeys(groupId)
-      } catch (e) {
-        toast.error((e as Error)?.message || '加载 API Key 列表失败')
-      } finally {
-        setLoading(false)
-      }
-    },
-    [fetchKeys],
-  )
+  const loadKeys = useCallback(async () => {
+    setLoading(true)
+    try {
+      await fetchKeys()
+    } catch (e) {
+      toast.error((e as Error)?.message || '加载 API Key 列表失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchKeys])
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        await fetchGroups()
-      } catch {
-        // 忽略：无项目组时由 loadKeys 统一提示
-      }
-      await loadKeys('')
-    }
-    void init()
-  }, [fetchGroups, loadKeys])
-
-  const handleGroupChange = (value: string) => {
-    setSelectedGroupId(value)
-    void loadKeys(value)
-  }
+    void loadKeys()
+  }, [loadKeys])
 
   const handleCreate = async () => {
-    if (!selectedGroupId) {
-      toast.warning('请先在筛选器中选择一个项目组')
-      return
-    }
     setCreating(true)
     try {
-      const result = await create(Number(selectedGroupId))
+      const result = await create()
       setNewKeyValue(result.key)
       setKeyDialogOpen(true)
     } catch (e) {
@@ -140,40 +88,19 @@ export default function ApiKeysView() {
     }
   }
 
-  const groupName = (groupId: number) =>
-    groups.find((g) => g.id === groupId)?.name || `ID:${groupId}`
-
   return (
     <div className="mx-auto w-full max-w-6xl">
       <PageHeader
         className="mb-5"
         title="API Key"
-        description="管理项目组的 API 访问密钥"
+        description="管理 API 访问密钥"
         actions={
-          <Button onClick={handleCreate} disabled={creating || !selectedGroupId}>
+          <Button onClick={handleCreate} disabled={creating}>
             <Plus />
             {creating ? '创建中...' : '创建 API Key'}
           </Button>
         }
       />
-
-      <Card className="mb-5">
-        <CardContent>
-          <Select value={selectedGroupId} onValueChange={handleGroupChange}>
-            <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="选择项目组" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部项目组</SelectItem>
-              {groups.map((g) => (
-                <SelectItem key={g.id} value={String(g.id)}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent>
@@ -181,7 +108,6 @@ export default function ApiKeysView() {
             <TableHeader>
               <TableRow>
                 <TableHead>API Key</TableHead>
-                <TableHead className="w-40">所属项目组</TableHead>
                 <TableHead className="w-48">创建时间</TableHead>
                 <TableHead className="w-24 text-right">操作</TableHead>
               </TableRow>
@@ -190,14 +116,14 @@ export default function ApiKeysView() {
               {loading ? (
                 Array.from({ length: 3 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={4}>
+                    <TableCell colSpan={3}>
                       <Skeleton className="h-6 w-full" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : apiKeys.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
                     暂无 API Key
                   </TableCell>
                 </TableRow>
@@ -209,7 +135,6 @@ export default function ApiKeysView() {
                         {maskKey(row.key)}
                       </code>
                     </TableCell>
-                    <TableCell>{groupName(row.group_id)}</TableCell>
                     <TableCell>{formatDate(row.created_at)}</TableCell>
                     <TableCell className="text-right">
                       <Button

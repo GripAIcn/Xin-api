@@ -7,11 +7,6 @@ export function channelStatusLabel(status: number): '正常' | '熔断' | '禁�
   return '禁用'
 }
 
-export function groupStatusLabel(status: number): '启用' | '停用' {
-  if (status === 1) return '启用'
-  return '停用'
-}
-
 export function channelStatusTone(
   status: number,
 ): 'success' | 'danger' | 'muted' {

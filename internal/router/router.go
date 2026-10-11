@@ -21,8 +21,6 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	userHandler := handler.NewUserHandler(userRepo, cfg.JWT)
 	apiKeyRepo := postgresql.NewApiKeyRepo(db)
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeyRepo)
-	groupRepo := postgresql.NewGroupRepo(db)
-	groupHandler := handler.NewGroupHandler(groupRepo)
 	channelRepo := postgresql.NewChannelRepo(db)
 	channelHandler := handler.NewChannelHandler(channelRepo, rdb)
 	balancer := service.NewWeightedRRBalancer()
@@ -51,25 +49,18 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 
 		protected := v1.Group("").Use(middleware.JWTAuth(cfg.JWT.Secret))
 		{
-			// 项目组路由
-			protected.POST("/groups", groupHandler.CreateGroup)
-			protected.GET("/groups", groupHandler.ListGroups)
-			protected.PUT("/groups/:id", groupHandler.UpdateGroup)
-			protected.PUT("/groups/:id/status", groupHandler.UpdateStatus)
-			protected.DELETE("/groups/:id", groupHandler.DeleteGroup)
-
 			// 供应商渠道路由
 			protected.POST("/channels", channelHandler.CreateChannel)
-			protected.GET("/channels", channelHandler.ListChannelsByGroup)
+			protected.GET("/channels", channelHandler.ListChannels)
 			protected.PUT("/channels/:id", channelHandler.UpdateChannel)
 			protected.DELETE("/channels/:id", channelHandler.DeleteChannel)
 			protected.POST("/channels/:id/test", channelHandler.TestChannel) // 测试单个渠道
 
-			// 项目组渠道批量测试
-			protected.POST("/groups/:id/test-channels", channelHandler.TestGroupChannels) // 测试项目组所有渠道
+			// 渠道批量测试
+			protected.POST("/channels/test", channelHandler.TestAllChannels) // 测试所有渠道
 
-			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)        // 为组分发新 Key
-			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)          // 查询组名下的 Key 列表
+			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)        // 分发新 Key
+			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)          // 查询 Key 列表
 			protected.POST("/apikeys/delete", apiKeyHandler.DeleteApiKey) // 吊销/软删除指定的 Key（使用 POST 以便从 body 读取 key）
 		}
 

@@ -50,8 +50,8 @@ func NewChatHandler(
 }
 
 // getChannelsWithCache 优先从缓存获取渠道，未命中则查数据库
-func (h *ChatHandler) getChannelsWithCache(ctx context.Context, groupID int64, modelName string) ([]model.Channel, error) {
-	cacheKey := fmt.Sprintf("xin:channels:active:%d:%s", groupID, modelName)
+func (h *ChatHandler) getChannelsWithCache(ctx context.Context, modelName string) ([]model.Channel, error) {
+	cacheKey := fmt.Sprintf("xin:channels:active:%s", modelName)
 
 	// 1. 尝试从缓存获取
 	if cached, err := h.redis.Get(ctx, cacheKey).Bytes(); err == nil {
@@ -62,7 +62,7 @@ func (h *ChatHandler) getChannelsWithCache(ctx context.Context, groupID int64, m
 	}
 
 	// 2. 缓存未命中，查询数据库
-	channels, err := h.channelRepo.ListActiveByGroupAndModel(ctx, groupID, modelName)
+	channels, err := h.channelRepo.ListActiveByModel(ctx, modelName)
 	if err != nil {
 		return nil, err
 	}
@@ -98,16 +98,8 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		return
 	}
 
-	// 3. 获取 group_id
-	groupID, exists := c.Get("group_id")
-	if !exists {
-		response.DataPlaneError(c, response.Unauthorized)
-		return
-	}
-	gid := groupID.(int64)
-
-	// 4. 查询可用渠道（使用缓存）
-	channels, err := h.getChannelsWithCache(c.Request.Context(), gid, modelName)
+	// 3. 查询可用渠道（使用缓存）
+	channels, err := h.getChannelsWithCache(c.Request.Context(), modelName)
 	if err != nil {
 		logger.Error(c.Request.Context(), "list channels failed: %v", err)
 		response.DataPlaneError(c, response.InternalError)
@@ -118,8 +110,8 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		return
 	}
 
-	// 5. 负载均衡 + 熔断检查
-	balancerKey := fmt.Sprintf("%d:%s", gid, modelName)
+	// 4. 负载均衡 + 熔断检查
+	balancerKey := modelName
 	var selected *model.Channel
 	for attempts := 0; attempts < len(channels); attempts++ {
 		candidate := h.balancer.Select(balancerKey, channels)
@@ -143,12 +135,12 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		return
 	}
 
-	// 6. 代理转发（使用 adapter 提供的端点）
+	// 5. 代理转发（使用 adapter 提供的端点）
 	logger.Info(c.Request.Context(), "routing to channel %s (id=%d) via %s adapter",
 		selected.Name, selected.ID, adpt.Name())
 	proxyErr := h.proxy.Forward(c, selected, body, adpt.UpstreamEndpoint())
 
-	// 7. 记录熔断结果
+	// 6. 记录熔断结果
 	h.breaker.Record(c.Request.Context(), selected.ID, proxyErr)
 	if proxyErr != nil {
 		logger.Error(c.Request.Context(), "service to channel %s failed: %v", selected.Name, proxyErr)

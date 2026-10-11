@@ -27,33 +27,10 @@ export interface UpdateAccountRequest {
   username: string
 }
 
-// === Group ===
-
-export interface Group {
-  id: number
-  name: string
-  status: number
-  created_at: string
-  updated_at: string
-}
-
-export interface CreateGroupRequest {
-  name: string
-}
-
-export interface UpdateGroupRequest {
-  name: string
-}
-
-export interface UpdateGroupStatusRequest {
-  status: number
-}
-
 // === Channel ===
 
 export interface Channel {
   id: number
-  group_id: number
   name: string
   model_mapping: string
   base_url: string
@@ -65,7 +42,6 @@ export interface Channel {
 }
 
 export interface CreateChannelRequest {
-  group_id: number
   name: string
   model_mapping: string
   base_url: string
@@ -74,7 +50,6 @@ export interface CreateChannelRequest {
 }
 
 export interface UpdateChannelRequest {
-  group_id: number
   name: string
   model_mapping: string
   base_url: string
@@ -107,12 +82,7 @@ export interface ChannelTestResult {
 
 export interface ApiKey {
   key: string
-  group_id: number
   created_at: string
-}
-
-export interface CreateApiKeyRequest {
-  group_id: number
 }
 
 export interface DeleteApiKeyRequest {

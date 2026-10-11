@@ -9,19 +9,19 @@ import * as channelsApi from '@/api/modules/channels'
 
 interface ChannelState {
   channels: Channel[]
-  fetchByGroup: (groupId?: number) => Promise<Channel[]>
+  fetchAll: () => Promise<Channel[]>
   create: (data: CreateChannelRequest) => Promise<Channel>
   update: (id: number, data: UpdateChannelRequest) => Promise<Channel>
   remove: (id: number) => Promise<void>
   testChannel: (id: number, model?: string) => Promise<ChannelTestResult>
-  testGroupChannels: (groupId: number) => Promise<ChannelTestResult[]>
+  testAllChannels: () => Promise<ChannelTestResult[]>
 }
 
 export const useChannelStore = create<ChannelState>()((set) => ({
   channels: [],
 
-  fetchByGroup: async (groupId) => {
-    const data = await channelsApi.fetchChannelsByGroup(groupId)
+  fetchAll: async () => {
+    const data = await channelsApi.fetchChannels()
     set({ channels: data || [] })
     return data
   },
@@ -50,8 +50,8 @@ export const useChannelStore = create<ChannelState>()((set) => ({
     return channelsApi.testChannel(channelId, model ? { model } : undefined)
   },
 
-  // 测试项目组所有渠道
-  testGroupChannels: async (groupId) => {
-    return channelsApi.testGroupChannels(groupId)
+  // 测试所有渠道
+  testAllChannels: async () => {
+    return channelsApi.testAllChannels()
   },
 }))

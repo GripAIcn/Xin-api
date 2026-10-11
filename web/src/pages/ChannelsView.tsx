@@ -48,13 +48,6 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   Table,
   TableBody,
   TableCell,
@@ -69,11 +62,9 @@ import {
   summarizeTestResult,
 } from '@/lib/status'
 import { useChannelStore } from '@/stores/channels'
-import { useGroupStore } from '@/stores/groups'
 import type { Channel, ChannelTestResult } from '@/types/api'
 
 const channelFormSchema = z.object({
-  group_id: z.string().min(1, '请选择项目组'),
   name: z.string().min(1, '请输入渠道名称').min(2, '至少 2 个字符'),
   model_mapping: z.string().min(1, '请输入模型映射'),
   base_url: z.string().min(1, '请输入 Base URL'),
@@ -85,17 +76,13 @@ type ChannelFormValues = z.infer<typeof channelFormSchema>
 
 export default function ChannelsView() {
   const channels = useChannelStore((s) => s.channels)
-  const fetchByGroup = useChannelStore((s) => s.fetchByGroup)
+  const fetchAllChannels = useChannelStore((s) => s.fetchAll)
   const createChannel = useChannelStore((s) => s.create)
   const updateChannel = useChannelStore((s) => s.update)
   const removeChannel = useChannelStore((s) => s.remove)
   const testChannel = useChannelStore((s) => s.testChannel)
 
-  const groups = useGroupStore((s) => s.groups)
-  const fetchAllGroups = useGroupStore((s) => s.fetchAll)
-
   const [loading, setLoading] = useState(true)
-  const [selectedGroupId, setSelectedGroupId] = useState('')
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
@@ -114,7 +101,6 @@ export default function ChannelsView() {
   const form = useForm<ChannelFormValues>({
     resolver: zodResolver(channelFormSchema),
     defaultValues: {
-      group_id: '',
       name: '',
       model_mapping: '',
       base_url: '',
@@ -129,32 +115,7 @@ export default function ChannelsView() {
     const load = async () => {
       setLoading(true)
       try {
-        try {
-          await fetchAllGroups()
-        } catch {
-          // 忽略项目组加载失败，后续按无项目组处理
-        }
-
-        let groupId: number | undefined
-        if (selectedGroupId && selectedGroupId !== 'all') {
-          const parsed = Number(selectedGroupId)
-          if (!Number.isNaN(parsed) && parsed > 0) {
-            groupId = parsed
-          }
-        }
-
-        const currentGroups = useGroupStore.getState().groups
-        if (groupId === undefined && currentGroups.length > 0) {
-          groupId = currentGroups[0]!.id
-          if (!cancelled) setSelectedGroupId(String(groupId))
-        }
-
-        if (groupId === undefined) {
-          toast.warning('请先创建项目组')
-          return
-        }
-
-        await fetchByGroup(groupId)
+        await fetchAllChannels()
         if (!cancelled) setTestResults(new Map())
       } catch (e) {
         toast.error(
@@ -169,16 +130,11 @@ export default function ChannelsView() {
     return () => {
       cancelled = true
     }
-  }, [selectedGroupId, fetchAllGroups, fetchByGroup])
-
-  const groupName = (groupId: number) =>
-    groups.find((g) => g.id === groupId)?.name ?? `ID:${groupId}`
+  }, [fetchAllChannels])
 
   const openCreate = () => {
     setEditingChannel(null)
     form.reset({
-      group_id:
-        selectedGroupId && selectedGroupId !== 'all' ? selectedGroupId : '',
       name: '',
       model_mapping: '',
       base_url: '',
@@ -191,7 +147,6 @@ export default function ChannelsView() {
   const openEdit = (row: Channel) => {
     setEditingChannel(row)
     form.reset({
-      group_id: String(row.group_id),
       name: row.name,
       model_mapping: row.model_mapping,
       base_url: row.base_url,
@@ -204,10 +159,8 @@ export default function ChannelsView() {
   const onSubmit = async (values: ChannelFormValues) => {
     setSubmitting(true)
     try {
-      const groupId = Number(values.group_id)
       if (editingChannel) {
         await updateChannel(editingChannel.id, {
-          group_id: groupId,
           name: values.name,
           model_mapping: values.model_mapping,
           base_url: values.base_url,
@@ -218,7 +171,6 @@ export default function ChannelsView() {
         toast.success('渠道更新成功')
       } else {
         await createChannel({
-          group_id: groupId,
           name: values.name,
           model_mapping: values.model_mapping,
           base_url: values.base_url,
@@ -335,31 +287,12 @@ export default function ChannelsView() {
         title="渠道管理"
         description="管理所有上游供应商渠道"
         actions={
-          <Button onClick={openCreate} disabled={groups.length === 0}>
+          <Button onClick={openCreate}>
             <Plus />
             添加渠道
           </Button>
         }
       />
-
-      {/* 筛选器 */}
-      <Card className="py-4">
-        <CardContent>
-          <Select value={selectedGroupId} onValueChange={setSelectedGroupId}>
-            <SelectTrigger className="w-60">
-              <SelectValue placeholder="选择项目组" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">全部项目组</SelectItem>
-              {groups.map((g) => (
-                <SelectItem key={g.id} value={String(g.id)}>
-                  {g.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
 
       {/* 数据表格 */}
       <Card className="py-0">
@@ -368,7 +301,6 @@ export default function ChannelsView() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[70px]">ID</TableHead>
-                <TableHead className="min-w-[140px]">所属项目组</TableHead>
                 <TableHead className="min-w-[140px]">名称</TableHead>
                 <TableHead className="min-w-[140px]">模型映射</TableHead>
                 <TableHead className="min-w-[180px]">Base URL</TableHead>
@@ -382,7 +314,7 @@ export default function ChannelsView() {
               {channels.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={9}
+                    colSpan={8}
                     className="h-32 text-center text-muted-foreground"
                   >
                     {loading ? '加载中...' : '暂无渠道'}
@@ -394,7 +326,6 @@ export default function ChannelsView() {
                   return (
                     <TableRow key={row.id}>
                       <TableCell>{row.id}</TableCell>
-                      <TableCell>{groupName(row.group_id)}</TableCell>
                       <TableCell className="font-medium">{row.name}</TableCell>
                       <TableCell>
                         <span
@@ -471,35 +402,6 @@ export default function ChannelsView() {
               }}
               className="space-y-4"
             >
-              <FormField
-                control={form.control}
-                name="group_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>所属项目组</FormLabel>
-                    <Select
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      disabled={isEdit}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="选择项目组" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {groups.map((g) => (
-                          <SelectItem key={g.id} value={String(g.id)}>
-                            {g.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <FormField
                 control={form.control}
                 name="name"

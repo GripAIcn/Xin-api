@@ -34,7 +34,7 @@ export default function LandingHero() {
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/70 md:text-lg">
             无缝兼容 OpenAI、Anthropic Claude、DeepSeek
             等主流大模型，统一 /v1/chat/completions
-            端点；负载均衡、熔断限流、多租户管理开箱即用。
+            端点；负载均衡、熔断限流、渠道管理开箱即用。
           </p>
           <div className="mt-10 flex w-full flex-col items-center justify-center gap-3 sm:w-auto sm:flex-row">
             <Button

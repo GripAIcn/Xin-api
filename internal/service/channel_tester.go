@@ -88,9 +88,9 @@ func (t *ChannelTester) TestChannel(ctx context.Context, channelID int64, modelN
 	return result, nil
 }
 
-// TestGroupAllChannels 测试项目组下所有渠道的所有模型
-func (t *ChannelTester) TestGroupAllChannels(ctx context.Context, groupID int64) ([]ChannelTestResult, error) {
-	channels, err := t.channelRepo.ListByGroupID(ctx, groupID)
+// TestAllChannels 测试所有渠道的所有模型
+func (t *ChannelTester) TestAllChannels(ctx context.Context) ([]ChannelTestResult, error) {
+	channels, err := t.channelRepo.ListAll(ctx)
 	if err != nil {
 		return nil, err
 	}

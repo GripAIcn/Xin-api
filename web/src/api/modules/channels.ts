@@ -1,9 +1,8 @@
 import apiClient, { handleApiResponse } from '@/lib/api-client'
 import type { Channel, CreateChannelRequest, UpdateChannelRequest, TestChannelRequest, ChannelTestResult } from '@/types/api'
 
-export function fetchChannelsByGroup(groupId?: number) {
-  const url = groupId ? `/v1/channels?group_id=${groupId}` : '/v1/channels'
-  return apiClient.get(url).then(res => handleApiResponse<Channel[]>(res))
+export function fetchChannels() {
+  return apiClient.get('/v1/channels').then(res => handleApiResponse<Channel[]>(res))
 }
 
 export function createChannel(data: CreateChannelRequest) {
@@ -23,7 +22,7 @@ export function testChannel(id: number, data?: TestChannelRequest) {
   return apiClient.post(`/v1/channels/${id}/test`, data || {}).then(res => handleApiResponse<ChannelTestResult>(res))
 }
 
-// 测试项目组所有渠道
-export function testGroupChannels(groupId: number) {
-  return apiClient.post(`/v1/groups/${groupId}/test-channels`).then(res => handleApiResponse<ChannelTestResult[]>(res))
+// 测试所有渠道
+export function testAllChannels() {
+  return apiClient.post('/v1/channels/test', {}).then(res => handleApiResponse<ChannelTestResult[]>(res))
 }
