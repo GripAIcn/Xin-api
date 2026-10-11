@@ -19,6 +19,9 @@ import { renderToString } from 'react-dom/server'
 // react-router-dom v7 的 package.json exports 不再提供 ./server 子路径，
 // StaticRouter 由 react-router 主导出提供（react-router-dom 亦 re-export 之）
 import { StaticRouter } from 'react-router'
+// next-themes 的 ThemeProvider 会在 children 前渲染一个主题引导 <script> 节点；
+// 客户端 main.tsx 用它包裹 App，SSR 树必须包含同样的节点，否则水合首子节点不匹配（React #418）
+import { ThemeProvider } from 'next-themes'
 
 import { features, faqItems } from '../src/components/landing/content'
 import LandingView from '../src/pages/LandingView'
@@ -46,14 +49,26 @@ const PLACEHOLDER = '__SITE_URL__'
 /**
  * 渲染首页为 HTML 字符串。
  * 使用 createElement 而非 JSX，以便本脚本以 .ts 扩展名被 bun 直接执行。
- * 不渲染 <App/>：其自带 RouterProvider 与 Toaster，只需要纯静态首页。
+ * 不渲染 <App/>：其自带 RouterProvider 与 Toaster，只需要纯静态首页；
+ * 但必须用与 main.tsx 完全相同参数的 ThemeProvider 包裹，保持 SSR/客户端树形状一致
+ * （ThemeProvider 会在 children 前输出引导 <script>，缺失会导致水合 #418）。
  */
 function renderLanding(): string {
   return renderToString(
     createElement(
-      StaticRouter,
-      { location: '/' },
-      createElement(LandingView),
+      ThemeProvider,
+      {
+        attribute: 'class',
+        defaultTheme: 'dark',
+        enableSystem: true,
+        storageKey: 'xin-api-theme',
+        disableTransitionOnChange: true,
+      },
+      createElement(
+        StaticRouter,
+        { location: '/' },
+        createElement(LandingView),
+      ),
     ),
   )
 }
