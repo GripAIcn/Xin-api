@@ -17,13 +17,13 @@ type ChannelRepo interface {
 	DeleteSoft(ctx context.Context, id int64) error
 	// Update 完整更新渠道信息（常用于管理后台编辑页面整体提交）
 	Update(ctx context.Context, channel *model.Channel) error
-	// UpdateStatus 修改渠道状态 (1-正常 0-手动关闭 2-自动熔断)——常用于健康检查熔断器
-	UpdateStatus(ctx context.Context, id int64, status int) error
+	// UpdateStatus 修改渠道状态 (active-正常 disabled-手动关闭 circuit_open-自动熔断)——常用于健康检查熔断器
+	UpdateStatus(ctx context.Context, id int64, status string) error
 	// GetByID 根据 ID 查询渠道详情
 	GetByID(ctx context.Context, id int64) (*model.Channel, error)
 	// ListAll 获取所有渠道（包含关闭和熔断的，供管理后台列表展示）
 	ListAll(ctx context.Context) ([]model.Channel, error)
-	// ListActiveByModel ⚡️核心流量方法：根据请求的模型，捞出所有当前可用的物理渠道（状态为 1-正常）
+	// ListActiveByModel ⚡️核心流量方法：根据请求的模型，捞出所有当前可用的物理渠道（状态为 active）
 	ListActiveByModel(ctx context.Context, modelName string) ([]model.Channel, error)
 }
 
@@ -53,7 +53,7 @@ func (r *channelRepo) Update(ctx context.Context, channel *model.Channel) error 
 	return r.db.WithContext(ctx).Save(channel).Error
 }
 
-func (r *channelRepo) UpdateStatus(ctx context.Context, id int64, status int) error {
+func (r *channelRepo) UpdateStatus(ctx context.Context, id int64, status string) error {
 	rows, err := gorm.G[model.Channel](r.db).Where("id = ?", id).Update(ctx, "status", status)
 	if err != nil || rows == 0 {
 		return err
@@ -81,7 +81,7 @@ func (r *channelRepo) ListActiveByModel(ctx context.Context, modelName string) (
 	// 第一步：获取所有正常状态的渠道（不限制模型）
 	var allChannels []model.Channel
 	err := r.db.WithContext(ctx).
-		Where("status = 1").
+		Where("status = ?", model.ChannelStatusActive).
 		Order("weight DESC").
 		Find(&allChannels).Error
 	if err != nil {

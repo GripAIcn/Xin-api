@@ -104,7 +104,7 @@ func (t *ChannelTester) TestAllChannels(ctx context.Context) ([]ChannelTestResul
 
 	for _, channel := range channels {
 		// 只测试正常状态的渠道
-		if channel.Status != 1 {
+		if channel.Status != model.ChannelStatusActive {
 			continue
 		}
 

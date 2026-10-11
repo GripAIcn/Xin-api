@@ -235,7 +235,7 @@ export default function ChannelsView() {
           variant="link"
           size="sm"
           className="h-auto p-0"
-          disabled={row.status !== 1 || isTesting}
+          disabled={row.status !== 'active' || isTesting}
           onClick={() => void handleTestChannel(row)}
         >
           {isTesting ? (

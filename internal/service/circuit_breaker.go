@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"Xin-api/config"
+	"Xin-api/internal/model"
 	"Xin-api/internal/store/postgresql"
 )
 
@@ -40,18 +41,18 @@ func NewCircuitBreaker(rdb *redis.Client, channelRepo postgresql.ChannelRepo, cf
 	}
 }
 
-// IsHealthy 检查渠道是否健康（查 DB 中 status 是否为 1）
+// IsHealthy 检查渠道是否健康（查 DB 中 status 是否为 active）
 func (cb *CircuitBreaker) IsHealthy(ctx context.Context, channelID int64) (bool, error) {
 	ch, err := cb.channelRepo.GetByID(ctx, channelID)
 	if err != nil || ch == nil {
 		return false, err
 	}
-	return ch.Status == 1, nil
+	return ch.Status == model.ChannelStatusActive, nil
 }
 
 // Record 记录请求结果
 // 成功：重置失败计数，更新最后成功时间
-// 失败：递增失败计数，达阈值则将渠道 status 更新为 2（自动熔断）
+// 失败：递增失败计数，达阈值则将渠道 status 更新为 circuit_open（自动熔断）
 func (cb *CircuitBreaker) Record(ctx context.Context, channelID int64, err error) {
 	if err == nil {
 		cb.rdb.Del(ctx, fmt.Sprintf(cbFailCountKey, channelID))
@@ -66,10 +67,10 @@ func (cb *CircuitBreaker) Record(ctx context.Context, channelID int64, err error
 
 	if count >= int64(cb.cfg.FailureThreshold) {
 		log.Printf("[CB] channel %d failure threshold reached, opening circuit", channelID)
-		if updateErr := cb.channelRepo.UpdateStatus(ctx, channelID, 2); updateErr != nil {
-			log.Printf("[CB] update channel %d status to 2 failed: %v", channelID, updateErr)
+		if updateErr := cb.channelRepo.UpdateStatus(ctx, channelID, model.ChannelStatusCircuitOpen); updateErr != nil {
+			log.Printf("[CB] update channel %d status to circuit_open failed: %v", channelID, updateErr)
 		} else {
-			log.Printf("[CB] channel %d circuit opened (status=2)", channelID)
+			log.Printf("[CB] channel %d circuit opened (status=circuit_open)", channelID)
 			cb.rdb.Del(ctx, failKey)
 		}
 	}
@@ -90,7 +91,7 @@ func (cb *CircuitBreaker) RecoveryLoop(ctx context.Context, interval time.Durati
 	}
 }
 
-// recover 扫描 Redis 中记录的熔断渠道，冷却期到期后尝试恢复为 Status=1
+// recover 扫描 Redis 中记录的熔断渠道，冷却期到期后尝试恢复为 status=active
 func (cb *CircuitBreaker) recover(ctx context.Context) {
 	keys, err := cb.rdb.Keys(ctx, "cb:*:last_fail_time").Result()
 	if err != nil {
@@ -112,11 +113,11 @@ func (cb *CircuitBreaker) recover(ctx context.Context) {
 
 		if since >= cb.cfg.RecoveryInterval {
 			ch, err := cb.channelRepo.GetByID(ctx, channelID)
-			if err != nil || ch == nil || ch.Status != 2 {
+			if err != nil || ch == nil || ch.Status != model.ChannelStatusCircuitOpen {
 				continue
 			}
-			if updateErr := cb.channelRepo.UpdateStatus(ctx, channelID, 1); updateErr == nil {
-				log.Printf("[CB] channel %d recovered (status=1)", channelID)
+			if updateErr := cb.channelRepo.UpdateStatus(ctx, channelID, model.ChannelStatusActive); updateErr == nil {
+				log.Printf("[CB] channel %d recovered (status=active)", channelID)
 				cb.rdb.Del(ctx, fmt.Sprintf(cbFailCountKey, channelID))
 				cb.rdb.Del(ctx, key)
 			}

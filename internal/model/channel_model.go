@@ -6,6 +6,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// 渠道状态枚举，对应数据库 channels.status 的取值
+const (
+	ChannelStatusActive      = "active"       // 正常
+	ChannelStatusDisabled    = "disabled"     // 手动关闭
+	ChannelStatusCircuitOpen = "circuit_open" // 自动熔断
+)
+
 // Channel 上游物理供应商渠道，对应 channels 表
 type Channel struct {
 	ID           int64          `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
@@ -14,7 +21,7 @@ type Channel struct {
 	BaseURL      string         `gorm:"column:base_url;type:varchar(255);not null;comment:供应商基础URL" json:"base_url"`
 	APIKey       string         `gorm:"column:api_key;type:varchar(255);not null;comment:供应商鉴权key" json:"api_key"`
 	Weight       int            `gorm:"column:weight;default:1;comment:负载权重 1-100" json:"weight"`
-	Status       int            `gorm:"column:status;default:1;comment:渠道状态 1-正常 0-手动关闭 2-自动熔断" json:"status"`
+	Status       string         `gorm:"column:status;type:varchar(32);not null;default:active;comment:渠道状态 active-正常 disabled-手动关闭 circuit_open-自动熔断" json:"status"`
 	CreatedAt    time.Time      `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt    time.Time      `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`

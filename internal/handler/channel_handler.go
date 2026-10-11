@@ -45,7 +45,7 @@ func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 		BaseURL:      req.BaseURL,
 		APIKey:       req.APIKey,
 		Weight:       req.Weight,
-		Status:       1, // 默认正常
+		Status:       model.ChannelStatusActive, // 默认正常
 	}
 
 	if err := h.channelRepo.Create(c.Request.Context(), channel); err != nil {

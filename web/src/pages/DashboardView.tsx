@@ -40,25 +40,25 @@ const distributionRows: {
   label: string
   tone: StatusTone
   barClass: string
-  match: (status: number) => boolean
+  match: (status: string) => boolean
 }[] = [
   {
     label: '正常',
     tone: 'success',
     barClass: 'bg-success',
-    match: (status) => status === 1,
+    match: (status) => status === 'active',
   },
   {
     label: '熔断',
     tone: 'danger',
     barClass: 'bg-destructive',
-    match: (status) => status === 2,
+    match: (status) => status === 'circuit_open',
   },
   {
     label: '禁用',
     tone: 'muted',
     barClass: 'bg-muted-foreground/40',
-    match: (status) => status !== 1 && status !== 2,
+    match: (status) => status !== 'active' && status !== 'circuit_open',
   },
 ]
 

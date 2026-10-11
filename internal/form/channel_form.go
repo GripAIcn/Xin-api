@@ -16,7 +16,7 @@ type UpdateChannelReq struct {
 	BaseURL      string `json:"base_url" binding:"required" validate:"required,url"`
 	APIKey       string `json:"api_key" binding:"required" validate:"required,min=1,max=255"`
 	Weight       int    `json:"weight" binding:"required" validate:"required,min=1,max=100"`
-	Status       int    `json:"status" binding:"oneof=0 1 2" validate:"oneof=0 1 2"` // 状态允许修改为 0-手动关闭, 1-正常, 2-自动熔断
+	Status       string `json:"status" binding:"oneof=active disabled circuit_open" validate:"oneof=active disabled circuit_open"` // 状态：active-正常 disabled-手动关闭 circuit_open-自动熔断
 }
 
 // TestChannelReq 测试单个渠道请求入参

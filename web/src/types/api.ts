@@ -36,7 +36,7 @@ export interface Channel {
   base_url: string
   api_key: string
   weight: number
-  status: number
+  status: string
   created_at: string
   updated_at: string
 }
@@ -55,7 +55,7 @@ export interface UpdateChannelRequest {
   base_url: string
   api_key: string
   weight: number
-  status: number
+  status: string
 }
 
 // === Channel Test ===

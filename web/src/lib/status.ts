@@ -1,17 +1,19 @@
 import type { ChannelTestResult } from '@/types/api'
 import { formatTime } from '@/lib/format'
 
-export function channelStatusLabel(status: number): '正常' | '熔断' | '禁用' {
-  if (status === 1) return '正常'
-  if (status === 2) return '熔断'
+export function channelStatusLabel(
+  status: string,
+): '正常' | '熔断' | '禁用' {
+  if (status === 'active') return '正常'
+  if (status === 'circuit_open') return '熔断'
   return '禁用'
 }
 
 export function channelStatusTone(
-  status: number,
+  status: string,
 ): 'success' | 'danger' | 'muted' {
-  if (status === 1) return 'success'
-  if (status === 2) return 'danger'
+  if (status === 'active') return 'success'
+  if (status === 'circuit_open') return 'danger'
   return 'muted'
 }
 
