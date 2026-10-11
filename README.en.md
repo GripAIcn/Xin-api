@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version">
   <img src="https://img.shields.io/badge/Gin-1.12-00ADD8?style=flat-square" alt="Gin Framework">
-  <img src="https://img.shields.io/badge/Vue.js-3.x-42b883?style=flat-square&logo=vue.js&logoColor=white" alt="Vue.js">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React">
   <img src="https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
   <img src="https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis">
   <img src="https://img.shields.io/badge/Nginx-Alpine-009639?style=flat-square&logo=nginx&logoColor=white" alt="Nginx">
@@ -32,7 +32,7 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 - **🔑 API Key Management**: Flexible API key distribution and revocation
 - **🧪 Channel Health Check**: One-click manual channel testing, supporting single/batch testing of multi-model connectivity
 - **📊 Full-Link Tracing**: Complete request chain tracing and audit logging (extensible)
-- **🌐 Web Admin Dashboard**: Modern management UI built with Vue 3 + Tailwind CSS
+- **🌐 Web Admin Dashboard**: Modern management UI built with React 19 + Tailwind CSS
 - **🐳 Containerized Deployment**: Out-of-the-box Docker Compose deployment
 
 ---
@@ -43,7 +43,7 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | Vue 3 + TypeScript + Vite + Tailwind CSS + Element Plus |
+| **Frontend** | React 19 + TypeScript + Vite + Tailwind CSS + shadcn/ui |
 | **Backend** | Go 1.25 + Gin + GORM + JWT |
 | **Database** | PostgreSQL 16 (metadata storage) |
 | **Cache** | Redis 7 (rate limiting, circuit breaker, channel query cache) |

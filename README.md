@@ -9,7 +9,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go Version">
   <img src="https://img.shields.io/badge/Gin-1.12-00ADD8?style=flat-square" alt="Gin Framework">
-  <img src="https://img.shields.io/badge/Vue.js-3.x-42b883?style=flat-square&logo=vue.js&logoColor=white" alt="Vue.js">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" alt="React">
   <img src="https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
   <img src="https://img.shields.io/badge/Redis-7-DC382D?style=flat-square&logo=redis&logoColor=white" alt="Redis">
   <img src="https://img.shields.io/badge/Nginx-Alpine-009639?style=flat-square&logo=nginx&logoColor=white" alt="Nginx">
@@ -32,7 +32,7 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 - **🔑 API Key 管理**: 灵活的 API Key 分发和吊销机制
 - **🧪 渠道健康检测**: 手动一键测试渠道状态，支持单渠道/批量测试多模型连通性
 - **📊 全链路追踪**: 完整的请求链路追踪和审计日志（可扩展）
-- **🌐 Web 管理后台**: 基于 Vue 3 + Tailwind CSS 的现代化管理界面
+- **🌐 Web 管理后台**: 基于 React 19 + Tailwind CSS 的现代化管理界面
 - **🐳 容器化部署**: 开箱即用的 Docker Compose 部署方案
 
 ---
@@ -43,7 +43,7 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 
 | 层级 | 技术 |
 |------|------|
-| **前端** | Vue 3 + TypeScript + Vite + Tailwind CSS + Element Plus |
+| **前端** | React 19 + TypeScript + Vite + Tailwind CSS + shadcn/ui |
 | **后端** | Go 1.25 + Gin + GORM + JWT |
 | **数据库** | PostgreSQL 16（元数据存储） |
 | **缓存** | Redis 7（限流、熔断、渠道查询缓存） |
