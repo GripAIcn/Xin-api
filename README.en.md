@@ -169,9 +169,17 @@ Try Xin API Admin Dashboard at [http://api.gripai.cn/](http://api.gripai.cn/)
 
 ##  Screenshots
 
+### Landing Page
+
+![Landing Page](screenshot/landing.png)
+
 ### Dashboard
 
 ![Dashboard](screenshot/dashboard.png)
+
+### Group Detail
+
+![Group Detail](screenshot/detail.png)
 
 ### Admin Dashboard Features
 

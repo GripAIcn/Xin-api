@@ -169,9 +169,17 @@ npm run dev
 
 ## 📸 界面预览
 
-### 仪表盘
+### 官网首页
+
+![官网首页](screenshot/landing.png)
+
+### 控制台仪表盘
 
 ![仪表盘](screenshot/dashboard.png)
+
+### 项目组详情
+
+![项目组详情](screenshot/detail.png)
 
 ### 管理后台功能
 
