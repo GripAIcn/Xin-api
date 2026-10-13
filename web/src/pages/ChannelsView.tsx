@@ -66,13 +66,27 @@ import type { Channel, ChannelTestResult } from '@/types/api'
 
 const channelFormSchema = z.object({
   name: z.string().min(1, '请输入渠道名称').min(2, '至少 2 个字符'),
-  model_mapping: z.string().min(1, '请输入模型映射'),
+  provider: z.string().min(1, '请输入供应商，例如 openai'),
+  protocol: z
+    .string()
+    .min(1, '请输入协议')
+    .refine((v) => v.split(',').map((s) => s.trim()).filter(Boolean).length > 0, {
+      message: '至少填写一个协议',
+    }),
   base_url: z.string().min(1, '请输入 Base URL'),
   api_key: z.string().min(1, '请输入 API Key'),
   weight: z.number().min(1, '请输入权重').max(100, '权重不能超过 100'),
+  priority: z.number().min(0, '优先级不能小于 0'),
+  tags: z.string(),
+  timeout: z.number().min(1, '超时至少 1 秒'),
+  max_retries: z.number().min(0, '重试次数不能小于 0'),
 })
 
 type ChannelFormValues = z.infer<typeof channelFormSchema>
+
+// 将逗号分隔文本拆成去空数组（用于 protocol / tags）
+const splitList = (value: string): string[] =>
+  value.split(',').map((s) => s.trim()).filter(Boolean)
 
 export default function ChannelsView() {
   const channels = useChannelStore((s) => s.channels)
@@ -102,10 +116,15 @@ export default function ChannelsView() {
     resolver: zodResolver(channelFormSchema),
     defaultValues: {
       name: '',
-      model_mapping: '',
+      provider: '',
+      protocol: '',
       base_url: '',
       api_key: '',
       weight: 1,
+      priority: 0,
+      tags: '',
+      timeout: 60,
+      max_retries: 0,
     },
   })
 
@@ -136,10 +155,15 @@ export default function ChannelsView() {
     setEditingChannel(null)
     form.reset({
       name: '',
-      model_mapping: '',
+      provider: '',
+      protocol: '',
       base_url: '',
       api_key: '',
       weight: 1,
+      priority: 0,
+      tags: '',
+      timeout: 60,
+      max_retries: 0,
     })
     setDialogOpen(true)
   }
@@ -148,10 +172,15 @@ export default function ChannelsView() {
     setEditingChannel(row)
     form.reset({
       name: row.name,
-      model_mapping: row.model_mapping,
+      provider: row.provider,
+      protocol: (row.protocol ?? []).join(','),
       base_url: row.base_url,
       api_key: row.api_key,
       weight: row.weight,
+      priority: row.priority,
+      tags: (row.tags ?? []).join(','),
+      timeout: row.timeout,
+      max_retries: row.max_retries,
     })
     setDialogOpen(true)
   }
@@ -162,20 +191,30 @@ export default function ChannelsView() {
       if (editingChannel) {
         await updateChannel(editingChannel.id, {
           name: values.name,
-          model_mapping: values.model_mapping,
+          provider: values.provider,
+          protocol: splitList(values.protocol),
           base_url: values.base_url,
           api_key: values.api_key,
           weight: values.weight,
+          priority: values.priority,
+          tags: splitList(values.tags),
+          timeout: values.timeout,
+          max_retries: values.max_retries,
           status: editingChannel.status,
         })
         toast.success('渠道更新成功')
       } else {
         await createChannel({
           name: values.name,
-          model_mapping: values.model_mapping,
+          provider: values.provider,
+          protocol: splitList(values.protocol),
           base_url: values.base_url,
           api_key: values.api_key,
           weight: values.weight,
+          priority: values.priority,
+          tags: splitList(values.tags),
+          timeout: values.timeout,
+          max_retries: values.max_retries,
         })
         toast.success('渠道创建成功')
       }
@@ -302,7 +341,7 @@ export default function ChannelsView() {
               <TableRow>
                 <TableHead className="w-[70px]">ID</TableHead>
                 <TableHead className="min-w-[140px]">名称</TableHead>
-                <TableHead className="min-w-[140px]">模型映射</TableHead>
+                <TableHead className="min-w-[180px]">供应商 / 协议</TableHead>
                 <TableHead className="min-w-[180px]">Base URL</TableHead>
                 <TableHead className="w-[70px]">权重</TableHead>
                 <TableHead className="w-[90px]">状态</TableHead>
@@ -328,12 +367,14 @@ export default function ChannelsView() {
                       <TableCell>{row.id}</TableCell>
                       <TableCell className="font-medium">{row.name}</TableCell>
                       <TableCell>
-                        <span
-                          className="block max-w-[180px] truncate"
-                          title={row.model_mapping}
-                        >
-                          {row.model_mapping}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge variant="secondary">{row.provider}</Badge>
+                          {(row.protocol ?? []).map((p) => (
+                            <Badge key={p} variant="outline">
+                              {p}
+                            </Badge>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <span
@@ -418,13 +459,44 @@ export default function ChannelsView() {
 
               <FormField
                 control={form.control}
-                name="model_mapping"
+                name="provider"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>模型映射</FormLabel>
+                    <FormLabel>供应商</FormLabel>
+                    <FormControl>
+                      <Input placeholder="例如：openai" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="protocol"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>协议</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="例如：gpt-4o,deepseek-chat"
+                        placeholder="多个用逗号分隔，例如：chat,responses"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>标签</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="多个用逗号分隔，例如：fast,cheap"
                         {...field}
                       />
                     </FormControl>
@@ -479,6 +551,72 @@ export default function ChannelsView() {
                         type="number"
                         min={1}
                         max={100}
+                        name={field.name}
+                        ref={field.ref}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>优先级</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        name={field.name}
+                        ref={field.ref}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="timeout"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>超时（秒）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        name={field.name}
+                        ref={field.ref}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="max_retries"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>失败重试次数</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
                         name={field.name}
                         ref={field.ref}
                         value={field.value}

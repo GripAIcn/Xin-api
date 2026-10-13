@@ -106,10 +106,19 @@ func NewPostgres() *gorm.DB {
 	log.Println("连接 PostgreSQL 成功")
 
 	// 第三步：自动迁移（建表）
+	// 顺序按外键依赖排列：先父表后子表
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.Channel{},
 		&model.ApiKey{},
+		&model.Model{},
+		&model.ModelPrice{},
+		&model.ModelPriceBinding{},
+		&model.RequestLog{},
+		&model.RequestPayload{},
+		&model.BillingRecord{},
+		&model.ChannelMetric{},
+		&model.AuditLog{},
 	); err != nil {
 		panic(fmt.Sprintf("数据库自动迁移失败: %v", err))
 	}
@@ -126,6 +135,9 @@ func NewPostgres() *gorm.DB {
 		if err := db.Create(&model.User{
 			Username: "admin",
 			Password: string(hashed),
+			Role:     model.UserRoleAdmin,    // 显式写入，满足 CHECK (role IN (...))
+			Status:   model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
+			Currency: "USD",                  // 显式写入，与 price/billing 币种口径一致
 		}).Error; err != nil {
 			panic(fmt.Sprintf("创建默认管理员账号失败: %v", err))
 		}

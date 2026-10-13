@@ -3,10 +3,12 @@ package middleware
 import (
 	"Xin-api/internal/store/postgresql"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 
+	"Xin-api/internal/model"
 	"Xin-api/pkg/response"
 )
 
@@ -79,8 +81,19 @@ func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 		}
 
 		key := strings.TrimPrefix(auth, "Bearer ")
-		apiKey, err := apiKeyRepo.GetByKey(c.Request.Context(), key)
+		// 落库只存哈希：对来访明文 Key 求摘要后比对
+		apiKey, err := apiKeyRepo.GetByKeyHash(c.Request.Context(), model.HashApiKey(key))
 		if err != nil || apiKey == nil {
+			response.DataPlaneError(c, response.Unauthorized)
+			return
+		}
+
+		// 仅启用且未过期的 Key 可通过鉴权
+		if apiKey.Status != model.ApiKeyStatusActive {
+			response.DataPlaneError(c, response.Unauthorized)
+			return
+		}
+		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.Before(time.Now()) {
 			response.DataPlaneError(c, response.Unauthorized)
 			return
 		}

@@ -3,7 +3,6 @@ package postgresql
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"gorm.io/gorm"
 
@@ -25,6 +24,8 @@ type ChannelRepo interface {
 	ListAll(ctx context.Context) ([]model.Channel, error)
 	// ListActiveByModel ⚡️核心流量方法：根据请求的模型，捞出所有当前可用的物理渠道（状态为 active）
 	ListActiveByModel(ctx context.Context, modelName string) ([]model.Channel, error)
+	// ListModelsByChannel 获取指定渠道下可用的模型（渠道 × 模型，来自 models 表）
+	ListModelsByChannel(ctx context.Context, channelID int64) ([]model.Model, error)
 }
 
 type channelRepo struct {
@@ -77,40 +78,39 @@ func (r *channelRepo) ListAll(ctx context.Context) ([]model.Channel, error) {
 	return channels, err
 }
 
+// ListActiveByModel 根据模型选出支持该模型的可用渠道
+// 模型支持关系由 models 表（渠道 × 模型）行式表达；无精确匹配时回退全部可用渠道。
 func (r *channelRepo) ListActiveByModel(ctx context.Context, modelName string) ([]model.Channel, error) {
-	// 第一步：获取所有正常状态的渠道（不限制模型）
-	var allChannels []model.Channel
+	var channels []model.Channel
 	err := r.db.WithContext(ctx).
-		Where("status = ?", model.ChannelStatusActive).
-		Order("weight DESC").
-		Find(&allChannels).Error
+		Model(&model.Channel{}).
+		Select("channels.*").
+		Joins("JOIN models ON models.channel_id = channels.id AND models.deleted_at IS NULL").
+		Where("channels.status = ?", model.ChannelStatusActive).
+		Where("models.name = ?", modelName).
+		Order("channels.priority DESC, channels.weight DESC").
+		Find(&channels).Error
 	if err != nil {
 		return nil, err
 	}
 
-	if len(allChannels) == 0 {
-		return nil, nil
+	if len(channels) > 0 {
+		return channels, nil
 	}
 
-	// 第二步：优先精确匹配指定模型的渠道
-	var matchedChannels []model.Channel
-	for _, ch := range allChannels {
-		models := strings.Split(ch.ModelMapping, ",")
-		for _, m := range models {
-			if strings.TrimSpace(m) == modelName {
-				matchedChannels = append(matchedChannels, ch)
-				break
-			}
-		}
-	}
-
-	// 第三步：若找到精确匹配，直接返回
-	if len(matchedChannels) > 0 {
-		return matchedChannels, nil
-	}
-
-	// 第四步：容错策略 - 返回所有可用渠道（让上层按权重选择）
-	// 场景：用户请求 "deepseek-v4-flash" 但渠道配置的是 "deepseek-chat"
+	// 容错策略 - 返回所有可用渠道（让上层按权重选择）
+	// 场景：用户请求 "deepseek-v4-flash" 但渠道尚未登记对应模型
 	// 避免直接报错，提高网关可用性
-	return allChannels, nil
+	err = r.db.WithContext(ctx).
+		Where("status = ?", model.ChannelStatusActive).
+		Order("priority DESC, weight DESC").
+		Find(&channels).Error
+	return channels, err
+}
+
+func (r *channelRepo) ListModelsByChannel(ctx context.Context, channelID int64) ([]model.Model, error) {
+	models, err := gorm.G[model.Model](r.db).
+		Where("channel_id = ? AND status = ?", channelID, model.ModelStatusActive).
+		Find(ctx)
+	return models, err
 }

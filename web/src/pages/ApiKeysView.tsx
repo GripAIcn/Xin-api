@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { Alert, AlertTitle } from '@/components/ui/alert'
 import PageHeader from '@/components/PageHeader'
+import { DotBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -22,7 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { formatDate, maskKey } from '@/lib/format'
+import { formatDate } from '@/lib/format'
+import { apiKeyStatusLabel, apiKeyStatusTone } from '@/lib/status'
 import { useApiKeyStore } from '@/stores/apikeys'
 import type { ApiKey } from '@/types/api'
 
@@ -58,6 +60,7 @@ export default function ApiKeysView() {
     setCreating(true)
     try {
       const result = await create()
+      // 明文 key 仅在创建响应中出现一次
       setNewKeyValue(result.key)
       setKeyDialogOpen(true)
     } catch (e) {
@@ -80,7 +83,7 @@ export default function ApiKeysView() {
   const handleDelete = async () => {
     if (!deleteTarget) return
     try {
-      await remove(deleteTarget.key)
+      await remove(deleteTarget.id)
       toast.success('API Key 已删除')
       setDeleteTarget(null)
     } catch (e) {
@@ -107,7 +110,8 @@ export default function ApiKeysView() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>API Key</TableHead>
+                <TableHead>名称</TableHead>
+                <TableHead className="w-28">状态</TableHead>
                 <TableHead className="w-48">创建时间</TableHead>
                 <TableHead className="w-24 text-right">操作</TableHead>
               </TableRow>
@@ -116,24 +120,25 @@ export default function ApiKeysView() {
               {loading ? (
                 Array.from({ length: 3 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={3}>
+                    <TableCell colSpan={4}>
                       <Skeleton className="h-6 w-full" />
                     </TableCell>
                   </TableRow>
                 ))
               ) : apiKeys.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
                     暂无 API Key
                   </TableCell>
                 </TableRow>
               ) : (
                 apiKeys.map((row) => (
-                  <TableRow key={row.key}>
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium">{row.name || '未命名'}</TableCell>
                     <TableCell>
-                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[13px]">
-                        {maskKey(row.key)}
-                      </code>
+                      <DotBadge tone={apiKeyStatusTone(row.status)}>
+                        {apiKeyStatusLabel(row.status)}
+                      </DotBadge>
                     </TableCell>
                     <TableCell>{formatDate(row.created_at)}</TableCell>
                     <TableCell className="text-right">
@@ -194,9 +199,9 @@ export default function ApiKeysView() {
           {deleteTarget && (
             <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-primary bg-muted px-4 py-3">
               <span className="shrink-0 text-sm text-muted-foreground">API Key：</span>
-              <code className="break-all font-mono text-[13px] text-foreground/80">
-                {maskKey(deleteTarget.key)}
-              </code>
+              <span className="break-all font-medium text-foreground/80">
+                {deleteTarget.name || `#${deleteTarget.id}`}
+              </span>
             </div>
           )}
           <DialogFooter>

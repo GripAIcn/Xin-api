@@ -17,6 +17,14 @@ export function channelStatusTone(
   return 'muted'
 }
 
+export function apiKeyStatusLabel(status: string): '启用' | '禁用' {
+  return status === 'active' ? '启用' : '禁用'
+}
+
+export function apiKeyStatusTone(status: string): 'success' | 'muted' {
+  return status === 'active' ? 'success' : 'muted'
+}
+
 export interface TestResultSummary {
   tone: 'success' | 'danger' | 'warning'
   text: string

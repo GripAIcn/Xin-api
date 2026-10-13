@@ -67,23 +67,32 @@ func (t *ChannelTester) TestChannel(ctx context.Context, channelID int64, modelN
 	}
 
 	// 确定要测试的模型列表
-	var modelsToTest []string
+	// 渠道支持的模型由 models 表（渠道 × 模型）行式表达
+	channelModels, err := t.channelRepo.ListModelsByChannel(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	var targets []modelTarget
 	if modelName != "" {
-		// 测试指定模型
-		modelsToTest = []string{modelName}
+		// 测试指定模型：优先使用该渠道登记的实际上游模型名
+		upstream := modelName
+		for _, m := range channelModels {
+			if m.Name == modelName {
+				upstream = m.UpstreamModel
+				break
+			}
+		}
+		targets = append(targets, modelTarget{name: modelName, upstream: upstream})
 	} else {
 		// 测试该渠道支持的所有模型
-		models := strings.Split(channel.ModelMapping, ",")
-		for _, m := range models {
-			m = strings.TrimSpace(m)
-			if m != "" {
-				modelsToTest = append(modelsToTest, m)
-			}
+		for _, m := range channelModels {
+			targets = append(targets, modelTarget{name: m.Name, upstream: m.UpstreamModel})
 		}
 	}
 
 	// 并发测试所有模型，但限制并发数
-	result.Results = t.testModelsConcurrent(ctx, channel.BaseURL, channel.APIKey, modelsToTest)
+	result.Results = t.testModelsConcurrent(ctx, channel.BaseURL, channel.APIKey, targets)
 
 	return result, nil
 }
@@ -140,8 +149,14 @@ func (t *ChannelTester) TestAllChannels(ctx context.Context) ([]ChannelTestResul
 	return results, nil
 }
 
+// modelTarget 待测试模型：name 为对外逻辑名（用于展示），upstream 为上游真实名（用于请求）
+type modelTarget struct {
+	name     string
+	upstream string
+}
+
 // testModelsConcurrent 并发测试多个模型
-func (t *ChannelTester) testModelsConcurrent(ctx context.Context, baseURL, apiKey string, models []string) []ModelTestResult {
+func (t *ChannelTester) testModelsConcurrent(ctx context.Context, baseURL, apiKey string, targets []modelTarget) []ModelTestResult {
 	var results []ModelTestResult
 	var mu sync.Mutex
 	var wg sync.WaitGroup
@@ -149,31 +164,32 @@ func (t *ChannelTester) testModelsConcurrent(ctx context.Context, baseURL, apiKe
 	// 限制并发数为 3，避免对上游造成过大压力
 	semaphore := make(chan struct{}, 3)
 
-	for _, model := range models {
+	for _, target := range targets {
 		wg.Add(1)
-		go func(m string) {
+		go func(tg modelTarget) {
 			defer wg.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			result := t.testSingleModel(ctx, baseURL, apiKey, m)
+			result := t.testSingleModel(ctx, baseURL, apiKey, tg)
 
 			mu.Lock()
 			results = append(results, result)
 			mu.Unlock()
-		}(model)
+		}(target)
 	}
 
 	wg.Wait()
 	return results
 }
 
-func (t *ChannelTester) testSingleModel(ctx context.Context, baseURL, apiKey, modelName string) ModelTestResult {
+func (t *ChannelTester) testSingleModel(ctx context.Context, baseURL, apiKey string, target modelTarget) ModelTestResult {
+	modelName := target.name
 	start := time.Now()
 
-	// 构造测试请求
+	// 构造测试请求（使用上游真实模型名）
 	reqBody := form.ChatCompletionRequest{
-		Model: modelName,
+		Model: target.upstream,
 		Messages: []form.ChatMessage{
 			{Role: "user", Content: "hi"},
 		},

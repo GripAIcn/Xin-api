@@ -120,6 +120,9 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	newUser := &model.User{
 		Username: req.Username,
 		Password: string(hashedPassword),
+		Role:     model.UserRoleAdmin,    // 默认创建为管理员
+		Status:   model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
+		Currency: "USD",
 	}
 
 	if err := h.userRepo.Create(c.Request.Context(), newUser); err != nil {

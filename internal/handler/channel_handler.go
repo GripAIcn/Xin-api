@@ -34,18 +34,23 @@ func NewChannelHandler(repo postgresql.ChannelRepo, rdb *redis.Client) *ChannelH
 
 // CreateChannel 添加上游渠道供应商
 func (h *ChannelHandler) CreateChannel(c *gin.Context) {
-	var req form.CreateChannelReq // 包含 Name, ModelMapping, BaseURL, APIKey, Weight
+	var req form.CreateChannelReq // 包含 Name, Provider, Protocol, BaseURL, APIKey, Weight 等
 	if !h.bindAndValidate(c, &req) {
 		return
 	}
 
 	channel := &model.Channel{
-		Name:         req.Name,
-		ModelMapping: req.ModelMapping,
-		BaseURL:      req.BaseURL,
-		APIKey:       req.APIKey,
-		Weight:       req.Weight,
-		Status:       model.ChannelStatusActive, // 默认正常
+		Name:       req.Name,
+		Provider:   req.Provider,
+		Protocol:   req.Protocol,
+		BaseURL:    req.BaseURL,
+		APIKey:     req.APIKey,
+		Weight:     req.Weight,
+		Priority:   req.Priority,
+		Tags:       req.Tags,
+		Timeout:    req.Timeout,
+		MaxRetries: req.MaxRetries,
+		Status:     model.ChannelStatusActive, // 默认正常
 	}
 
 	if err := h.channelRepo.Create(c.Request.Context(), channel); err != nil {
@@ -97,13 +102,18 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 
 	// 先获取老数据进行校验，或直接覆盖
 	channel := &model.Channel{
-		ID:           id,
-		Name:         req.Name,
-		ModelMapping: req.ModelMapping,
-		BaseURL:      req.BaseURL,
-		APIKey:       req.APIKey,
-		Weight:       req.Weight,
-		Status:       req.Status, // 允许编辑时调整状态
+		ID:         id,
+		Name:       req.Name,
+		Provider:   req.Provider,
+		Protocol:   req.Protocol,
+		BaseURL:    req.BaseURL,
+		APIKey:     req.APIKey,
+		Weight:     req.Weight,
+		Priority:   req.Priority,
+		Tags:       req.Tags,
+		Timeout:    req.Timeout,
+		MaxRetries: req.MaxRetries,
+		Status:     req.Status, // 允许编辑时调整状态
 	}
 
 	if err := h.channelRepo.Update(c.Request.Context(), channel); err != nil {

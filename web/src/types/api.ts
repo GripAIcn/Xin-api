@@ -32,29 +32,46 @@ export interface UpdateAccountRequest {
 export interface Channel {
   id: number
   name: string
-  model_mapping: string
+  provider: string
+  protocol: string[]
   base_url: string
   api_key: string
   weight: number
+  priority: number
+  tags: string[]
   status: string
+  timeout: number
+  max_retries: number
+  last_error_at?: string
+  circuit_opened_at?: string
   created_at: string
   updated_at: string
 }
 
 export interface CreateChannelRequest {
   name: string
-  model_mapping: string
+  provider: string
+  protocol: string[]
   base_url: string
   api_key: string
   weight: number
+  priority?: number
+  tags?: string[]
+  timeout?: number
+  max_retries?: number
 }
 
 export interface UpdateChannelRequest {
   name: string
-  model_mapping: string
+  provider: string
+  protocol: string[]
   base_url: string
   api_key: string
   weight: number
+  priority?: number
+  tags?: string[]
+  timeout?: number
+  max_retries?: number
   status: string
 }
 
@@ -81,10 +98,25 @@ export interface ChannelTestResult {
 // === API Key ===
 
 export interface ApiKey {
-  key: string
+  id: number
+  name: string
+  user_id: number
+  status: string
+  expires_at?: string
+  last_used_at?: string
   created_at: string
 }
 
-export interface DeleteApiKeyRequest {
+export interface CreateApiKeyRequest {
+  name?: string
+  expires_at?: string
+}
+
+// 创建响应：明文 key 仅在创建时返回一次，其余为元数据
+export interface CreateApiKeyResponse extends ApiKey {
   key: string
+}
+
+export interface DeleteApiKeyRequest {
+  id: number
 }

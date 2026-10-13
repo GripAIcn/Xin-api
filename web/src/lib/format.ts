@@ -9,8 +9,3 @@ export function formatTime(ms: number): string {
   }
   return `${(ms / 1000).toFixed(2)}s`
 }
-
-export function maskKey(key: string): string {
-  if (key.length > 12) return key.slice(0, 8) + '****' + key.slice(-4)
-  return key
-}
