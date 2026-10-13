@@ -103,7 +103,7 @@ export default function LoginView() {
             <h2 className="mb-2 text-[28px] font-semibold text-foreground">
               欢迎登录
             </h2>
-            <p className="text-sm text-muted-foreground">请使用管理员账号登录系统</p>
+            <p className="text-sm text-muted-foreground">请输入账号密码登录系统</p>
           </div>
 
           <Form {...form}>

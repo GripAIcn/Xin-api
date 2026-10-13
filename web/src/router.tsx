@@ -8,6 +8,7 @@ import DashboardView from '@/pages/DashboardView'
 import LandingView from '@/pages/LandingView'
 import LoginView from '@/pages/LoginView'
 import SettingsView from '@/pages/SettingsView'
+import UsersView from '@/pages/UsersView'
 import { useAuthStore } from '@/stores/auth'
 
 // 检查用户是否已登录（优先使用 store，后备使用 localStorage）
@@ -27,6 +28,14 @@ function ProtectedRoute() {
 // 访客专属：已登录则跳转仪表盘
 function GuestRoute() {
   if (isAuthenticated()) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return <Outlet />
+}
+
+// 管理员专属：非管理员则跳转仪表盘
+function AdminRoute() {
+  if (!useAuthStore.getState().isAdmin) {
     return <Navigate to="/dashboard" replace />
   }
   return <Outlet />
@@ -102,6 +111,19 @@ export const router = createBrowserRouter([
                 <SettingsView />
               </Page>
             ),
+          },
+          {
+            element: <AdminRoute />,
+            children: [
+              {
+                path: 'users',
+                element: (
+                  <Page title="用户管理">
+                    <UsersView />
+                  </Page>
+                ),
+              },
+            ],
           },
         ],
       },

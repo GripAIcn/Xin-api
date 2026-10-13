@@ -17,7 +17,7 @@ const (
 // User 控制面管理员表，对应 users 表
 type User struct {
 	ID          uint       `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Username    string     `gorm:"column:username;type:varchar(50);not null;unique;comment:全局唯一登录账号名" json:"username"`
+	Username    string     `gorm:"column:username;type:varchar(50);not null;unique;check:chk_users_username_len,char_length(username) >= 5;comment:全局唯一登录账号名（长度不少于5）" json:"username"`
 	Password    string     `gorm:"column:password;type:varchar(255);not null;comment:bcrypt 单向加密加盐密文" json:"-"`
 	Email       *string    `gorm:"column:email;type:varchar(255);unique;comment:邮箱（唯一，可空）" json:"email,omitempty"`
 	Phone       *string    `gorm:"column:phone;type:varchar(32);comment:手机号" json:"phone,omitempty"`

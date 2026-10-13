@@ -1,21 +1,22 @@
 import { create } from 'zustand'
-import type { LoginResponse } from '@/types/api'
+import type { LoginResponse, UpdateProfileRequest } from '@/types/api'
 import * as authApi from '@/api/modules/auth'
 import apiClient from '@/lib/api-client'
 
 interface AuthState {
   token: string | null
   username: string | null
+  role: string | null
+  isAdmin: boolean
   isValidating: boolean
   isAuthenticated: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => void
-  updateUsername: (username: string) => void
   updatePassword: (data: {
     old_password: string
     new_password: string
   }) => Promise<void>
-  updateAccount: (data: { username: string }) => Promise<void>
+  updateProfile: (data: UpdateProfileRequest) => Promise<void>
   recoverFromStorage: () => void
   validateToken: () => Promise<boolean>
 }
@@ -29,6 +30,8 @@ function readStoredAuth(key: string): string | null {
 export const useAuthStore = create<AuthState>()((set, get) => ({
   token: readStoredAuth('token'),
   username: readStoredAuth('username'),
+  role: readStoredAuth('role'),
+  isAdmin: readStoredAuth('role') === 'admin',
   isValidating: false,
   isAuthenticated: !!readStoredAuth('token'),
 
@@ -39,40 +42,50 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     })
     localStorage.setItem('token', res.token)
     localStorage.setItem('username', res.username)
-    set({ token: res.token, username: res.username, isAuthenticated: true })
+    localStorage.setItem('role', res.role)
+    set({
+      token: res.token,
+      username: res.username,
+      role: res.role,
+      isAdmin: res.role === 'admin',
+      isAuthenticated: true,
+    })
   },
 
   logout: () => {
     localStorage.removeItem('token')
     localStorage.removeItem('username')
-    set({ token: null, username: null, isAuthenticated: false })
+    localStorage.removeItem('role')
+    set({
+      token: null,
+      username: null,
+      role: null,
+      isAdmin: false,
+      isAuthenticated: false,
+    })
     if (window.location.pathname !== '/login') {
       window.location.assign('/login')
     }
-  },
-
-  updateUsername: (newUsername) => {
-    localStorage.setItem('username', newUsername)
-    set({ username: newUsername })
   },
 
   updatePassword: async (data) => {
     await authApi.updatePassword(data)
   },
 
-  updateAccount: async (data) => {
-    await authApi.updateAccount(data)
-    localStorage.setItem('username', data.username)
-    set({ username: data.username })
+  updateProfile: async (data) => {
+    await authApi.updateProfile(data)
   },
 
   recoverFromStorage: () => {
     const storedToken = localStorage.getItem('token')
     const storedUsername = localStorage.getItem('username')
     if (storedToken && storedUsername) {
+      const storedRole = localStorage.getItem('role')
       set({
         token: storedToken,
         username: storedUsername,
+        role: storedRole,
+        isAdmin: storedRole === 'admin',
         isAuthenticated: true,
       })
     }

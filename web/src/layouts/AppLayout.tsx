@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ChevronsUpDown,
@@ -8,6 +8,7 @@ import {
   Menu,
   Settings,
   UserCog,
+  Users,
   Waypoints,
 } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -40,25 +41,33 @@ interface NavGroup {
   items: NavItem[]
 }
 
-const navGroups: NavGroup[] = [
-  {
-    label: '概览',
-    items: [{ name: '仪表盘', path: '/dashboard', icon: LayoutDashboard }],
-  },
-  {
-    label: '资源',
-    items: [
-      { name: '渠道', path: '/channels', icon: Waypoints },
-      { name: 'API Key', path: '/apikeys', icon: KeyRound },
-    ],
-  },
-  {
-    label: '系统',
-    items: [{ name: '账户设置', path: '/settings', icon: Settings }],
-  },
-]
+function buildNavGroups(isAdmin: boolean): NavGroup[] {
+  return [
+    {
+      label: '概览',
+      items: [{ name: '仪表盘', path: '/dashboard', icon: LayoutDashboard }],
+    },
+    {
+      label: '资源',
+      items: [
+        { name: '渠道', path: '/channels', icon: Waypoints },
+        { name: 'API Key', path: '/apikeys', icon: KeyRound },
+      ],
+    },
+    {
+      label: '系统',
+      items: [
+        { name: '账户设置', path: '/settings', icon: Settings },
+        ...(isAdmin
+          ? [{ name: '用户管理', path: '/users', icon: Users }]
+          : []),
+      ],
+    },
+  ]
+}
 
-const allNavItems = navGroups.flatMap((group) => group.items)
+// 标题解析使用包含管理员项的完整导航，保证任意角色下均可解析路径标题
+const allNavItems = buildNavGroups(true).flatMap((group) => group.items)
 
 function pageTitle(pathname: string): string {
   const exact =
@@ -90,14 +99,16 @@ function Logo({ collapsed }: { collapsed: boolean }) {
 
 function NavGroupList({
   collapsed,
+  groups,
   onNavigate,
 }: {
   collapsed: boolean
+  groups: NavGroup[]
   onNavigate?: () => void
 }) {
   return (
     <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-4">
-      {navGroups.map((group) => (
+      {groups.map((group) => (
         <div key={group.label}>
           {!collapsed && (
             <p className="mb-1.5 px-3 text-[11px] font-medium tracking-wider text-muted-foreground/80 uppercase">
@@ -207,10 +218,13 @@ function UserMenu({
 
 export default function AppLayout() {
   const username = useAuthStore((s) => s.username)
+  const isAdmin = useAuthStore((s) => s.isAdmin)
   const logout = useAuthStore((s) => s.logout)
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const navGroups = useMemo(() => buildNavGroups(isAdmin), [isAdmin])
 
   // 挂载时若存在 token 则验证其有效性
   useEffect(() => {
@@ -229,7 +243,7 @@ export default function AppLayout() {
         )}
       >
         <Logo collapsed={collapsed} />
-        <NavGroupList collapsed={collapsed} />
+        <NavGroupList collapsed={collapsed} groups={navGroups} />
         <VersionFooter collapsed={collapsed} />
 
         {/* 折叠按钮 */}
@@ -273,6 +287,7 @@ export default function AppLayout() {
             <Logo collapsed={false} />
             <NavGroupList
               collapsed={false}
+              groups={navGroups}
               onNavigate={() => setMobileOpen(false)}
             />
             <VersionFooter collapsed={false} />

@@ -40,11 +40,22 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		// ==========================================
 		// 权限受控路由组 (Protected Group)：必须通过 JWT 拦截器
 		// ==========================================
-		protectedUser := v1.Group("/users").Use(middleware.JWTAuth(cfg.JWT.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
+		protectedUser := v1.Group("/users")
+		protectedUser.Use(middleware.JWTAuth(cfg.JWT.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
 		{
-			protectedUser.POST("", userHandler.CreateUser)             // 添加账户名和密码
+			// —— 自助接口（所有登录用户）——
 			protectedUser.PUT("/password", userHandler.UpdatePassword) // 修改当前登录用户的密码
-			protectedUser.PUT("/account", userHandler.UpdateAccount)   // 修改当前登录用户的账号名
+			protectedUser.PUT("/profile", userHandler.UpdateProfile)   // 修改当前登录用户的邮箱/手机号
+
+			// —— 管理员接口（在 JWTAuth 基础上追加 RequireAdmin 校验）——
+			adminUser := protectedUser.Group("").Use(middleware.RequireAdmin())
+			{
+				adminUser.POST("", userHandler.CreateUser)                        // 创建新账户
+				adminUser.GET("", userHandler.ListUsers)                          // 查询用户列表
+				adminUser.PUT("/:id/status", userHandler.UpdateUserStatus)        // 启用/禁用指定用户
+				adminUser.POST("/:id/reset-password", userHandler.AdminResetPassword) // 重置指定用户密码
+				adminUser.POST("/:id/recharge", userHandler.RechargeBalance)      // 为指定用户充值
+			}
 		}
 
 		protected := v1.Group("").Use(middleware.JWTAuth(cfg.JWT.Secret))

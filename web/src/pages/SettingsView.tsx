@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Lock, User } from 'lucide-react'
+import { Contact, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 
 import PageHeader from '@/components/PageHeader'
@@ -24,16 +24,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { useAuthStore } from '@/stores/auth'
 
-const usernameSchema = z.object({
-  username: z
-    .string()
-    .min(1, '请输入用户名')
-    .min(5, '用户名长度需在 5-10 个字符之间')
-    .max(10, '用户名长度需在 5-10 个字符之间'),
-})
-
-type UsernameForm = z.infer<typeof usernameSchema>
-
 const passwordSchema = z
   .object({
     old_password: z
@@ -55,29 +45,40 @@ const passwordSchema = z
 
 type PasswordForm = z.infer<typeof passwordSchema>
 
-export default function SettingsView() {
-  const username = useAuthStore((s) => s.username)
-  const updateAccount = useAuthStore((s) => s.updateAccount)
-  const updatePassword = useAuthStore((s) => s.updatePassword)
-
-  const usernameForm = useForm<UsernameForm>({
-    resolver: zodResolver(usernameSchema),
-    defaultValues: { username: username ?? '' },
+const profileSchema = z
+  .object({
+    email: z
+      .string()
+      .email('请输入有效的邮箱地址')
+      .optional()
+      .or(z.literal('')),
+    phone: z.string().optional(),
+    old_password: z
+      .string()
+      .min(1, '请输入当前密码')
+      .min(8, '密码长度需在 8-20 个字符之间')
+      .max(20, '密码长度需在 8-20 个字符之间'),
   })
+  .refine((data) => !!data.email || !!data.phone, {
+    message: '请至少填写邮箱或手机号',
+    path: ['email'],
+  })
+
+type ProfileForm = z.infer<typeof profileSchema>
+
+export default function SettingsView() {
+  const updatePassword = useAuthStore((s) => s.updatePassword)
+  const updateProfile = useAuthStore((s) => s.updateProfile)
 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
     defaultValues: { old_password: '', new_password: '', confirm_password: '' },
   })
 
-  const onSubmitUsername = async (values: UsernameForm) => {
-    try {
-      await updateAccount({ username: values.username })
-      toast.success('用户名修改成功')
-    } catch (e) {
-      toast.error((e as Error)?.message || '修改失败')
-    }
-  }
+  const profileForm = useForm<ProfileForm>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: { email: '', phone: '', old_password: '' },
+  })
 
   const onSubmitPassword = async (values: PasswordForm) => {
     try {
@@ -92,6 +93,20 @@ export default function SettingsView() {
     }
   }
 
+  const onSubmitProfile = async (values: ProfileForm) => {
+    try {
+      await updateProfile({
+        old_password: values.old_password,
+        email: values.email || undefined,
+        phone: values.phone || undefined,
+      })
+      toast.success('资料更新成功')
+      profileForm.reset()
+    } catch (e) {
+      toast.error((e as Error)?.message || '更新失败')
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-6xl">
       <PageHeader
@@ -101,54 +116,6 @@ export default function SettingsView() {
       />
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card className="h-full">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <User className="size-[18px]" />
-              </span>
-              <div className="flex flex-col gap-1">
-                <CardTitle>修改用户名</CardTitle>
-                <CardDescription>当前：{username}</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Form {...usernameForm}>
-              <form
-                onSubmit={usernameForm.handleSubmit(onSubmitUsername)}
-                className="space-y-4"
-              >
-                <FormField
-                  control={usernameForm.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>新用户名</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="输入新用户名"
-                          maxLength={10}
-                          disabled={usernameForm.formState.isSubmitting}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={usernameForm.formState.isSubmitting}
-                >
-                  {usernameForm.formState.isSubmitting ? '保存中...' : '保存修改'}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
         <Card className="h-full">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -227,6 +194,89 @@ export default function SettingsView() {
                   disabled={passwordForm.formState.isSubmitting}
                 >
                   {passwordForm.formState.isSubmitting ? '保存中...' : '修改密码'}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+
+        <Card className="h-full">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Contact className="size-[18px]" />
+              </span>
+              <div className="flex flex-col gap-1">
+                <CardTitle>修改资料</CardTitle>
+                <CardDescription>修改邮箱/手机号需验证当前密码</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Form {...profileForm}>
+              <form
+                onSubmit={profileForm.handleSubmit(onSubmitProfile)}
+                className="space-y-4"
+              >
+                <FormField
+                  control={profileForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>邮箱</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="输入邮箱（选填）"
+                          disabled={profileForm.formState.isSubmitting}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>手机号</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="输入手机号（选填）"
+                          disabled={profileForm.formState.isSubmitting}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={profileForm.control}
+                  name="old_password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>当前密码</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="输入当前密码以验证身份"
+                          disabled={profileForm.formState.isSubmitting}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={profileForm.formState.isSubmitting}
+                >
+                  {profileForm.formState.isSubmitting ? '保存中...' : '保存修改'}
                 </Button>
               </form>
             </Form>

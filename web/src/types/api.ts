@@ -16,6 +16,7 @@ export interface LoginRequest {
 export interface LoginResponse {
   token: string
   username: string
+  role: string
 }
 
 export interface UpdatePasswordRequest {
@@ -23,8 +24,47 @@ export interface UpdatePasswordRequest {
   new_password: string
 }
 
-export interface UpdateAccountRequest {
+// === User ===
+
+export interface User {
+  id: number
   username: string
+  email?: string
+  phone?: string
+  role: string
+  status: string
+  balance: number
+  currency: string
+  quota?: number
+  used_quota: number
+  last_login_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateUserRequest {
+  username: string
+  password: string
+  email?: string
+  phone?: string
+}
+
+export interface UpdateProfileRequest {
+  old_password: string
+  email?: string
+  phone?: string
+}
+
+export interface UpdateUserStatusRequest {
+  status: string
+}
+
+export interface AdminResetPasswordRequest {
+  new_password: string
+}
+
+export interface RechargeBalanceRequest {
+  amount: number
 }
 
 // === Channel ===

@@ -15,6 +15,7 @@ import (
 const (
 	CtxUserIDKey   = "user_id"
 	CtxUsernameKey = "username"
+	CtxRoleKey     = "role"
 )
 
 // JWTAuth 控制面管理后台鉴权中间件
@@ -65,8 +66,21 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 		// 将常用用户信息存入上下文，方便后续 Handler 免密读取
 		c.Set(CtxUserIDKey, claims["user_id"])
 		c.Set(CtxUsernameKey, claims["username"])
+		c.Set(CtxRoleKey, claims["role"])
 
 		c.Next() // 鉴权通过，放行继续执行后续路由
+	}
+}
+
+// RequireAdmin 管理员权限中间件：仅放行 role=admin 的用户
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetString(CtxRoleKey) != model.UserRoleAdmin {
+			response.AdminFail(c, response.Forbidden)
+			c.Abort()
+			return
+		}
+		c.Next()
 	}
 }
 
