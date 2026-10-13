@@ -3,13 +3,16 @@ package handler
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"gorm.io/gorm"
 
 	"Xin-api/internal/form"
+	"Xin-api/internal/middleware"
 	"Xin-api/internal/model"
 	"Xin-api/internal/store/postgresql"
 	"Xin-api/pkg/response"
@@ -38,12 +41,7 @@ func (h *ApiKeyHandler) CreateApiKey(c *gin.Context) {
 	}
 
 	// api_keys.user_id 非空：从 JWT 上下文取当前登录用户 id
-	uidRaw, exists := c.Get("user_id")
-	if !exists {
-		response.AdminFail(c, response.Unauthorized)
-		return
-	}
-	uidFloat, ok := uidRaw.(float64) // JWT 数字解析通常为 float64
+	uid, ok := currentUserID(c)
 	if !ok {
 		response.AdminFail(c, response.Unauthorized)
 		return
@@ -62,7 +60,7 @@ func (h *ApiKeyHandler) CreateApiKey(c *gin.Context) {
 	apiKey := &model.ApiKey{
 		KeyHash:   model.HashApiKey(generatedKey), // 落库存哈希，不存明文
 		Name:      req.Name,
-		UserID:    int64(uidFloat),
+		UserID:    uid,
 		Status:    model.ApiKeyStatusActive,
 		ExpiresAt: req.ExpiresAt,
 	}
@@ -81,14 +79,25 @@ func (h *ApiKeyHandler) CreateApiKey(c *gin.Context) {
 	})
 }
 
-// DeleteApiKey 按 id 软删除指定的密钥凭证
+// DeleteApiKey 按 id 软删除指定的密钥凭证（仅限本人名下的 Key）
 func (h *ApiKeyHandler) DeleteApiKey(c *gin.Context) {
 	var req form.DeleteApiKeyReq
 	if !h.bindAndValidate(c, &req) {
 		return
 	}
 
-	if err := h.apiKeyRepo.DeleteSoft(c.Request.Context(), req.ID); err != nil {
+	uid, ok := currentUserID(c)
+	if !ok {
+		response.AdminFail(c, response.Unauthorized)
+		return
+	}
+
+	// 归属校验：id 与当前用户同时匹配才会删除，越权/不存在统一拒绝
+	if err := h.apiKeyRepo.DeleteSoftByUser(c.Request.Context(), req.ID, uid); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.AdminFail(c, response.Forbidden)
+			return
+		}
 		logger.Error(c.Request.Context(), "delete api key failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return
@@ -97,9 +106,15 @@ func (h *ApiKeyHandler) DeleteApiKey(c *gin.Context) {
 	response.AdminSuccess(c, "凭证已成功吊销")
 }
 
-// ListApiKeys 获取全量可用密钥列表
+// ListApiKeys 获取当前登录用户名下的密钥列表
 func (h *ApiKeyHandler) ListApiKeys(c *gin.Context) {
-	keys, err := h.apiKeyRepo.ListAll(c.Request.Context())
+	uid, ok := currentUserID(c)
+	if !ok {
+		response.AdminFail(c, response.Unauthorized)
+		return
+	}
+
+	keys, err := h.apiKeyRepo.ListByUserID(c.Request.Context(), uid)
 	if err != nil {
 		logger.Error(c.Request.Context(), "list api keys failed: %v", err)
 		response.AdminFail(c, response.InternalError)
@@ -107,12 +122,25 @@ func (h *ApiKeyHandler) ListApiKeys(c *gin.Context) {
 	}
 
 	// 批量转化为响应 DTO 数组（不暴露明文与哈希）
-	var resp []form.ApiKeyResponse
+	resp := make([]form.ApiKeyResponse, 0, len(keys))
 	for _, k := range keys {
 		resp = append(resp, toApiKeyResponse(&k))
 	}
 
 	response.AdminSuccess(c, resp)
+}
+
+// currentUserID 从 JWT 上下文中提取当前登录用户 id
+func currentUserID(c *gin.Context) (int64, bool) {
+	uidRaw, exists := c.Get(middleware.CtxUserIDKey)
+	if !exists {
+		return 0, false
+	}
+	uidFloat, ok := uidRaw.(float64) // JWT 数字解析通常为 float64
+	if !ok {
+		return 0, false
+	}
+	return int64(uidFloat), true
 }
 
 // toApiKeyResponse 将模型转换为对外响应 DTO

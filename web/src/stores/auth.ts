@@ -99,8 +99,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     set({ isValidating: true })
     try {
-      // 使用 GET /v1/channels 作为验证接口
-      await apiClient.get('/v1/channels')
+      // 使用 GET /v1/users/profile 作为验证接口（所有登录角色均可访问）
+      await apiClient.get('/v1/users/profile')
       return true
     } catch {
       // 验证失败（包括网络错误、401 等），清除 token 并跳转到登录页

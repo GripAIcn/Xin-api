@@ -50,7 +50,9 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
     {
       label: '资源',
       items: [
-        { name: '渠道', path: '/channels', icon: Waypoints },
+        ...(isAdmin
+          ? [{ name: '渠道', path: '/channels', icon: Waypoints }]
+          : []),
         { name: 'API Key', path: '/apikeys', icon: KeyRound },
       ],
     },

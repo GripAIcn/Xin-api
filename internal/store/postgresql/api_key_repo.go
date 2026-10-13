@@ -12,12 +12,12 @@ import (
 type ApiKeyRepo interface {
 	// Create 分发一个 API Key（落库仅存 key_hash）
 	Create(ctx context.Context, apiKey *model.ApiKey) error
-	// DeleteSoft 按代理主键软删除指定的 API Key
-	DeleteSoft(ctx context.Context, id int64) error
+	// DeleteSoftByUser 按代理主键软删除指定的 API Key，且仅限该 Key 的归属用户
+	DeleteSoftByUser(ctx context.Context, id int64, userID int64) error
 	// GetByKeyHash 根据 Key 的哈希摘要获取详情（鉴权用）
 	GetByKeyHash(ctx context.Context, keyHash string) (*model.ApiKey, error)
-	// ListAll 获取全部可用密钥
-	ListAll(ctx context.Context) ([]model.ApiKey, error)
+	// ListByUserID 获取指定用户自己的全部可用密钥
+	ListByUserID(ctx context.Context, userID int64) ([]model.ApiKey, error)
 }
 
 type apiKeyRepo struct {
@@ -33,8 +33,8 @@ func (r *apiKeyRepo) Create(ctx context.Context, apiKey *model.ApiKey) error {
 	return gorm.G[model.ApiKey](r.db).Create(ctx, apiKey)
 }
 
-func (r *apiKeyRepo) DeleteSoft(ctx context.Context, id int64) error {
-	rows, err := gorm.G[model.ApiKey](r.db).Where("id = ?", id).Delete(ctx)
+func (r *apiKeyRepo) DeleteSoftByUser(ctx context.Context, id int64, userID int64) error {
+	rows, err := gorm.G[model.ApiKey](r.db).Where("id = ? AND user_id = ?", id, userID).Delete(ctx)
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (r *apiKeyRepo) GetByKeyHash(ctx context.Context, keyHash string) (*model.A
 	return &apiKey, nil
 }
 
-func (r *apiKeyRepo) ListAll(ctx context.Context) ([]model.ApiKey, error) {
-	keys, err := gorm.G[model.ApiKey](r.db).Find(ctx)
+func (r *apiKeyRepo) ListByUserID(ctx context.Context, userID int64) ([]model.ApiKey, error) {
+	keys, err := gorm.G[model.ApiKey](r.db).Where("user_id = ?", userID).Find(ctx)
 	return keys, err
 }

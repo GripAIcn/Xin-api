@@ -44,6 +44,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		protectedUser.Use(middleware.JWTAuth(cfg.JWT.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
 		{
 			// —— 自助接口（所有登录用户）——
+			protectedUser.GET("/profile", userHandler.GetProfile)      // 获取当前登录用户资料（亦用于前端 token 校验）
 			protectedUser.PUT("/password", userHandler.UpdatePassword) // 修改当前登录用户的密码
 			protectedUser.PUT("/profile", userHandler.UpdateProfile)   // 修改当前登录用户的邮箱/手机号
 
@@ -58,21 +59,26 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			}
 		}
 
-		protected := v1.Group("").Use(middleware.JWTAuth(cfg.JWT.Secret))
+		protected := v1.Group("")
+		protected.Use(middleware.JWTAuth(cfg.JWT.Secret))
 		{
-			// 供应商渠道路由
-			protected.POST("/channels", channelHandler.CreateChannel)
-			protected.GET("/channels", channelHandler.ListChannels)
-			protected.PUT("/channels/:id", channelHandler.UpdateChannel)
-			protected.DELETE("/channels/:id", channelHandler.DeleteChannel)
-			protected.POST("/channels/:id/test", channelHandler.TestChannel) // 测试单个渠道
-
-			// 渠道批量测试
-			protected.POST("/channels/test", channelHandler.TestAllChannels) // 测试所有渠道
-
+			// API Key：所有登录用户均可管理，但仓储/业务层按当前用户 user_id 隔离
 			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)        // 分发新 Key
-			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)          // 查询 Key 列表
-			protected.POST("/apikeys/delete", apiKeyHandler.DeleteApiKey) // 吊销/软删除指定的 Key（使用 POST 以便从 body 读取 key）
+			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)          // 查询当前用户的 Key 列表
+			protected.POST("/apikeys/delete", apiKeyHandler.DeleteApiKey) // 吊销/软删除当前用户名下的 Key
+
+			// 供应商渠道：全局上游资源，仅管理员可管理
+			adminChannel := protected.Group("").Use(middleware.RequireAdmin())
+			{
+				adminChannel.POST("/channels", channelHandler.CreateChannel)
+				adminChannel.GET("/channels", channelHandler.ListChannels)
+				adminChannel.PUT("/channels/:id", channelHandler.UpdateChannel)
+				adminChannel.DELETE("/channels/:id", channelHandler.DeleteChannel)
+				adminChannel.POST("/channels/:id/test", channelHandler.TestChannel) // 测试单个渠道
+
+				// 渠道批量测试
+				adminChannel.POST("/channels/test", channelHandler.TestAllChannels) // 测试所有渠道
+			}
 		}
 
 		// ==========================================

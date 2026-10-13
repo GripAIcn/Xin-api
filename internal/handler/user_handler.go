@@ -331,6 +331,29 @@ func (h *UserHandler) RechargeBalance(c *gin.Context) {
 	response.AdminSuccess(c, toUserResponse(*updated))
 }
 
+// GetProfile 获取当前登录用户的个人资料（所有登录用户可访问）
+func (h *UserHandler) GetProfile(c *gin.Context) {
+	currentUserID, exists := c.Get(middleware.CtxUserIDKey)
+	if !exists {
+		response.AdminFail(c, response.Unauthorized)
+		return
+	}
+	uID := uint(currentUserID.(float64)) // JWT 解析数字通常为 float64
+
+	user, err := h.userRepo.GetByID(c.Request.Context(), uID)
+	if err != nil {
+		logger.Error(c.Request.Context(), "query user failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+	if user == nil {
+		response.AdminFail(c, response.Unauthorized)
+		return
+	}
+
+	response.AdminSuccess(c, toUserResponse(*user))
+}
+
 // UpdateProfile 普通用户修改自身邮箱/手机号（需校验原始密码）
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	var req form.UpdateProfileReq

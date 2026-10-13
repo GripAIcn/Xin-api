@@ -89,14 +89,6 @@ export const router = createBrowserRouter([
             ),
           },
           {
-            path: 'channels',
-            element: (
-              <Page title="渠道管理">
-                <ChannelsView />
-              </Page>
-            ),
-          },
-          {
             path: 'apikeys',
             element: (
               <Page title="API Key">
@@ -115,6 +107,14 @@ export const router = createBrowserRouter([
           {
             element: <AdminRoute />,
             children: [
+              {
+                path: 'channels',
+                element: (
+                  <Page title="渠道管理">
+                    <ChannelsView />
+                  </Page>
+                ),
+              },
               {
                 path: 'users',
                 element: (
