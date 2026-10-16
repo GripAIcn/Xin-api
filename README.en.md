@@ -20,7 +20,7 @@
 
 ## ✨ Introduction
 
-Xin API is a high-performance Large Language Model (LLM) gateway service that seamlessly integrates with mainstream models like OpenAI, Anthropic Claude, DeepSeek, and more — providing a standardized, unified API access layer.
+Xin API is a high-performance Large Language Model (LLM) gateway service that seamlessly integrates with mainstream models like OpenAI, Anthropic Claude, DeepSeek, Gemini, and more — providing a standardized, unified API access layer.
 
 ### Core Features
 
@@ -28,7 +28,9 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 - **🔀 Smart Distribution**: Weight-based load balancing to automatically route requests to the optimal channel
 - **🛡️ Circuit Breaker**: Distributed circuit breaker that isolates failing channels and prevents cascading failures
 - **⚡ Rate Limiting**: Redis-based distributed rate limiter supporting RPM/TPM multi-dimensional limiting
-- **👥 Unified Channel Management**: Manage upstream provider channels with weights and status
+- **👥 Unified Channel Management**: Manage upstream provider channels with weights and status, including per-channel model management (create/update/delete, enable/disable, fetch models from upstream)
+- **🔗 Model Name Mapping**: Register the upstream model name per "channel × external model name"; rewrite the outgoing request to the upstream name and restore the external name in responses
+- **🧩 Multi-Protocol Adaptation**: OpenAI Chat on the inbound side; outbound adapted per channel provider (OpenAI / DeepSeek / Anthropic / Gemini)
 - **🔑 API Key Management**: Flexible API key distribution and revocation
 - **🧪 Channel Health Check**: One-click manual channel testing, supporting single/batch testing of multi-model connectivity
 - **📊 Full-Link Tracing**: Complete request chain tracing and audit logging (extensible)
@@ -181,7 +183,7 @@ Try Xin API Admin Dashboard at [http://api.gripai.cn/](http://api.gripai.cn/)
 
 - **📊 Dashboard**: System overview, request statistics
 - **👥 User Management**: User accounts and permissions
-- **🔌 Channel Management**: Configure upstream LLM channels with weighted routing, one-click channel health testing
+- **🔌 Channel Management**: Configure upstream LLM channels with weighted routing, one-click channel health testing, and per-channel model management (create/update/delete, enable/disable, fetch models from upstream)
 - **🔑 API Key Management**: Distribute and manage API keys
 - **⚙️ System Settings**: Global configuration
 
