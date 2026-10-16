@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"strconv"
 
 	"github.com/bytedance/gopkg/util/logger"
@@ -17,18 +18,20 @@ import (
 )
 
 type ChannelHandler struct {
-	channelRepo   postgresql.ChannelRepo
-	channelTester *service.ChannelTester
-	redis         *redis.Client
-	validate      *validator.Validate
+	channelRepo         postgresql.ChannelRepo
+	channelTester       *service.ChannelTester
+	channelModelFetcher *service.ChannelModelFetcher
+	redis               *redis.Client
+	validate            *validator.Validate
 }
 
 func NewChannelHandler(repo postgresql.ChannelRepo, rdb *redis.Client) *ChannelHandler {
 	return &ChannelHandler{
-		channelRepo:   repo,
-		channelTester: service.NewChannelTester(repo),
-		redis:         rdb,
-		validate:      validator.New(),
+		channelRepo:         repo,
+		channelTester:       service.NewChannelTester(repo),
+		channelModelFetcher: service.NewChannelModelFetcher(repo),
+		redis:               rdb,
+		validate:            validator.New(),
 	}
 }
 
@@ -42,12 +45,12 @@ func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 	channel := &model.Channel{
 		Name:       req.Name,
 		Provider:   req.Provider,
-		Protocol:   req.Protocol,
+		Protocol:   model.StringArray(req.Protocol),
 		BaseURL:    req.BaseURL,
 		APIKey:     req.APIKey,
 		Weight:     req.Weight,
 		Priority:   req.Priority,
-		Tags:       req.Tags,
+		Tags:       model.StringArray(req.Tags),
 		Timeout:    req.Timeout,
 		MaxRetries: req.MaxRetries,
 		Status:     model.ChannelStatusActive, // 默认正常
@@ -105,12 +108,12 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 		ID:         id,
 		Name:       req.Name,
 		Provider:   req.Provider,
-		Protocol:   req.Protocol,
+		Protocol:   model.StringArray(req.Protocol),
 		BaseURL:    req.BaseURL,
 		APIKey:     req.APIKey,
 		Weight:     req.Weight,
 		Priority:   req.Priority,
-		Tags:       req.Tags,
+		Tags:       model.StringArray(req.Tags),
 		Timeout:    req.Timeout,
 		MaxRetries: req.MaxRetries,
 		Status:     req.Status, // 允许编辑时调整状态
@@ -138,6 +141,41 @@ func (h *ChannelHandler) ListChannels(c *gin.Context) {
 	}
 
 	response.AdminSuccess(c, channels)
+}
+
+// ListModels 按逻辑模型名聚合查询全部渠道模型（模型管理页）
+func (h *ChannelHandler) ListModels(c *gin.Context) {
+	rows, err := h.channelRepo.ListModelChannelRows(c.Request.Context())
+	if err != nil {
+		logger.Error(c.Request.Context(), "list models failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	// 在 Go 内按 Name 分组（保持 SQL 的稳定顺序）
+	groups := make([]model.ModelGroup, 0)
+	index := make(map[string]int)
+	for _, row := range rows {
+		i, ok := index[row.Name]
+		if !ok {
+			groups = append(groups, model.ModelGroup{Name: row.Name})
+			i = len(groups) - 1
+			index[row.Name] = i
+		}
+		groups[i].Channels = append(groups[i].Channels, row)
+	}
+	for i := range groups {
+		groups[i].ChannelCount = len(groups[i].Channels)
+		active := 0
+		for _, ch := range groups[i].Channels {
+			if ch.Status == model.ModelStatusActive {
+				active++
+			}
+		}
+		groups[i].ActiveCount = active
+	}
+
+	response.AdminSuccess(c, groups)
 }
 
 // invalidateChannelCache 清除全部渠道缓存
@@ -184,6 +222,287 @@ func (h *ChannelHandler) TestAllChannels(c *gin.Context) {
 	}
 
 	response.AdminSuccess(c, results)
+}
+
+// ==========================================
+// 渠道模型管理（管理员）
+// ==========================================
+
+// CreateChannelModel 为渠道新增模型
+func (h *ChannelHandler) CreateChannelModel(c *gin.Context) {
+	channelID, ok := h.parsePathInt64(c, "id")
+	if !ok {
+		return
+	}
+
+	var req form.CreateChannelModelReq
+	if !h.bindAndValidate(c, &req) {
+		return
+	}
+
+	ctx := c.Request.Context()
+	channel, err := h.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		logger.Error(ctx, "get channel failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+	if channel == nil {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	// 同渠道对外名判重（应用层保证一致性）
+	existing, err := h.channelRepo.GetModelByName(ctx, channelID, req.Name)
+	if err != nil {
+		logger.Error(ctx, "check duplicate model failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+	if existing != nil {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	status := req.Status
+	if status == "" {
+		status = model.ModelStatusActive
+	}
+
+	m := &model.Model{
+		ChannelID:          channelID,
+		Name:               req.Name,
+		UpstreamModel:      req.UpstreamModel,
+		ContextLength:      req.ContextLength,
+		MaxOutputTokens:    req.MaxOutputTokens,
+		Capabilities:       model.StringArray(req.Capabilities),
+		Status:             status,
+		InputPrice:         req.InputPrice,
+		OutputPrice:        req.OutputPrice,
+		CachedInputPrice:   req.CachedInputPrice,
+		CacheCreationPrice: req.CacheCreationPrice,
+		Currency:           req.Currency,
+	}
+
+	if err := h.channelRepo.CreateModel(ctx, m); err != nil {
+		logger.Error(ctx, "create channel model failed: %v", err)
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	h.invalidateModelCache(ctx)
+	response.AdminSuccess(c, m)
+}
+
+// ListChannelModels 列出渠道下全部模型（含 disabled）
+func (h *ChannelHandler) ListChannelModels(c *gin.Context) {
+	channelID, ok := h.parsePathInt64(c, "id")
+	if !ok {
+		return
+	}
+
+	ctx := c.Request.Context()
+	channel, err := h.channelRepo.GetByID(ctx, channelID)
+	if err != nil {
+		logger.Error(ctx, "get channel failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+	if channel == nil {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	models, err := h.channelRepo.ListModelsByChannelAll(ctx, channelID)
+	if err != nil {
+		logger.Error(ctx, "list channel models failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	response.AdminSuccess(c, models)
+}
+
+// UpdateChannelModel 编辑渠道模型
+func (h *ChannelHandler) UpdateChannelModel(c *gin.Context) {
+	channelID, ok := h.parsePathInt64(c, "id")
+	if !ok {
+		return
+	}
+	modelID, ok := h.parsePathInt64(c, "modelId")
+	if !ok {
+		return
+	}
+
+	var req form.UpdateChannelModelReq
+	if !h.bindAndValidate(c, &req) {
+		return
+	}
+
+	ctx := c.Request.Context()
+	m, err := h.channelRepo.GetModelByID(ctx, modelID)
+	if err != nil {
+		logger.Error(ctx, "get channel model failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+	if m == nil || m.ChannelID != channelID {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	// 改名时需保证同渠道对外名唯一
+	if req.Name != m.Name {
+		dup, err := h.channelRepo.GetModelByName(ctx, channelID, req.Name)
+		if err != nil {
+			logger.Error(ctx, "check duplicate model failed: %v", err)
+			response.AdminFail(c, response.InternalError)
+			return
+		}
+		if dup != nil {
+			response.AdminFail(c, response.InvalidParams)
+			return
+		}
+	}
+
+	m.Name = req.Name
+	m.UpstreamModel = req.UpstreamModel
+	m.ContextLength = req.ContextLength
+	m.MaxOutputTokens = req.MaxOutputTokens
+	m.Capabilities = model.StringArray(req.Capabilities)
+	if req.Status != "" {
+		m.Status = req.Status
+	}
+	m.InputPrice = req.InputPrice
+	m.OutputPrice = req.OutputPrice
+	m.CachedInputPrice = req.CachedInputPrice
+	m.CacheCreationPrice = req.CacheCreationPrice
+	m.Currency = req.Currency
+
+	if err := h.channelRepo.UpdateModel(ctx, m); err != nil {
+		logger.Error(ctx, "update channel model failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	h.invalidateModelCache(ctx)
+	response.AdminSuccess(c, m)
+}
+
+// DeleteChannelModel 软删除渠道模型
+func (h *ChannelHandler) DeleteChannelModel(c *gin.Context) {
+	channelID, ok := h.parsePathInt64(c, "id")
+	if !ok {
+		return
+	}
+	modelID, ok := h.parsePathInt64(c, "modelId")
+	if !ok {
+		return
+	}
+
+	ctx := c.Request.Context()
+	m, err := h.channelRepo.GetModelByID(ctx, modelID)
+	if err != nil {
+		logger.Error(ctx, "get channel model failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+	if m == nil || m.ChannelID != channelID {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	if err := h.channelRepo.DeleteModelSoft(ctx, modelID); err != nil {
+		logger.Error(ctx, "delete channel model failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	h.invalidateModelCache(ctx)
+	response.AdminSuccess(c, "模型删除成功")
+}
+
+// UpdateChannelModelStatus 启用/禁用渠道模型
+func (h *ChannelHandler) UpdateChannelModelStatus(c *gin.Context) {
+	channelID, ok := h.parsePathInt64(c, "id")
+	if !ok {
+		return
+	}
+	modelID, ok := h.parsePathInt64(c, "modelId")
+	if !ok {
+		return
+	}
+
+	var req form.UpdateChannelModelStatusReq
+	if !h.bindAndValidate(c, &req) {
+		return
+	}
+
+	ctx := c.Request.Context()
+	m, err := h.channelRepo.GetModelByID(ctx, modelID)
+	if err != nil {
+		logger.Error(ctx, "get channel model failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+	if m == nil || m.ChannelID != channelID {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
+	if err := h.channelRepo.UpdateModelStatus(ctx, modelID, req.Status); err != nil {
+		logger.Error(ctx, "update channel model status failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	h.invalidateModelCache(ctx)
+
+	m.Status = req.Status
+	response.AdminSuccess(c, m)
+}
+
+// FetchUpstreamModels 获取上游可用模型列表
+func (h *ChannelHandler) FetchUpstreamModels(c *gin.Context) {
+	channelID, ok := h.parsePathInt64(c, "id")
+	if !ok {
+		return
+	}
+
+	ctx := c.Request.Context()
+	ids, err := h.channelModelFetcher.FetchUpstreamModels(ctx, channelID)
+	if err != nil {
+		logger.Error(ctx, "fetch upstream models failed: %v", err)
+		if errors.Is(err, service.ErrChannelNotFound) {
+			response.AdminFail(c, response.InvalidParams)
+			return
+		}
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	response.AdminSuccess(c, ids)
+}
+
+// invalidateModelCache 清除渠道与模型映射相关缓存
+func (h *ChannelHandler) invalidateModelCache(ctx context.Context) {
+	patterns := []string{"xin:channels:active:*", "xin:modelmap:*"}
+	for _, pattern := range patterns {
+		iter := h.redis.Scan(ctx, 0, pattern, 0).Iterator()
+		for iter.Next(ctx) {
+			h.redis.Del(ctx, iter.Val())
+		}
+	}
+}
+
+// parsePathInt64 解析路径中的整型参数
+func (h *ChannelHandler) parsePathInt64(c *gin.Context, name string) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param(name), 10, 64)
+	if err != nil {
+		response.AdminFail(c, response.InvalidParams)
+		return 0, false
+	}
+	return id, true
 }
 
 // bindAndValidate 参数校验辅助方法

@@ -75,8 +75,27 @@ func (h *ChatHandler) getChannelsWithCache(ctx context.Context, modelName string
 	return channels, nil
 }
 
+// getUpstreamModelWithCache 解析渠道登记的「对外名 → 上游名」映射（带缓存）
+// 未登记映射时返回空串（表示透传对外名）
+func (h *ChatHandler) getUpstreamModelWithCache(ctx context.Context, channelID int64, modelName string) string {
+	cacheKey := fmt.Sprintf("xin:modelmap:%d:%s", channelID, modelName)
+
+	if cached, err := h.redis.Get(ctx, cacheKey).Result(); err == nil {
+		return cached
+	}
+
+	upstream, err := h.channelRepo.GetUpstreamModel(ctx, channelID, modelName)
+	if err != nil {
+		logger.Error(ctx, "get upstream model mapping failed: %v", err)
+		return ""
+	}
+
+	h.redis.Set(ctx, cacheKey, upstream, h.cacheExpire)
+	return upstream
+}
+
 // HandleDataPlane 通用数据面请求处理
-// 根据请求路径查找对应 adapter，委托 adapter 完成协议解析和转发
+// 入站协议固定为 OpenAI Chat；选中渠道后按渠道 provider 选择适配器完成协议转换与转发
 func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 	body, err := c.GetRawData()
 	if err != nil {
@@ -84,21 +103,19 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		return
 	}
 
-	// 1. 根据请求路径查找适配器
-	adpt, err := h.adapterGroup.GetAdapter(c.FullPath())
+	// 1. 入站协议固定为 OpenAI Chat，用 openai 适配器提取对外模型名
+	inbound, err := h.adapterGroup.GetAdapter("openai")
 	if err != nil {
-		response.DataPlaneError(c, response.URLNotFound)
+		response.DataPlaneError(c, response.ServiceUnavailable)
 		return
 	}
-
-	// 2. 提取模型名
-	modelName, err := adpt.ExtractModel(body)
+	modelName, err := inbound.ExtractModel(body)
 	if err != nil {
 		response.DataPlaneError(c, response.InvalidParams)
 		return
 	}
 
-	// 3. 查询可用渠道（使用缓存）
+	// 2. 查询可用渠道（使用缓存）
 	channels, err := h.getChannelsWithCache(c.Request.Context(), modelName)
 	if err != nil {
 		logger.Error(c.Request.Context(), "list channels failed: %v", err)
@@ -110,7 +127,7 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		return
 	}
 
-	// 4. 负载均衡 + 熔断检查
+	// 3. 负载均衡 + 熔断检查
 	balancerKey := modelName
 	var selected *model.Channel
 	for attempts := 0; attempts < len(channels); attempts++ {
@@ -135,12 +152,31 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		return
 	}
 
-	// 5. 代理转发（使用 adapter 提供的端点）
+	// 4. 按渠道 provider 选择出站适配器
+	adpt, err := h.adapterGroup.GetAdapter(selected.Provider)
+	if err != nil {
+		logger.Error(c.Request.Context(), "no adapter for provider %s: %v", selected.Provider, err)
+		response.DataPlaneError(c, response.ServiceUnavailable)
+		return
+	}
+
+	// 5. 解析上游模型映射（命中则改写为上游名，未命中透传对外名）
+	upstreamModel := h.getUpstreamModelWithCache(c.Request.Context(), selected.ID, modelName)
+
+	// 6. 由适配器构造上游请求（含协议转换与鉴权头）
+	upReq, err := adpt.BuildUpstreamRequest(body, upstreamModel, selected.APIKey)
+	if err != nil {
+		logger.Error(c.Request.Context(), "build upstream request failed: %v", err)
+		response.DataPlaneError(c, response.InvalidParams)
+		return
+	}
+
+	// 7. 转发并按需把响应转换回 OpenAI 格式（model 回写为对外名）
 	logger.Info(c.Request.Context(), "routing to channel %s (id=%d) via %s adapter",
 		selected.Name, selected.ID, adpt.Name())
-	proxyErr := h.proxy.Forward(c, selected, body, adpt.UpstreamEndpoint())
+	proxyErr := h.proxy.Forward(c, selected, upReq, adpt, modelName)
 
-	// 6. 记录熔断结果
+	// 8. 记录熔断结果
 	h.breaker.Record(c.Request.Context(), selected.ID, proxyErr)
 	if proxyErr != nil {
 		logger.Error(c.Request.Context(), "service to channel %s failed: %v", selected.Name, proxyErr)

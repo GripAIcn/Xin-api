@@ -76,6 +76,17 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 				adminChannel.DELETE("/channels/:id", channelHandler.DeleteChannel)
 				adminChannel.POST("/channels/:id/test", channelHandler.TestChannel) // 测试单个渠道
 
+				// 渠道模型管理
+				adminChannel.POST("/channels/:id/models", channelHandler.CreateChannelModel)              // 为渠道新增模型
+				adminChannel.GET("/channels/:id/models", channelHandler.ListChannelModels)                // 列出渠道下全部模型（含禁用）
+				adminChannel.GET("/channels/:id/models/available", channelHandler.FetchUpstreamModels)    // 获取上游可用模型
+				adminChannel.PUT("/channels/:id/models/:modelId", channelHandler.UpdateChannelModel)      // 编辑模型
+				adminChannel.DELETE("/channels/:id/models/:modelId", channelHandler.DeleteChannelModel)   // 软删除模型
+				adminChannel.PUT("/channels/:id/models/:modelId/status", channelHandler.UpdateChannelModelStatus) // 启用/禁用模型
+
+				// 模型管理：按逻辑模型名聚合查询全部渠道模型
+				adminChannel.GET("/models", channelHandler.ListModels) // 按逻辑模型名聚合查询（模型管理页）
+
 				// 渠道批量测试
 				adminChannel.POST("/channels/test", channelHandler.TestAllChannels) // 测试所有渠道
 			}
@@ -86,6 +97,9 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		// ==========================================
 		adapterGroup := adapter.NewRegistry()
 		adapterGroup.Register(adapter.NewOpenAIAdapter())
+		adapterGroup.RegisterAlias("deepseek", adapter.NewOpenAIAdapter())
+		adapterGroup.Register(adapter.NewAnthropicAdapter())
+		adapterGroup.Register(adapter.NewGeminiAdapter())
 
 		chatHandler := handler.NewChatHandler(
 			channelRepo,
