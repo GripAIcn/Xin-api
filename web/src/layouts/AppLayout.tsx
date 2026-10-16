@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  Boxes,
   ChevronsUpDown,
   KeyRound,
   LayoutDashboard,
@@ -51,7 +52,10 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
       label: '资源',
       items: [
         ...(isAdmin
-          ? [{ name: '渠道管理', path: '/channels', icon: Waypoints }]
+          ? [
+              { name: '渠道管理', path: '/channels', icon: Waypoints },
+              { name: '模型管理', path: '/models', icon: Boxes },
+            ]
           : []),
         { name: 'API Key', path: '/apikeys', icon: KeyRound },
       ],

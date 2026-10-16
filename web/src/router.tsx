@@ -7,6 +7,7 @@ import ChannelsView from '@/pages/ChannelsView'
 import DashboardView from '@/pages/DashboardView'
 import LandingView from '@/pages/LandingView'
 import LoginView from '@/pages/LoginView'
+import ModelsView from '@/pages/ModelsView'
 import SettingsView from '@/pages/SettingsView'
 import UsersView from '@/pages/UsersView'
 import { useAuthStore } from '@/stores/auth'
@@ -112,6 +113,14 @@ export const router = createBrowserRouter([
                 element: (
                   <Page title="渠道管理">
                     <ChannelsView />
+                  </Page>
+                ),
+              },
+              {
+                path: 'models',
+                element: (
+                  <Page title="模型管理">
+                    <ModelsView />
                   </Page>
                 ),
               },
