@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
+  Boxes,
   CircleCheck,
   CirclePlay,
   CircleX,
@@ -14,6 +15,7 @@ import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import ChannelModelsDialog from '@/components/ChannelModelsDialog'
 import ChannelTestResultCard from '@/components/ChannelTestResult'
 import { DotBadge } from '@/components/StatusBadge'
 import PageHeader from '@/components/PageHeader'
@@ -34,10 +36,17 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import {
   Form,
   FormControl,
@@ -111,6 +120,8 @@ export default function ChannelsView() {
     useState<ChannelTestResult | null>(null)
 
   const [deleteTarget, setDeleteTarget] = useState<Channel | null>(null)
+
+  const [modelsChannel, setModelsChannel] = useState<Channel | null>(null)
 
   const form = useForm<ChannelFormValues>({
     resolver: zodResolver(channelFormSchema),
@@ -302,18 +313,17 @@ export default function ChannelsView() {
           : 'text-amber-500'
 
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => openTestDetail(result)}
-        className={cn(
-          'flex items-center gap-1 rounded px-1 py-1 text-sm',
-          toneClass,
-        )}
+        className={cn('h-auto gap-1 px-1 py-1', toneClass)}
       >
         <Icon className="size-4" />
         <span>{summary.text}</span>
         {summary.isMulti && <Badge variant="secondary">详情</Badge>}
-      </button>
+      </Button>
     )
   }
 
@@ -396,6 +406,14 @@ export default function ChannelsView() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            aria-label="模型管理"
+                            onClick={() => setModelsChannel(row)}
+                          >
+                            <Boxes />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             aria-label="编辑"
                             onClick={() => openEdit(row)}
                           >
@@ -422,26 +440,26 @@ export default function ChannelsView() {
       </Card>
 
       {/* 创建/编辑对话框 */}
-      <Dialog
+      <Sheet
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open)
           if (!open) setEditingChannel(null)
         }}
       >
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{isEdit ? '编辑渠道' : '添加渠道'}</DialogTitle>
-            <DialogDescription className="sr-only">
+        <SheetContent className="overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>{isEdit ? '编辑渠道' : '添加渠道'}</SheetTitle>
+            <SheetDescription className="sr-only">
               填写渠道信息
-            </DialogDescription>
-          </DialogHeader>
+            </SheetDescription>
+          </SheetHeader>
           <Form {...form}>
             <form
               onSubmit={(event) => {
                 void form.handleSubmit(onSubmit)(event)
               }}
-              className="space-y-4"
+              className="space-y-4 px-4 pb-4"
             >
               <FormField
                 control={form.control}
@@ -629,7 +647,7 @@ export default function ChannelsView() {
                 )}
               />
 
-              <DialogFooter>
+              <SheetFooter className="p-0 sm:flex-row sm:justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -640,11 +658,11 @@ export default function ChannelsView() {
                 <Button type="submit" disabled={submitting}>
                   {submitting ? '保存中...' : '保存'}
                 </Button>
-              </DialogFooter>
+              </SheetFooter>
             </form>
           </Form>
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       {/* 删除确认 */}
       <AlertDialog
@@ -686,6 +704,16 @@ export default function ChannelsView() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* 渠道模型管理 */}
+      <ChannelModelsDialog
+        channelId={modelsChannel?.id ?? null}
+        channelName={modelsChannel?.name}
+        open={modelsChannel !== null}
+        onOpenChange={(open) => {
+          if (!open) setModelsChannel(null)
+        }}
+      />
     </div>
   )
 }

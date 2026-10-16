@@ -135,6 +135,62 @@ export interface ChannelTestResult {
   results: ModelTestResult[]
 }
 
+// === Channel Model ===
+
+export type ChannelModelStatus = 'active' | 'disabled'
+
+// 渠道下的可用模型（渠道 × 模型）：name 为对外（逻辑）模型名，upstream_model 为上游真实模型名
+export interface ChannelModel {
+  id: number
+  channel_id: number
+  name: string
+  upstream_model: string
+  context_length?: number
+  max_output_tokens?: number
+  capabilities: string[]
+  status: ChannelModelStatus
+  // 预留价格字段：为「模型价格表」功能占位，本期可空、不参与计费
+  input_price?: number
+  output_price?: number
+  cached_input_price?: number
+  cache_creation_price?: number
+  currency?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateChannelModelRequest {
+  name: string
+  upstream_model: string
+  context_length?: number
+  max_output_tokens?: number
+  capabilities?: string[]
+  status?: ChannelModelStatus
+  input_price?: number
+  output_price?: number
+  cached_input_price?: number
+  cache_creation_price?: number
+  currency?: string
+}
+
+export interface UpdateChannelModelRequest {
+  name: string
+  upstream_model: string
+  context_length?: number
+  max_output_tokens?: number
+  capabilities?: string[]
+  status?: ChannelModelStatus
+  input_price?: number
+  output_price?: number
+  cached_input_price?: number
+  cache_creation_price?: number
+  currency?: string
+}
+
+export interface UpdateChannelModelStatusRequest {
+  status: ChannelModelStatus
+}
+
 // === API Key ===
 
 export interface ApiKey {
