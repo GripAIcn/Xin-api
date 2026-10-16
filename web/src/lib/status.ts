@@ -34,11 +34,18 @@ export interface TestResultSummary {
 export function summarizeTestResult(
   result: ChannelTestResult,
 ): TestResultSummary {
-  const successCount = result.results.filter((r) => r.success).length
-  const totalCount = result.results.length
+  // 后端在「渠道尚未配置模型」等场景下可能返回 results: null，这里做空值兜底
+  const results = result.results ?? []
+  const totalCount = results.length
+
+  if (totalCount === 0) {
+    return { tone: 'warning', text: '未配置模型', isMulti: false }
+  }
+
+  const successCount = results.filter((r) => r.success).length
 
   if (totalCount === 1) {
-    const singleResult = result.results[0]
+    const singleResult = results[0]
     if (singleResult?.success) {
       return {
         tone: 'success',

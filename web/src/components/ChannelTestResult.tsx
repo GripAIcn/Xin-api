@@ -28,8 +28,10 @@ export default function ChannelTestResultCard({
   result,
 }: ChannelTestResultProps) {
   const { tone } = summarizeTestResult(result)
-  const successCount = result.results.filter((r) => r.success).length
-  const totalCount = result.results.length
+  // 后端可能返回 results: null（渠道未配置模型），这里做空值兜底
+  const results = result.results ?? []
+  const successCount = results.filter((r) => r.success).length
+  const totalCount = results.length
 
   return (
     <div className="space-y-4 py-2">
@@ -45,6 +47,12 @@ export default function ChannelTestResultCard({
 
       {/* 汇总信息 */}
       <div>
+        {totalCount === 0 && (
+          <Badge className="border-transparent bg-amber-500 text-white">
+            <TriangleAlert />
+            未配置模型
+          </Badge>
+        )}
         {tone === 'success' && (
           <Badge className="border-transparent bg-green-600 text-white">
             <CircleCheck />
@@ -57,7 +65,7 @@ export default function ChannelTestResultCard({
             全部失败 (0/{totalCount})
           </Badge>
         )}
-        {tone === 'warning' && (
+        {tone === 'warning' && totalCount > 0 && (
           <Badge className="border-transparent bg-amber-500 text-white">
             <TriangleAlert />
             部分通过 ({successCount}/{totalCount})
@@ -78,7 +86,17 @@ export default function ChannelTestResultCard({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {result.results.map((row) => (
+              {totalCount === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={4}
+                    className="h-20 text-center text-muted-foreground"
+                  >
+                    该渠道尚未配置可测试的模型
+                  </TableCell>
+                </TableRow>
+              )}
+              {results.map((row) => (
                 <TableRow key={row.model}>
                   <TableCell className="font-medium">{row.model}</TableCell>
                   <TableCell>

@@ -104,7 +104,8 @@ func (t *ChannelTester) TestAllChannels(ctx context.Context) ([]ChannelTestResul
 		return nil, err
 	}
 
-	var results []ChannelTestResult
+	// 初始化为空切片而非 nil，保证 JSON 序列化为 [] 而非 null
+	results := make([]ChannelTestResult, 0, len(channels))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -157,7 +158,8 @@ type modelTarget struct {
 
 // testModelsConcurrent 并发测试多个模型
 func (t *ChannelTester) testModelsConcurrent(ctx context.Context, baseURL, apiKey string, targets []modelTarget) []ModelTestResult {
-	var results []ModelTestResult
+	// 初始化为空切片而非 nil，避免「无待测模型」时返回 JSON null 导致前端解析崩溃
+	results := make([]ModelTestResult, 0, len(targets))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
