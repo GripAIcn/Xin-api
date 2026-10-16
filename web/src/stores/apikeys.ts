@@ -5,7 +5,7 @@ import * as apiKeysApi from '@/api/modules/apikeys'
 interface ApiKeyState {
   apiKeys: ApiKey[]
   fetchAll: () => Promise<ApiKey[]>
-  create: () => Promise<CreateApiKeyResponse>
+  create: (name?: string) => Promise<CreateApiKeyResponse>
   remove: (id: number) => Promise<void>
 }
 
@@ -31,8 +31,8 @@ export const useApiKeyStore = create<ApiKeyState>()((set) => ({
     return data
   },
 
-  create: async () => {
-    const data = await apiKeysApi.createApiKey()
+  create: async (name) => {
+    const data = await apiKeysApi.createApiKey({ name })
     set((state) => ({ apiKeys: [...state.apiKeys, toApiKeyMeta(data)] }))
     return data
   },

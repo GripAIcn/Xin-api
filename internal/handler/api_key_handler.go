@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,9 @@ import (
 	"Xin-api/internal/store/postgresql"
 	"Xin-api/pkg/response"
 )
+
+// defaultApiKeyName 未指定名称时为凭证使用的默认名称
+const defaultApiKeyName = "未命名"
 
 type ApiKeyHandler struct {
 	apiKeyRepo postgresql.ApiKeyRepo
@@ -57,9 +61,15 @@ func (h *ApiKeyHandler) CreateApiKey(c *gin.Context) {
 	// 生成类似: sk-xin-4a6f9c8d3e2b1a0f9b8c7d6e5f4a3b2c 的高强度密钥
 	generatedKey := fmt.Sprintf("sk-xin-%s", hex.EncodeToString(randomBytes))
 
+	// 名称未填时使用默认名称，避免列表中名称留空
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = defaultApiKeyName
+	}
+
 	apiKey := &model.ApiKey{
 		KeyHash:   model.HashApiKey(generatedKey), // 落库存哈希，不存明文
-		Name:      req.Name,
+		Name:      name,
 		UserID:    uid,
 		Status:    model.ApiKeyStatusActive,
 		ExpiresAt: req.ExpiresAt,

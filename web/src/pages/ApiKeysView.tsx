@@ -3,6 +3,16 @@ import { AlertTriangle, Check, Copy, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Alert, AlertTitle } from '@/components/ui/alert'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import PageHeader from '@/components/PageHeader'
 import { DotBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -10,11 +20,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Table,
   TableBody,
@@ -39,6 +52,8 @@ export default function ApiKeysView() {
   const [newKeyValue, setNewKeyValue] = useState('')
   const [keyDialogOpen, setKeyDialogOpen] = useState(false)
   const [keyCopied, setKeyCopied] = useState(false)
+  const [createSheetOpen, setCreateSheetOpen] = useState(false)
+  const [keyName, setKeyName] = useState('未命名')
   const [deleteTarget, setDeleteTarget] = useState<ApiKey | null>(null)
 
   const loadKeys = useCallback(async () => {
@@ -56,18 +71,26 @@ export default function ApiKeysView() {
     void loadKeys()
   }, [loadKeys])
 
+  // 创建凭证：先填写名称，再在弹窗中一次性展示明文 key
   const handleCreate = async () => {
     setCreating(true)
     try {
-      const result = await create()
+      const result = await create(keyName.trim() || '未命名')
       // 明文 key 仅在创建响应中出现一次
       setNewKeyValue(result.key)
+      setCreateSheetOpen(false)
       setKeyDialogOpen(true)
     } catch (e) {
       toast.error((e as Error)?.message || '创建失败')
     } finally {
       setCreating(false)
     }
+  }
+
+  // 打开创建表单，名称默认「未命名」
+  const openCreateSheet = () => {
+    setKeyName('未命名')
+    setCreateSheetOpen(true)
   }
 
   const copyKey = async () => {
@@ -98,9 +121,9 @@ export default function ApiKeysView() {
         title="API Key"
         description="管理 API 访问密钥"
         actions={
-          <Button onClick={handleCreate} disabled={creating}>
+          <Button onClick={openCreateSheet}>
             <Plus />
-            {creating ? '创建中...' : '创建 API Key'}
+            创建 API Key
           </Button>
         }
       />
@@ -160,6 +183,48 @@ export default function ApiKeysView() {
         </CardContent>
       </Card>
 
+      {/* 创建凭证（居中弹窗） */}
+      <Dialog open={createSheetOpen} onOpenChange={setCreateSheetOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>创建 API Key</DialogTitle>
+            <DialogDescription>
+              为新的访问密钥设置名称以便识别，留空则使用「未命名」。
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleCreate()
+            }}
+          >
+            <div className="space-y-2">
+              <Label htmlFor="api-key-name">名称</Label>
+              <Input
+                id="api-key-name"
+                value={keyName}
+                maxLength={100}
+                placeholder="未命名"
+                onChange={(event) => setKeyName(event.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateSheetOpen(false)}
+              >
+                取消
+              </Button>
+              <Button type="submit" disabled={creating}>
+                {creating ? '创建中...' : '创建'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={keyDialogOpen} onOpenChange={setKeyDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -182,20 +247,19 @@ export default function ApiKeysView() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <AlertDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null)
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>确认删除 API Key</DialogTitle>
-          </DialogHeader>
-          <Alert>
-            <AlertTriangle className="size-4" />
-            <AlertTitle>删除后，使用此 Key 的应用将立即无法访问网关。</AlertTitle>
-          </Alert>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除 API Key</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后，使用此 Key 的应用将立即无法访问网关。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           {deleteTarget && (
             <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-primary bg-muted px-4 py-3">
               <span className="shrink-0 text-sm text-muted-foreground">API Key：</span>
@@ -204,16 +268,17 @@ export default function ApiKeysView() {
               </span>
             </div>
           )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              取消
-            </Button>
-            <Button variant="destructive" onClick={() => void handleDelete()}>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void handleDelete()}
+            >
               确认删除
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
