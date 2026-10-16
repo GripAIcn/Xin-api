@@ -22,7 +22,9 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	apiKeyRepo := postgresql.NewApiKeyRepo(db)
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeyRepo)
 	channelRepo := postgresql.NewChannelRepo(db)
-	channelHandler := handler.NewChannelHandler(channelRepo, rdb)
+	modelPriceRepo := postgresql.NewModelPriceRepo(db)
+	channelHandler := handler.NewChannelHandler(channelRepo, modelPriceRepo, rdb)
+	modelPriceHandler := handler.NewModelPriceHandler(modelPriceRepo)
 	balancer := service.NewWeightedRRBalancer()
 	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout)
 
@@ -86,6 +88,15 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 
 				// 模型管理：按逻辑模型名聚合查询全部渠道模型
 				adminChannel.GET("/models", channelHandler.ListModels) // 按逻辑模型名聚合查询（模型管理页）
+
+				// 价格方案管理
+				adminChannel.POST("/prices", modelPriceHandler.CreatePrice)              // 新增价格方案
+				adminChannel.GET("/prices", modelPriceHandler.ListPrices)                // 价格方案列表（含绑定模型数）
+				adminChannel.GET("/prices/:id", modelPriceHandler.GetPrice)              // 价格方案详情
+				adminChannel.PUT("/prices/:id", modelPriceHandler.UpdatePrice)           // 编辑价格方案
+				adminChannel.PUT("/prices/:id/status", modelPriceHandler.UpdatePriceStatus) // 启用/禁用价格方案
+				adminChannel.DELETE("/prices/:id", modelPriceHandler.DeletePrice)        // 删除价格方案
+				adminChannel.GET("/prices/:id/models", modelPriceHandler.ListPriceModels) // 查看绑定该方案的模型
 
 				// 渠道批量测试
 				adminChannel.POST("/channels/test", channelHandler.TestAllChannels) // 测试所有渠道

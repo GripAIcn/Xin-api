@@ -149,12 +149,9 @@ export interface ChannelModel {
   max_output_tokens?: number
   capabilities: string[]
   status: ChannelModelStatus
-  // 预留价格字段：为「模型价格表」功能占位，本期可空、不参与计费
-  input_price?: number
-  output_price?: number
-  cached_input_price?: number
-  cache_creation_price?: number
-  currency?: string
+  // 绑定的价格方案 id / 方案名（未绑定时缺省）
+  model_price_id?: number
+  price_name?: string | null
   created_at: string
   updated_at: string
 }
@@ -166,11 +163,8 @@ export interface CreateChannelModelRequest {
   max_output_tokens?: number
   capabilities?: string[]
   status?: ChannelModelStatus
-  input_price?: number
-  output_price?: number
-  cached_input_price?: number
-  cache_creation_price?: number
-  currency?: string
+  // 绑定的价格方案 id（缺省=不改变绑定 / 0=解绑 / >0=绑定）
+  model_price_id?: number
 }
 
 export interface UpdateChannelModelRequest {
@@ -180,11 +174,8 @@ export interface UpdateChannelModelRequest {
   max_output_tokens?: number
   capabilities?: string[]
   status?: ChannelModelStatus
-  input_price?: number
-  output_price?: number
-  cached_input_price?: number
-  cache_creation_price?: number
-  currency?: string
+  // 绑定的价格方案 id（缺省=不改变绑定 / 0=解绑 / >0=绑定）
+  model_price_id?: number
 }
 
 export interface UpdateChannelModelStatusRequest {
@@ -205,11 +196,9 @@ export interface ModelChannelEntry {
   context_length?: number
   max_output_tokens?: number
   capabilities: string[]
-  input_price?: number
-  output_price?: number
-  cached_input_price?: number
-  cache_creation_price?: number
-  currency?: string
+  // 绑定的价格方案 id / 方案名（未绑定时缺省）
+  model_price_id?: number | null
+  price_name?: string | null
 }
 
 // 按逻辑模型名聚合的分组（GET /v1/models 的元素）
@@ -218,6 +207,65 @@ export interface ModelGroup {
   channel_count: number
   active_count: number
   channels: ModelChannelEntry[]
+}
+
+// === 价格方案 ===
+
+export type ModelPriceStatus = 'active' | 'disabled'
+
+// 价格方案（model_prices）：单位 currency / 1M tokens
+export interface ModelPrice {
+  id: number
+  name: string
+  input_price: number
+  output_price: number
+  cached_input_price: number
+  cache_creation_price: number
+  currency: string
+  status: ModelPriceStatus
+  created_at: string
+  updated_at: string
+}
+
+// 价格方案 + 绑定模型数（GET /v1/prices 的元素）
+export interface ModelPriceWithCount extends ModelPrice {
+  bound_count: number
+}
+
+export interface CreateModelPriceRequest {
+  name: string
+  input_price: number
+  output_price: number
+  cached_input_price: number
+  cache_creation_price: number
+  currency: string
+}
+
+export interface UpdateModelPriceRequest {
+  name: string
+  input_price: number
+  output_price: number
+  cached_input_price: number
+  cache_creation_price: number
+  currency: string
+  status?: ModelPriceStatus
+}
+
+export interface UpdateModelPriceStatusRequest {
+  status: ModelPriceStatus
+}
+
+// 绑定到某价格方案的「渠道 × 模型」明细（GET /v1/prices/:id/models 的元素）
+export interface PriceBoundModelEntry {
+  binding_id: number
+  model_id: number
+  channel_id: number
+  channel_name: string
+  channel_provider: string
+  model_name: string
+  upstream_model: string
+  model_status: string
+  channel_status: string
 }
 
 // === API Key ===

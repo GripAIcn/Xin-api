@@ -26,8 +26,8 @@ type ChannelRepo interface {
 	ListActiveByModel(ctx context.Context, modelName string) ([]model.Channel, error)
 	// ListModelsByChannel 获取指定渠道下可用的模型（渠道 × 模型，来自 models 表）
 	ListModelsByChannel(ctx context.Context, channelID int64) ([]model.Model, error)
-	// ListModelsByChannelAll 获取指定渠道下全部模型（含 disabled，不含软删），供管理后台展示
-	ListModelsByChannelAll(ctx context.Context, channelID int64) ([]model.Model, error)
+	// ListModelsByChannelAll 获取指定渠道下全部模型（含 disabled，不含软删），并带出当前价格方案绑定
+	ListModelsByChannelAll(ctx context.Context, channelID int64) ([]model.ChannelModelView, error)
 	// GetModelByID 根据模型 ID 查询渠道模型记录（软删记录不返回）
 	GetModelByID(ctx context.Context, id int64) (*model.Model, error)
 	// GetModelByName 按 (channel_id, name) 查询渠道模型记录（软删记录不返回），用于判重
@@ -36,12 +36,20 @@ type ChannelRepo interface {
 	GetUpstreamModel(ctx context.Context, channelID int64, name string) (string, error)
 	// CreateModel 为渠道新增模型（渠道 × 模型）
 	CreateModel(ctx context.Context, m *model.Model) error
+	// CreateModelWithBinding 为渠道新增模型，并在同一事务内维护价格方案绑定
+	// modelPriceID：nil 或 <=0 时不写入绑定；>0 时绑定到该价格方案
+	CreateModelWithBinding(ctx context.Context, m *model.Model, modelPriceID *int64) error
 	// UpdateModel 更新模型（整体保存）
 	UpdateModel(ctx context.Context, m *model.Model) error
+	// UpdateModelWithBinding 更新模型，并在同一事务内维护价格方案绑定
+	// modelPriceID：nil=不改绑定；0=解绑；>0=切换到该价格方案
+	UpdateModelWithBinding(ctx context.Context, m *model.Model, modelPriceID *int64) error
 	// UpdateModelStatus 修改模型状态（active/disabled）
 	UpdateModelStatus(ctx context.Context, id int64, status string) error
 	// DeleteModelSoft 软删除模型
 	DeleteModelSoft(ctx context.Context, id int64) error
+	// DeleteModelSoftWithBinding 软删除指定渠道下的模型，并在同一事务内软删其价格方案绑定
+	DeleteModelSoftWithBinding(ctx context.Context, channelID, modelID int64) error
 	// ListModelChannelRows 查询全部「渠道 × 模型」明细行（JOIN 渠道信息），供模型管理页按逻辑模型名聚合
 	ListModelChannelRows(ctx context.Context) ([]model.ModelChannelEntry, error)
 }
@@ -59,13 +67,23 @@ func (r *channelRepo) Create(ctx context.Context, channel *model.Channel) error 
 	return gorm.G[model.Channel](r.db).Create(ctx, channel)
 }
 
-// DeleteSoft 软删除渠道，并在同一事务内链式软删其名下全部 models，避免孤儿数据
+// DeleteSoft 软删除渠道，并在同一事务内链式软删其名下全部 models 及其价格方案绑定，避免孤儿数据
+// 顺序：先取模型 id 列表 → 软删绑定 → 软删 models → 软删渠道（绑定清理须在 models 软删之前，否则查不到模型 id）。
 func (r *channelRepo) DeleteSoft(ctx context.Context, id int64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("id = ?", id).Delete(&model.Channel{}).Error; err != nil {
+		var modelIDs []int64
+		if err := tx.Model(&model.Model{}).Where("channel_id = ?", id).Pluck("id", &modelIDs).Error; err != nil {
 			return err
 		}
-		return tx.Where("channel_id = ?", id).Delete(&model.Model{}).Error
+		if len(modelIDs) > 0 {
+			if err := tx.Where("model_id IN ?", modelIDs).Delete(&model.ModelPriceBinding{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("channel_id = ?", id).Delete(&model.Model{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", id).Delete(&model.Channel{}).Error
 	})
 }
 
@@ -135,13 +153,70 @@ func (r *channelRepo) ListModelsByChannel(ctx context.Context, channelID int64) 
 	return models, err
 }
 
-// ListModelsByChannelAll 获取指定渠道下全部模型（含 disabled，不含软删）
-func (r *channelRepo) ListModelsByChannelAll(ctx context.Context, channelID int64) ([]model.Model, error) {
+// ListModelsByChannelAll 获取指定渠道下全部模型（含 disabled，不含软删），
+// 并补充当前绑定的 model_price_id / price_name，供渠道管理页展示与编辑预选。
+// 说明：分两步查询——模型本体走 GORM Find（保证 capabilities 数组正确解码），绑定信息单独聚合后合并。
+func (r *channelRepo) ListModelsByChannelAll(ctx context.Context, channelID int64) ([]model.ChannelModelView, error) {
 	models, err := gorm.G[model.Model](r.db).
 		Where("channel_id = ?", channelID).
 		Order("id ASC").
 		Find(ctx)
-	return models, err
+	if err != nil {
+		return nil, err
+	}
+
+	views := make([]model.ChannelModelView, 0, len(models))
+	if len(models) == 0 {
+		return views, nil
+	}
+
+	ids := make([]int64, 0, len(models))
+	for i := range models {
+		ids = append(ids, models[i].ID)
+	}
+
+	// 该渠道下全部有效绑定的模型 id → 价格方案
+	var binds []struct {
+		ModelID      int64   `gorm:"column:model_id"`
+		ModelPriceID int64   `gorm:"column:model_price_id"`
+		PriceName    *string `gorm:"column:price_name"`
+	}
+	if err := r.db.WithContext(ctx).
+		Table("model_price_bindings AS bindings").
+		Select("bindings.model_id AS model_id, bindings.model_price_id AS model_price_id, prices.name AS price_name").
+		Joins("LEFT JOIN model_prices prices ON prices.id = bindings.model_price_id").
+		Where("bindings.model_id IN ? AND bindings.deleted_at IS NULL", ids).
+		Scan(&binds).Error; err != nil {
+		return nil, err
+	}
+
+	bindByModelID := make(map[int64]*int64, len(binds))
+	nameByModelID := make(map[int64]*string, len(binds))
+	for _, b := range binds {
+		priceID := b.ModelPriceID
+		bindByModelID[b.ModelID] = &priceID
+		nameByModelID[b.ModelID] = b.PriceName
+	}
+
+	for i := range models {
+		m := models[i]
+		views = append(views, model.ChannelModelView{
+			ID:              m.ID,
+			ChannelID:       m.ChannelID,
+			Name:            m.Name,
+			UpstreamModel:   m.UpstreamModel,
+			ContextLength:   m.ContextLength,
+			MaxOutputTokens: m.MaxOutputTokens,
+			Capabilities:    m.Capabilities,
+			Status:          m.Status,
+			ModelPriceID:    bindByModelID[m.ID],
+			PriceName:       nameByModelID[m.ID],
+			CreatedAt:       m.CreatedAt,
+			UpdatedAt:       m.UpdatedAt,
+		})
+	}
+
+	return views, nil
 }
 
 // GetModelByID 根据模型 ID 查询渠道模型记录
@@ -190,9 +265,47 @@ func (r *channelRepo) CreateModel(ctx context.Context, m *model.Model) error {
 	return gorm.G[model.Model](r.db).Create(ctx, m)
 }
 
+// CreateModelWithBinding 为渠道新增模型，并在同一事务内写入价格方案绑定
+func (r *channelRepo) CreateModelWithBinding(ctx context.Context, m *model.Model, modelPriceID *int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(m).Error; err != nil {
+			return err
+		}
+		if modelPriceID != nil && *modelPriceID > 0 {
+			if err := tx.Create(&model.ModelPriceBinding{ModelPriceID: *modelPriceID, ModelID: m.ID}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // UpdateModel 更新模型（整体保存，允许清空价格等可空字段）
 func (r *channelRepo) UpdateModel(ctx context.Context, m *model.Model) error {
 	return r.db.WithContext(ctx).Save(m).Error
+}
+
+// UpdateModelWithBinding 更新模型，并在同一事务内维护价格方案绑定
+func (r *channelRepo) UpdateModelWithBinding(ctx context.Context, m *model.Model, modelPriceID *int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Save 全字段更新，保留 models 预留价格列存量值不变
+		if err := tx.Save(m).Error; err != nil {
+			return err
+		}
+		if modelPriceID == nil {
+			return nil // 不改动绑定
+		}
+		// 先软删该模型的既有有效绑定，保证未软删范围内最多一条绑定
+		if err := tx.Where("model_id = ?", m.ID).Delete(&model.ModelPriceBinding{}).Error; err != nil {
+			return err
+		}
+		if *modelPriceID > 0 {
+			if err := tx.Create(&model.ModelPriceBinding{ModelPriceID: *modelPriceID, ModelID: m.ID}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // UpdateModelStatus 修改模型状态
@@ -213,8 +326,19 @@ func (r *channelRepo) DeleteModelSoft(ctx context.Context, id int64) error {
 	return nil
 }
 
+// DeleteModelSoftWithBinding 软删除指定渠道下的模型，并在同一事务内软删其价格方案绑定
+func (r *channelRepo) DeleteModelSoftWithBinding(ctx context.Context, channelID, modelID int64) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("id = ? AND channel_id = ?", modelID, channelID).Delete(&model.Model{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("model_id = ?", modelID).Delete(&model.ModelPriceBinding{}).Error
+	})
+}
+
 // ListModelChannelRows 查询全部「渠道 × 模型」明细行（JOIN 渠道信息），供模型管理页按逻辑模型名聚合
-// 说明：以 models 为主表，GORM 自动追加 models.deleted_at IS NULL；从表 channels 的软删条件写在 JOIN 内。
+// 说明：以 models 为主表，GORM 自动追加 models.deleted_at IS NULL；从表 channels 的软删条件写在 JOIN 内；
+// 价格信息通过 LEFT JOIN 绑定表与价格方案表补充 model_price_id / price_name。
 func (r *channelRepo) ListModelChannelRows(ctx context.Context) ([]model.ModelChannelEntry, error) {
 	var rows []model.ModelChannelEntry
 	err := r.db.WithContext(ctx).
@@ -223,10 +347,11 @@ func (r *channelRepo) ListModelChannelRows(ctx context.Context) ([]model.ModelCh
 			"channels.name AS channel_name, channels.provider AS channel_provider, channels.status AS channel_status, " +
 			"models.upstream_model AS upstream_model, models.status AS status, " +
 			"models.context_length AS context_length, models.max_output_tokens AS max_output_tokens, " +
-			"models.capabilities AS capabilities, models.input_price AS input_price, " +
-			"models.output_price AS output_price, models.cached_input_price AS cached_input_price, " +
-			"models.cache_creation_price AS cache_creation_price, models.currency AS currency").
+			"models.capabilities AS capabilities, " +
+			"bindings.model_price_id AS model_price_id, prices.name AS price_name").
 		Joins("JOIN channels ON channels.id = models.channel_id AND channels.deleted_at IS NULL").
+		Joins("LEFT JOIN model_price_bindings bindings ON bindings.model_id = models.id AND bindings.deleted_at IS NULL").
+		Joins("LEFT JOIN model_prices prices ON prices.id = bindings.model_price_id").
 		Order("models.name ASC, channels.priority DESC, channels.weight DESC").
 		Scan(&rows).Error
 	return rows, err

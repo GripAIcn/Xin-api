@@ -35,18 +35,15 @@ type TestChannelReq struct {
 }
 
 // ChannelModelBase 渠道模型公共字段（新增/编辑复用）
-// 说明：价格字段为「模型价格表」功能预留，本期可空、可维护、不参与计费
+// 说明：模型价格改由「价格方案」（model_prices + model_price_bindings）承载，通过 ModelPriceID 绑定；
+// 语义：缺省=不改变绑定；0=解绑；>0=绑定到该价格方案。
 type ChannelModelBase struct {
 	Name            string   `json:"name" binding:"required" validate:"required,min=1,max=128"`           // 对外（逻辑）模型名
 	UpstreamModel   string   `json:"upstream_model" binding:"required" validate:"required,min=1,max=128"` // 该渠道上游真实模型名
 	ContextLength   *int     `json:"context_length" validate:"omitempty,min=1"`                           // 上下文窗口长度（tokens）
 	MaxOutputTokens *int     `json:"max_output_tokens" validate:"omitempty,min=1"`                        // 单次最大输出 tokens
 	Capabilities    []string `json:"capabilities"`                                                        // 能力标签 vision/tools/json/reasoning/audio
-	InputPrice         *float64 `json:"input_price" validate:"omitempty,gte=0"`          // 预留-输入单价（待接入计费）
-	OutputPrice        *float64 `json:"output_price" validate:"omitempty,gte=0"`         // 预留-输出单价（待接入计费）
-	CachedInputPrice   *float64 `json:"cached_input_price" validate:"omitempty,gte=0"`   // 预留-缓存命中输入单价（待接入计费）
-	CacheCreationPrice *float64 `json:"cache_creation_price" validate:"omitempty,gte=0"` // 预留-缓存创建单价（待接入计费）
-	Currency           string   `json:"currency" validate:"omitempty,max=16"`            // 预留-币种（如 USD/CNY）
+	ModelPriceID    *int64   `json:"model_price_id" validate:"omitempty,gte=0"`                           // 绑定的价格方案 model_prices.id（缺省=不改绑定 / 0=解绑 / >0=绑定）
 }
 
 // CreateChannelModelReq 为渠道新增模型请求入参

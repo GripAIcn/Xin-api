@@ -52,6 +52,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useChannelStore } from '@/stores/channels'
+import { usePriceStore } from '@/stores/prices'
 import type { ChannelModel } from '@/types/api'
 
 const modelFormSchema = z.object({
@@ -61,11 +62,8 @@ const modelFormSchema = z.object({
   max_output_tokens: z.string(),
   capabilities: z.string(),
   status: z.enum(['active', 'disabled']),
-  input_price: z.string(),
-  output_price: z.string(),
-  cached_input_price: z.string(),
-  cache_creation_price: z.string(),
-  currency: z.string(),
+  // 价格方案 id 字符串（'0' 表示不绑定）
+  model_price_id: z.string(),
 })
 
 type ModelFormValues = z.infer<typeof modelFormSchema>
@@ -77,11 +75,7 @@ const EMPTY_FORM: ModelFormValues = {
   max_output_tokens: '',
   capabilities: '',
   status: 'active',
-  input_price: '',
-  output_price: '',
-  cached_input_price: '',
-  cache_creation_price: '',
-  currency: '',
+  model_price_id: '0',
 }
 
 // 将逗号分隔文本拆成去空数组（用于 capabilities）
@@ -96,13 +90,33 @@ const toOptionalNumber = (value: string): number | undefined => {
   return Number.isFinite(num) ? num : undefined
 }
 
-const toOptionalString = (value: string): string | undefined => {
-  const trimmed = value.trim()
-  return trimmed ? trimmed : undefined
+// 表单值 → 渠道模型请求体（新增/编辑共用）
+// 价格方案语义：新增态「不绑定」不提交该字段；编辑态始终提交（0=解绑 / >0=绑定）
+const buildPayload = (values: ModelFormValues, isEdit: boolean) => {
+  const priceId = toOptionalNumber(values.model_price_id)
+  const payload: {
+    name: string
+    upstream_model: string
+    context_length?: number
+    max_output_tokens?: number
+    capabilities: string[]
+    status: 'active' | 'disabled'
+    model_price_id?: number
+  } = {
+    name: values.name.trim(),
+    upstream_model: values.upstream_model.trim(),
+    context_length: toOptionalNumber(values.context_length),
+    max_output_tokens: toOptionalNumber(values.max_output_tokens),
+    capabilities: splitList(values.capabilities),
+    status: values.status,
+  }
+  if (isEdit) {
+    payload.model_price_id = priceId ?? 0
+  } else if (priceId != null && priceId > 0) {
+    payload.model_price_id = priceId
+  }
+  return payload
 }
-
-const priceText = (value?: number): string =>
-  value == null ? '-' : String(value)
 
 interface ChannelModelsDialogProps {
   channelId: number | null
@@ -124,6 +138,7 @@ export default function ChannelModelsDialog({
   const removeModel = useChannelStore((s) => s.removeModel)
   const updateModelStatus = useChannelStore((s) => s.updateModelStatus)
   const fetchUpstreamModels = useChannelStore((s) => s.fetchUpstreamModels)
+  const prices = usePriceStore((s) => s.prices)
 
   const [loading, setLoading] = useState(false)
   const [statusPending, setStatusPending] = useState<Set<number>>(new Set())
@@ -167,6 +182,19 @@ export default function ChannelModelsDialog({
     }
   }, [open, channelId, fetchModels])
 
+  // 打开且价格方案列表为空时，只读拉取一次作为下拉选项
+  useEffect(() => {
+    if (!open) return
+    if (usePriceStore.getState().prices.length === 0) {
+      void usePriceStore
+        .getState()
+        .fetchAll()
+        .catch(() => {
+          /* 静默失败：无方案选项时仍可提交（视为不绑定） */
+        })
+    }
+  }, [open])
+
   const openCreate = () => {
     setEditingModel(null)
     form.reset(EMPTY_FORM)
@@ -184,15 +212,8 @@ export default function ChannelModelsDialog({
         row.max_output_tokens == null ? '' : String(row.max_output_tokens),
       capabilities: (row.capabilities ?? []).join(','),
       status: row.status,
-      input_price: row.input_price == null ? '' : String(row.input_price),
-      output_price: row.output_price == null ? '' : String(row.output_price),
-      cached_input_price:
-        row.cached_input_price == null ? '' : String(row.cached_input_price),
-      cache_creation_price:
-        row.cache_creation_price == null
-          ? ''
-          : String(row.cache_creation_price),
-      currency: row.currency ?? '',
+      model_price_id:
+        row.model_price_id == null ? '0' : String(row.model_price_id),
     })
     setFormOpen(true)
   }
@@ -201,28 +222,17 @@ export default function ChannelModelsDialog({
     if (channelId == null) return
     setSubmitting(true)
     try {
-      const payload = {
-        name: values.name.trim(),
-        upstream_model: values.upstream_model.trim(),
-        context_length: toOptionalNumber(values.context_length),
-        max_output_tokens: toOptionalNumber(values.max_output_tokens),
-        capabilities: splitList(values.capabilities),
-        status: values.status,
-        input_price: toOptionalNumber(values.input_price),
-        output_price: toOptionalNumber(values.output_price),
-        cached_input_price: toOptionalNumber(values.cached_input_price),
-        cache_creation_price: toOptionalNumber(values.cache_creation_price),
-        currency: toOptionalString(values.currency),
-      }
       if (editingModel) {
-        await updateModel(channelId, editingModel.id, payload)
+        await updateModel(channelId, editingModel.id, buildPayload(values, true))
         toast.success('模型更新成功')
       } else {
-        await createModel(channelId, payload)
+        await createModel(channelId, buildPayload(values, false))
         toast.success('模型新增成功')
       }
       setFormOpen(false)
       setEditingModel(null)
+      // 重新拉取列表，刷新「价格方案」列（绑定信息由列表接口带出）
+      await fetchModels(channelId)
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : '保存失败')
     } finally {
@@ -276,27 +286,6 @@ export default function ChannelModelsDialog({
     } finally {
       setLoadingUpstream(false)
     }
-  }
-
-  const renderPrice = (row: ChannelModel) => {
-    const hasAny =
-      row.input_price != null ||
-      row.output_price != null ||
-      row.cached_input_price != null ||
-      row.cache_creation_price != null
-    if (!hasAny) return <span className="text-muted-foreground">-</span>
-    return (
-      <div className="text-xs text-muted-foreground">
-        <div>
-          入 {priceText(row.input_price)} / 出 {priceText(row.output_price)}
-        </div>
-        <div>
-          缓存入 {priceText(row.cached_input_price)} / 缓存建{' '}
-          {priceText(row.cache_creation_price)}
-        </div>
-        {row.currency && <div>币种 {row.currency}</div>}
-      </div>
-    )
   }
 
   const isEdit = editingModel !== null
@@ -354,8 +343,8 @@ export default function ChannelModelsDialog({
                   <TableHead className="min-w-[120px]">对外模型名</TableHead>
                   <TableHead className="min-w-[120px]">上游模型名</TableHead>
                   <TableHead className="w-[110px]">状态</TableHead>
+                  <TableHead className="min-w-[120px]">价格方案</TableHead>
                   <TableHead className="min-w-[120px]">能力</TableHead>
-                  <TableHead className="min-w-[180px]">价格</TableHead>
                   <TableHead className="w-[90px]">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -397,6 +386,13 @@ export default function ChannelModelsDialog({
                           </div>
                         </TableCell>
                         <TableCell>
+                          {row.price_name ? (
+                            <span className="text-sm">{row.price_name}</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {(row.capabilities ?? []).length === 0 ? (
                             <span className="text-muted-foreground">-</span>
                           ) : (
@@ -409,7 +405,6 @@ export default function ChannelModelsDialog({
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>{renderPrice(row)}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Button
@@ -591,95 +586,36 @@ export default function ChannelModelsDialog({
                 )}
               />
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">价格（可选）</span>
-                  <Badge variant="secondary">待接入计费</Badge>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="input_price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>输入单价</FormLabel>
-                        <FormControl>
-                          <Input
-                            inputMode="decimal"
-                            placeholder="可空"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+              <FormField
+                control={form.control}
+                name="model_price_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>价格方案</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="不绑定" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="0">不绑定</SelectItem>
+                        {prices.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {prices.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        暂无可用价格方案，可先到「定价管理」创建
+                      </p>
                     )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="output_price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>输出单价</FormLabel>
-                        <FormControl>
-                          <Input
-                            inputMode="decimal"
-                            placeholder="可空"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="cached_input_price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>缓存命中输入单价</FormLabel>
-                        <FormControl>
-                          <Input
-                            inputMode="decimal"
-                            placeholder="可空"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="cache_creation_price"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>缓存创建单价</FormLabel>
-                        <FormControl>
-                          <Input
-                            inputMode="decimal"
-                            placeholder="可空"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="currency"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>币种</FormLabel>
-                        <FormControl>
-                          <Input placeholder="例如：USD / CNY" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <SheetFooter className="p-0 sm:flex-row sm:justify-end">
                 <Button

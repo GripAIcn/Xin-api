@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Boxes,
   ChevronsUpDown,
+  CircleDollarSign,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -55,6 +56,7 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
           ? [
               { name: '渠道管理', path: '/channels', icon: Waypoints },
               { name: '模型管理', path: '/models', icon: Boxes },
+              { name: '定价管理', path: '/pricing', icon: CircleDollarSign },
             ]
           : []),
         { name: 'API Key', path: '/apikeys', icon: KeyRound },

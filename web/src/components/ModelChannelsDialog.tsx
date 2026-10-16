@@ -39,9 +39,6 @@ import {
 import { channelStatusLabel, channelStatusTone } from '@/lib/status'
 import type { ModelChannelEntry, ModelGroup } from '@/types/api'
 
-const priceText = (value?: number): string =>
-  value == null ? '-' : String(value)
-
 interface ModelChannelsDialogProps {
   group: ModelGroup | null
   open: boolean
@@ -99,24 +96,9 @@ export default function ModelChannelsDialog({
   }
 
   const renderPrice = (entry: ModelChannelEntry) => {
-    const hasAny =
-      entry.input_price != null ||
-      entry.output_price != null ||
-      entry.cached_input_price != null ||
-      entry.cache_creation_price != null
-    if (!hasAny) return <span className="text-muted-foreground">-</span>
-    return (
-      <div className="text-xs text-muted-foreground">
-        <div>
-          入 {priceText(entry.input_price)} / 出 {priceText(entry.output_price)}
-        </div>
-        <div>
-          缓存入 {priceText(entry.cached_input_price)} / 缓存建{' '}
-          {priceText(entry.cache_creation_price)}
-        </div>
-        {entry.currency && <div>币种 {entry.currency}</div>}
-      </div>
-    )
+    if (!entry.price_name)
+      return <span className="text-muted-foreground">-</span>
+    return <span className="text-sm">{entry.price_name}</span>
   }
 
   return (
@@ -140,7 +122,7 @@ export default function ModelChannelsDialog({
                   <TableHead className="w-[90px]">渠道状态</TableHead>
                   <TableHead className="w-[90px]">上下文</TableHead>
                   <TableHead className="min-w-[120px]">能力</TableHead>
-                  <TableHead className="min-w-[180px]">价格</TableHead>
+                  <TableHead className="min-w-[120px]">价格方案</TableHead>
                   <TableHead className="w-[90px]">操作</TableHead>
                 </TableRow>
               </TableHeader>

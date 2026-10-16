@@ -19,15 +19,17 @@ import (
 
 type ChannelHandler struct {
 	channelRepo         postgresql.ChannelRepo
+	priceRepo           postgresql.ModelPriceRepo
 	channelTester       *service.ChannelTester
 	channelModelFetcher *service.ChannelModelFetcher
 	redis               *redis.Client
 	validate            *validator.Validate
 }
 
-func NewChannelHandler(repo postgresql.ChannelRepo, rdb *redis.Client) *ChannelHandler {
+func NewChannelHandler(repo postgresql.ChannelRepo, priceRepo postgresql.ModelPriceRepo, rdb *redis.Client) *ChannelHandler {
 	return &ChannelHandler{
 		channelRepo:         repo,
+		priceRepo:           priceRepo,
 		channelTester:       service.NewChannelTester(repo),
 		channelModelFetcher: service.NewChannelModelFetcher(repo),
 		redis:               rdb,
@@ -269,22 +271,31 @@ func (h *ChannelHandler) CreateChannelModel(c *gin.Context) {
 		status = model.ModelStatusActive
 	}
 
-	m := &model.Model{
-		ChannelID:          channelID,
-		Name:               req.Name,
-		UpstreamModel:      req.UpstreamModel,
-		ContextLength:      req.ContextLength,
-		MaxOutputTokens:    req.MaxOutputTokens,
-		Capabilities:       model.StringArray(req.Capabilities),
-		Status:             status,
-		InputPrice:         req.InputPrice,
-		OutputPrice:        req.OutputPrice,
-		CachedInputPrice:   req.CachedInputPrice,
-		CacheCreationPrice: req.CacheCreationPrice,
-		Currency:           req.Currency,
+	// 若提交了有效价格方案 id，先校验其存在
+	if req.ModelPriceID != nil && *req.ModelPriceID > 0 {
+		exists, err := h.priceRepo.Exists(ctx, *req.ModelPriceID)
+		if err != nil {
+			logger.Error(ctx, "check model price exists failed: %v", err)
+			response.AdminFail(c, response.InternalError)
+			return
+		}
+		if !exists {
+			response.AdminFail(c, response.InvalidParams)
+			return
+		}
 	}
 
-	if err := h.channelRepo.CreateModel(ctx, m); err != nil {
+	m := &model.Model{
+		ChannelID:       channelID,
+		Name:            req.Name,
+		UpstreamModel:   req.UpstreamModel,
+		ContextLength:   req.ContextLength,
+		MaxOutputTokens: req.MaxOutputTokens,
+		Capabilities:    model.StringArray(req.Capabilities),
+		Status:          status,
+	}
+
+	if err := h.channelRepo.CreateModelWithBinding(ctx, m, req.ModelPriceID); err != nil {
 		logger.Error(ctx, "create channel model failed: %v", err)
 		response.AdminFail(c, response.InvalidParams)
 		return
@@ -365,6 +376,20 @@ func (h *ChannelHandler) UpdateChannelModel(c *gin.Context) {
 		}
 	}
 
+	// 若提交了有效价格方案 id，先校验其存在
+	if req.ModelPriceID != nil && *req.ModelPriceID > 0 {
+		exists, err := h.priceRepo.Exists(ctx, *req.ModelPriceID)
+		if err != nil {
+			logger.Error(ctx, "check model price exists failed: %v", err)
+			response.AdminFail(c, response.InternalError)
+			return
+		}
+		if !exists {
+			response.AdminFail(c, response.InvalidParams)
+			return
+		}
+	}
+
 	m.Name = req.Name
 	m.UpstreamModel = req.UpstreamModel
 	m.ContextLength = req.ContextLength
@@ -373,13 +398,8 @@ func (h *ChannelHandler) UpdateChannelModel(c *gin.Context) {
 	if req.Status != "" {
 		m.Status = req.Status
 	}
-	m.InputPrice = req.InputPrice
-	m.OutputPrice = req.OutputPrice
-	m.CachedInputPrice = req.CachedInputPrice
-	m.CacheCreationPrice = req.CacheCreationPrice
-	m.Currency = req.Currency
 
-	if err := h.channelRepo.UpdateModel(ctx, m); err != nil {
+	if err := h.channelRepo.UpdateModelWithBinding(ctx, m, req.ModelPriceID); err != nil {
 		logger.Error(ctx, "update channel model failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return
@@ -412,7 +432,7 @@ func (h *ChannelHandler) DeleteChannelModel(c *gin.Context) {
 		return
 	}
 
-	if err := h.channelRepo.DeleteModelSoft(ctx, modelID); err != nil {
+	if err := h.channelRepo.DeleteModelSoftWithBinding(ctx, channelID, modelID); err != nil {
 		logger.Error(ctx, "delete channel model failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return

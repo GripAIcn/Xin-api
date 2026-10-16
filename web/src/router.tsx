@@ -8,6 +8,7 @@ import DashboardView from '@/pages/DashboardView'
 import LandingView from '@/pages/LandingView'
 import LoginView from '@/pages/LoginView'
 import ModelsView from '@/pages/ModelsView'
+import PricingView from '@/pages/PricingView'
 import SettingsView from '@/pages/SettingsView'
 import UsersView from '@/pages/UsersView'
 import { useAuthStore } from '@/stores/auth'
@@ -121,6 +122,14 @@ export const router = createBrowserRouter([
                 element: (
                   <Page title="模型管理">
                     <ModelsView />
+                  </Page>
+                ),
+              },
+              {
+                path: 'pricing',
+                element: (
+                  <Page title="定价管理">
+                    <PricingView />
                   </Page>
                 ),
               },
