@@ -352,7 +352,7 @@ export default function UsersView() {
         </CardContent>
       </Card>
 
-      {/* 新建用户 */}
+      {/* 新建用户（居中弹窗） */}
       <Dialog
         open={createOpen}
         onOpenChange={(open) => {
@@ -362,9 +362,6 @@ export default function UsersView() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>新建用户</DialogTitle>
-            <DialogDescription className="sr-only">
-              填写用户信息
-            </DialogDescription>
           </DialogHeader>
           <Form {...createForm}>
             <form
@@ -491,14 +488,14 @@ export default function UsersView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 充值 */}
+      {/* 充值（居中弹窗） */}
       <Dialog
         open={rechargeTarget !== null}
         onOpenChange={(open) => {
           if (!open) setRechargeTarget(null)
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>充值</DialogTitle>
             <DialogDescription>
@@ -553,14 +550,14 @@ export default function UsersView() {
         </DialogContent>
       </Dialog>
 
-      {/* 重置密码 */}
+      {/* 重置密码（居中弹窗） */}
       <Dialog
         open={resetTarget !== null}
         onOpenChange={(open) => {
           if (!open) setResetTarget(null)
         }}
       >
-        <DialogContent>
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>重置密码</DialogTitle>
             <DialogDescription>

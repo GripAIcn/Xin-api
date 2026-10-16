@@ -51,7 +51,7 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
       label: '资源',
       items: [
         ...(isAdmin
-          ? [{ name: '渠道', path: '/channels', icon: Waypoints }]
+          ? [{ name: '渠道管理', path: '/channels', icon: Waypoints }]
           : []),
         { name: 'API Key', path: '/apikeys', icon: KeyRound },
       ],
@@ -180,9 +180,10 @@ function UserMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
+        <Button
           type="button"
-          className="flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-accent focus-visible:outline-ring/50 focus-visible:outline-2"
+          variant="ghost"
+          className="h-auto gap-2 rounded-md px-1.5 py-1"
           aria-label="用户菜单"
         >
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
@@ -192,7 +193,7 @@ function UserMenu({
             {username || '管理员'}
           </span>
           <ChevronsUpDown className="hidden size-3.5 text-muted-foreground sm:block" />
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel className="text-muted-foreground">
@@ -249,14 +250,16 @@ export default function AppLayout() {
         <VersionFooter collapsed={collapsed} />
 
         {/* 折叠按钮 */}
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="icon-xs"
           onClick={() => setCollapsed((c) => !c)}
-          className="absolute top-20 -right-3 z-10 flex size-6 items-center justify-center rounded-full border border-sidebar-border bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+          className="absolute top-20 -right-3 z-10 rounded-full border-sidebar-border bg-background text-muted-foreground shadow-sm hover:bg-background hover:text-foreground"
           aria-label={collapsed ? '展开侧边栏' : '折叠侧边栏'}
         >
           <Menu className="size-3" />
-        </button>
+        </Button>
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">

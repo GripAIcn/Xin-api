@@ -19,9 +19,9 @@ import { renderToString } from 'react-dom/server'
 // react-router-dom v7 的 package.json exports 不再提供 ./server 子路径，
 // StaticRouter 由 react-router 主导出提供（react-router-dom 亦 re-export 之）
 import { StaticRouter } from 'react-router'
-// next-themes 的 ThemeProvider 会在 children 前渲染一个主题引导 <script> 节点；
-// 客户端 main.tsx 用它包裹 App，SSR 树必须包含同样的节点，否则水合首子节点不匹配（React #418）
-import { ThemeProvider } from 'next-themes'
+// 与客户端 main.tsx 复用同一个 ThemeProvider；它只维护主题状态、不输出任何 DOM 节点，
+// 因此 SSR 树与客户端树天然一致（不再需要在树内渲染主题引导 <script>）
+import { ThemeProvider } from '../src/components/theme-provider'
 
 import { features, faqItems } from '../src/components/landing/content'
 import LandingView from '../src/pages/LandingView'
@@ -50,20 +50,14 @@ const PLACEHOLDER = '__SITE_URL__'
  * 渲染首页为 HTML 字符串。
  * 使用 createElement 而非 JSX，以便本脚本以 .ts 扩展名被 tsx 直接执行。
  * 不渲染 <App/>：其自带 RouterProvider 与 Toaster，只需要纯静态首页；
- * 但必须用与 main.tsx 完全相同参数的 ThemeProvider 包裹，保持 SSR/客户端树形状一致
- * （ThemeProvider 会在 children 前输出引导 <script>，缺失会导致水合 #418）。
+ * 与 main.tsx 一样用 ThemeProvider 包裹以保持 SSR/客户端树形状一致
+ * （该 Provider 不输出 DOM 节点，不会向静态 HTML 注入额外标记）。
  */
 function renderLanding(): string {
   return renderToString(
     createElement(
       ThemeProvider,
-      {
-        attribute: 'class',
-        defaultTheme: 'dark',
-        enableSystem: true,
-        storageKey: 'xin-api-theme',
-        disableTransitionOnChange: true,
-      },
+      null,
       createElement(
         StaticRouter,
         { location: '/' },

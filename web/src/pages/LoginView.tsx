@@ -145,10 +145,12 @@ export default function LoginView() {
                           {...field}
                         />
                       </FormControl>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        className="absolute right-3 top-1/2 size-auto -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-foreground"
                         aria-label={showPassword ? '隐藏密码' : '显示密码'}
                       >
                         {showPassword ? (
@@ -156,7 +158,7 @@ export default function LoginView() {
                         ) : (
                           <Eye className="size-4" />
                         )}
-                      </button>
+                      </Button>
                     </div>
                     <FormMessage />
                   </FormItem>
