@@ -1,12 +1,26 @@
 import { fileURLToPath, URL } from 'node:url'
 
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// preview 默认把 /docs 当作 SPA 路由回退到 dist/index.html，
+// 这里重写为目录索引，以便本地验证 dist/docs/index.html 的预渲染与水合。
+function docsPreviewPlugin(): Plugin {
+  return {
+    name: 'xin-docs-preview',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url === '/docs') req.url = '/docs/'
+        next()
+      })
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), docsPreviewPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
