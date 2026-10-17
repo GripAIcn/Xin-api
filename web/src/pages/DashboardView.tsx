@@ -82,7 +82,8 @@ export default function DashboardView() {
   }, [fetchStats, range])
 
   const overview = stats?.overview
-  const currency = overview?.currency ?? 'USD'
+  // 费用与账户余额统一按人民币（CNY）展示
+  const currency = overview?.currency ?? 'CNY'
 
   const buildTrend = (
     pick: (p: DashboardTrendPoint) => number,

@@ -62,6 +62,25 @@ func dashboardWhere(alias string, start, end time.Time, scopeUserID *int64) (str
 	return strings.Join(conds, " AND "), args
 }
 
+// dashboardMoneyFrom 生成仪表盘费用聚合的 FROM 片段：
+// 关联计费流水以读取结算快照（与账户余额 CNY 对齐），并关联汇率表为历史缺失结算快照的记录兜底。
+func dashboardMoneyFrom() string {
+	return `FROM request_logs l
+	LEFT JOIN billing_records b ON b.request_id = l.request_id
+	LEFT JOIN exchange_rates er ON er.from_currency = l.currency AND er.to_currency = 'CNY'`
+}
+
+// dashboardSettleCost 结算金额表达式（CNY）：
+// 结算失败的流水未扣减余额，计 0；有结算快照时取快照；历史记录缺失快照时按原币种兜底（USD 按当前汇率折算）。
+const dashboardSettleCost = `CASE
+		WHEN b.status = 'failed' THEN 0
+		ELSE COALESCE(
+			NULLIF(b.settle_cost, 0),
+			CASE WHEN l.currency = 'CNY' THEN l.total_cost
+				ELSE l.total_cost * COALESCE(er.rate, 1) END
+		)
+	END`
+
 // Stats 一次性汇总概览 / 趋势 / 模型排行 / 渠道排行 / 错误排行
 func (r *dashboardRepo) Stats(ctx context.Context, q form.DashboardQuery, scopeUserID *int64) (*model.DashboardStats, error) {
 	rangeKey := q.Range
@@ -69,7 +88,7 @@ func (r *dashboardRepo) Stats(ctx context.Context, q form.DashboardQuery, scopeU
 		rangeKey = "today"
 	}
 	start, end, bucketStep := dashboardScope(rangeKey)
-	where, args := dashboardWhere("", start, end, scopeUserID)
+	where, args := dashboardWhere("l", start, end, scopeUserID)
 
 	stats := &model.DashboardStats{
 		Range:       rangeKey,
@@ -81,36 +100,36 @@ func (r *dashboardRepo) Stats(ctx context.Context, q form.DashboardQuery, scopeU
 		TopErrors:   []model.DashboardErrorRank{},
 	}
 
-	// 1. 概览（AVG(latency_ms) 自动忽略 NULL 行）
+	// 1. 概览（AVG(latency_ms) 自动忽略 NULL 行）；费用统一折算为账户余额币种 CNY
 	overviewSQL := `SELECT
 		COUNT(*)::bigint AS request_count,
-		COUNT(*) FILTER (WHERE status = 'success')::bigint AS success_count,
-		COUNT(*) FILTER (WHERE status = 'error')::bigint AS error_count,
-		COALESCE(COUNT(*) FILTER (WHERE status = 'success')::numeric / NULLIF(COUNT(*), 0), 0)::float8 AS success_rate,
-		COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
-		COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
-		COALESCE(SUM(total_tokens), 0)::bigint AS total_tokens,
-		COALESCE(SUM(total_cost), 0) AS total_cost,
-		COALESCE(MAX(currency), 'USD') AS currency,
-		COALESCE(AVG(latency_ms), 0)::float8 AS avg_latency_ms,
-		COALESCE(AVG(ttft_ms), 0)::float8 AS avg_ttft_ms
-	FROM request_logs WHERE ` + where
+		COUNT(*) FILTER (WHERE l.status = 'success')::bigint AS success_count,
+		COUNT(*) FILTER (WHERE l.status = 'error')::bigint AS error_count,
+		COALESCE(COUNT(*) FILTER (WHERE l.status = 'success')::numeric / NULLIF(COUNT(*), 0), 0)::float8 AS success_rate,
+		COALESCE(SUM(l.input_tokens), 0)::bigint AS input_tokens,
+		COALESCE(SUM(l.output_tokens), 0)::bigint AS output_tokens,
+		COALESCE(SUM(l.total_tokens), 0)::bigint AS total_tokens,
+		COALESCE(SUM(` + dashboardSettleCost + `), 0) AS total_cost,
+		COALESCE(AVG(l.latency_ms), 0)::float8 AS avg_latency_ms,
+		COALESCE(AVG(l.ttft_ms), 0)::float8 AS avg_ttft_ms
+	` + dashboardMoneyFrom() + ` WHERE ` + where
 	if err := r.db.WithContext(ctx).Raw(overviewSQL, args...).Scan(&stats.Overview).Error; err != nil {
 		return nil, err
 	}
+	stats.Overview.Currency = model.CurrencyCNY
 
 	// 2. 趋势（基于 epoch 的分桶，与 channel_metrics 的 metricTrendBucket 约定一致）
 	step := strconv.FormatInt(bucketStep, 10)
-	bucketExpr := "to_timestamp(floor(extract(epoch FROM created_at) / " + step + ") * " + step + ")"
+	bucketExpr := "to_timestamp(floor(extract(epoch FROM l.created_at) / " + step + ") * " + step + ")"
 	trendSQL := `SELECT ` + bucketExpr + ` AS bucket_start,
 		COUNT(*)::bigint AS request_count,
-		COUNT(*) FILTER (WHERE status = 'success')::bigint AS success_count,
-		COUNT(*) FILTER (WHERE status = 'error')::bigint AS error_count,
-		COALESCE(SUM(input_tokens), 0)::bigint AS input_tokens,
-		COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens,
-		COALESCE(SUM(total_tokens), 0)::bigint AS total_tokens,
-		COALESCE(SUM(total_cost), 0) AS total_cost
-	FROM request_logs WHERE ` + where + ` GROUP BY ` + bucketExpr + ` ORDER BY bucket_start ASC`
+		COUNT(*) FILTER (WHERE l.status = 'success')::bigint AS success_count,
+		COUNT(*) FILTER (WHERE l.status = 'error')::bigint AS error_count,
+		COALESCE(SUM(l.input_tokens), 0)::bigint AS input_tokens,
+		COALESCE(SUM(l.output_tokens), 0)::bigint AS output_tokens,
+		COALESCE(SUM(l.total_tokens), 0)::bigint AS total_tokens,
+		COALESCE(SUM(` + dashboardSettleCost + `), 0) AS total_cost
+	` + dashboardMoneyFrom() + ` WHERE ` + where + ` GROUP BY ` + bucketExpr + ` ORDER BY bucket_start ASC`
 	if err := r.db.WithContext(ctx).Raw(trendSQL, args...).Scan(&stats.Trend).Error; err != nil {
 		return nil, err
 	}
@@ -119,11 +138,11 @@ func (r *dashboardRepo) Stats(ctx context.Context, q form.DashboardQuery, scopeU
 	}
 
 	// 3. 模型调用排行（按请求数取前 5）
-	modelSQL := `SELECT model,
+	modelSQL := `SELECT l.model AS model,
 		COUNT(*)::bigint AS request_count,
-		COALESCE(SUM(total_tokens), 0)::bigint AS total_tokens,
-		COALESCE(SUM(total_cost), 0) AS total_cost
-	FROM request_logs WHERE ` + where + ` GROUP BY model ORDER BY request_count DESC LIMIT 5`
+		COALESCE(SUM(l.total_tokens), 0)::bigint AS total_tokens,
+		COALESCE(SUM(` + dashboardSettleCost + `), 0) AS total_cost
+	` + dashboardMoneyFrom() + ` WHERE ` + where + ` GROUP BY l.model ORDER BY request_count DESC LIMIT 5`
 	if err := r.db.WithContext(ctx).Raw(modelSQL, args...).Scan(&stats.TopModels).Error; err != nil {
 		return nil, err
 	}
