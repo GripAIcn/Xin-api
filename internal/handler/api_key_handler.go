@@ -113,7 +113,7 @@ func (h *ApiKeyHandler) DeleteApiKey(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "凭证已成功吊销")
+	response.AdminSuccessMsg(c, "凭证已成功吊销")
 }
 
 // ListApiKeys 获取当前登录用户名下的密钥列表

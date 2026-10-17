@@ -158,7 +158,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 	if existUser != nil {
 		// 业务冲突：用户名已存在
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.Conflict)
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 			return
 		}
 		if existEmailUser != nil {
-			response.AdminFail(c, response.InvalidParams)
+			response.AdminFail(c, response.Conflict)
 			return
 		}
 	}
@@ -202,7 +202,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "账户创建成功")
+	response.AdminSuccessMsg(c, "账户创建成功")
 }
 
 // ListUsers 获取全部用户列表（管理员）
@@ -248,7 +248,7 @@ func (h *UserHandler) UpdateUserStatus(c *gin.Context) {
 		return
 	}
 	if user == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 
@@ -287,7 +287,7 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 		return
 	}
 	if user == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 
@@ -343,7 +343,7 @@ func (h *UserHandler) RechargeBalance(c *gin.Context) {
 		return
 	}
 	if user == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 
@@ -557,7 +557,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "资料更新成功")
+	response.AdminSuccessMsg(c, "资料更新成功")
 }
 
 func (h *UserHandler) UpdatePassword(c *gin.Context) {
@@ -608,7 +608,7 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "密码修改成功")
+	response.AdminSuccessMsg(c, "密码修改成功")
 }
 
 // generateJWT 创建 JWT Token

@@ -78,6 +78,9 @@ func (r *WeightedRouter) Route(ctx context.Context, req RouteRequest) (*RouteRes
 		if ch.Weight <= 0 {
 			continue
 		}
+		if !supportsProtocol(ch, req.Protocol) {
+			continue
+		}
 		if r.breaker != nil {
 			ok, _ := r.breaker.IsHealthy(ctx, ch.ID)
 			if !ok {
@@ -124,4 +127,17 @@ func (r *WeightedRouter) Route(ctx context.Context, req RouteRequest) (*RouteRes
 		Weight:     selected.Weight,
 		Candidates: len(healthy),
 	}, nil
+}
+
+// supportsProtocol 判断渠道是否支持指定协议；protocol 为空或渠道未登记协议视为「全协议支持」
+func supportsProtocol(ch model.Channel, protocol string) bool {
+	if protocol == "" || len(ch.Protocol) == 0 {
+		return true
+	}
+	for _, p := range ch.Protocol {
+		if p == protocol {
+			return true
+		}
+	}
+	return false
 }

@@ -34,11 +34,30 @@ func AdminSuccess[T any](c *gin.Context, data T) {
 	})
 }
 
-// AdminFail 控制面业务异常返回
+// AdminSuccessMsg 控制面无数据成功返回（用于删除、修改等仅需提示结果的操作）
+func AdminSuccessMsg(c *gin.Context, message string) {
+	if message == "" {
+		message = Msg(Success)
+	}
+	c.JSON(http.StatusOK, AdminResponse[any]{
+		Code:    Success,
+		Message: message,
+	})
+}
+
+// AdminFail 控制面业务异常返回（使用状态码默认文案）
 func AdminFail(c *gin.Context, bizCode int) {
+	AdminFailMsg(c, bizCode, Msg(bizCode))
+}
+
+// AdminFailMsg 控制面业务异常返回，支持按场景覆盖提示文案
+func AdminFailMsg(c *gin.Context, bizCode int, message string) {
+	if message == "" {
+		message = Msg(bizCode)
+	}
 	c.JSON(http.StatusOK, AdminResponse[any]{
 		Code:    bizCode,
-		Message: Msg(bizCode),
+		Message: message,
 	})
 }
 
@@ -59,38 +78,64 @@ type OpenAIErrorResponse struct {
 	Error OpenAIErrorBody `json:"error"`
 }
 
-// DataPlaneError 数据面专属错误注入器（自动映射 HTTP 状态码并 Abort）
-func DataPlaneError(c *gin.Context, bizCode int) {
-	httpStatus := MapToHTTPStatus(bizCode)
-	errType := "api_error"
-	errCode := "gateway_internal_error"
+// BuildOpenAIError 生成数据面 OpenAI 风格错误体与对应 HTTP 状态码（供数据面注入器与入站协议编码复用）
+func BuildOpenAIError(bizCode int) (int, OpenAIErrorResponse) {
+	return BuildOpenAIErrorMsg(bizCode, Msg(bizCode))
+}
 
-	// 根据不同的网关业务状态，转换为标准的 OpenAI 错误范式
-	switch bizCode {
-	case Unauthorized:
-		errType = "authentication_error"
-		errCode = "invalid_api_key"
-	case RateLimited:
-		errType = "requests_error"
-		errCode = "rate_limit_exceeded"
-	case ServiceUnavailable:
-		errType = "server_error"
-		errCode = "service_unavailable"
-	case CircuitBreakerOpen, UpstreamTimeout:
-		errType = "server_error"
-		errCode = "upstream_service_unavailable"
-	case InvalidParams:
-		errType = "invalid_request_error"
-		errCode = "parse_body_failed"
+// BuildOpenAIErrorMsg 生成数据面 OpenAI 风格错误体，支持按场景覆盖提示文案
+func BuildOpenAIErrorMsg(bizCode int, message string) (int, OpenAIErrorResponse) {
+	if message == "" {
+		message = Msg(bizCode)
 	}
 
-	c.JSON(httpStatus, OpenAIErrorResponse{
+	httpStatus := MapToHTTPStatus(bizCode)
+	errType, errCode := openAIErrorMeta(bizCode)
+
+	return httpStatus, OpenAIErrorResponse{
 		Error: OpenAIErrorBody{
-			Message: Msg(bizCode),
+			Message: message,
 			Type:    errType,
 			Code:    errCode,
 		},
-	})
+	}
+}
+
+// openAIErrorMeta 将网关业务状态码转换为标准的 OpenAI 错误 type / code
+func openAIErrorMeta(bizCode int) (errType, errCode string) {
+	switch bizCode {
+	case Unauthorized:
+		return "authentication_error", "invalid_api_key"
+	case Forbidden:
+		return "permission_error", "permission_denied"
+	case URLNotFound, NotFound:
+		return "invalid_request_error", "not_found"
+	case Conflict:
+		return "invalid_request_error", "resource_conflict"
+	case InvalidParams:
+		return "invalid_request_error", "parse_body_failed"
+	case RateLimited:
+		return "rate_limit_error", "rate_limit_exceeded"
+	case ServiceUnavailable:
+		return "server_error", "service_unavailable"
+	case CircuitBreakerOpen:
+		return "server_error", "circuit_breaker_open"
+	case UpstreamTimeout:
+		return "server_error", "upstream_timeout"
+	default:
+		return "server_error", "gateway_internal_error"
+	}
+}
+
+// DataPlaneError 数据面专属错误注入器（自动映射 HTTP 状态码并 Abort）
+func DataPlaneError(c *gin.Context, bizCode int) {
+	DataPlaneErrorMessage(c, bizCode, "")
+}
+
+// DataPlaneErrorMessage 数据面专属错误注入器，支持按场景覆盖提示文案
+func DataPlaneErrorMessage(c *gin.Context, bizCode int, message string) {
+	httpStatus, body := BuildOpenAIErrorMsg(bizCode, message)
+	c.JSON(httpStatus, body)
 
 	// 核心：直接阻断 Gin 中间件链条后续逻辑，防止错上加错
 	c.Abort()

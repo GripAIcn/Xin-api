@@ -24,7 +24,7 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 
 ### Core Features
 
-- **🎯 Unified API Gateway**: Standardize different LLM APIs under a single `/v1/chat/completions` endpoint
+- **🎯 Unified API Gateway**: Expose `/v1/chat/completions`, `/v1/responses`, and `/v1beta/models/{model}:generateContent` as inbound endpoints, standardizing different LLM APIs behind a unified gateway
 - **🔀 Smart Distribution**: Weight-based load balancing to automatically route requests to the optimal channel
 - **🛡️ Circuit Breaker**: Distributed circuit breaker that isolates failing channels and prevents cascading failures
 - **⚡ Rate Limiting**: Redis-based distributed rate limiter supporting RPM/TPM multi-dimensional limiting

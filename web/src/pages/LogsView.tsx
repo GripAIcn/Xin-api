@@ -387,6 +387,10 @@ export default function LogsView() {
   const [userId, setUserId] = useState('')
   const [apiKeyId, setApiKeyId] = useState('')
   const [requestId, setRequestId] = useState('')
+  const [provider, setProvider] = useState('')
+  const [protocol, setProtocol] = useState('')
+  const [upstreamReqId, setUpstreamReqId] = useState('')
+  const [isStream, setIsStream] = useState('all')
   const [status, setStatus] = useState('all')
   const [timeRange, setTimeRange] = useState<TimeRange>('today')
 
@@ -412,6 +416,10 @@ export default function LogsView() {
     user_id: toOptionalNumber(userId),
     api_key_id: toOptionalNumber(apiKeyId),
     request_id: requestId.trim() || undefined,
+    provider: provider.trim() || undefined,
+    protocol: protocol.trim() || undefined,
+    upstream_req_id: upstreamReqId.trim() || undefined,
+    is_stream: isStream === 'all' ? undefined : isStream === 'true',
     status: status === 'all' ? undefined : (status as LogListQuery['status']),
     ...buildTimeRange(timeRange),
   })
@@ -432,6 +440,10 @@ export default function LogsView() {
     setUserId('')
     setApiKeyId('')
     setRequestId('')
+    setProvider('')
+    setProtocol('')
+    setUpstreamReqId('')
+    setIsStream('all')
     setStatus('all')
     setTimeRange('today')
     resetFilters()
@@ -562,6 +574,46 @@ export default function LogsView() {
                 value={requestId}
                 onChange={(e) => setRequestId(e.target.value)}
               />
+            </Field>
+
+            <Field label="上游请求 ID">
+              <Input
+                className="w-48"
+                placeholder="upstream_req_id"
+                value={upstreamReqId}
+                onChange={(e) => setUpstreamReqId(e.target.value)}
+              />
+            </Field>
+
+            <Field label="供应商">
+              <Input
+                className="w-32"
+                placeholder="provider"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+              />
+            </Field>
+
+            <Field label="协议">
+              <Input
+                className="w-32"
+                placeholder="protocol"
+                value={protocol}
+                onChange={(e) => setProtocol(e.target.value)}
+              />
+            </Field>
+
+            <Field label="是否流式">
+              <Select value={isStream} onValueChange={setIsStream}>
+                <SelectTrigger className="w-24">
+                  <SelectValue placeholder="全部" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部</SelectItem>
+                  <SelectItem value="true">是</SelectItem>
+                  <SelectItem value="false">否</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
 
             <Field label="状态">

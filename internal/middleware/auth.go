@@ -86,17 +86,28 @@ func RequireAdmin() gin.HandlerFunc {
 	}
 }
 
+// extractDataPlaneKey 按优先级提取数据面 API Key：
+// Authorization: Bearer → x-goog-api-key 头（Gemini 官方 SDK）→ ?key= 查询参数（Gemini 兼容）
+func extractDataPlaneKey(c *gin.Context) string {
+	if auth := c.GetHeader("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		return strings.TrimPrefix(auth, "Bearer ")
+	}
+	if key := c.GetHeader("x-goog-api-key"); key != "" {
+		return key
+	}
+	return c.Query("key")
+}
+
 // ApiKeyAuth 数据面 API Key 认证中间件
-// 从 Authorization: Bearer sk-xin-xxx 提取 key，校验其有效性
+// 支持 Authorization: Bearer / x-goog-api-key / ?key= 三种取值方式，校验其有效性
 func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		auth := c.GetHeader("Authorization")
-		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+		key := extractDataPlaneKey(c)
+		if key == "" {
 			response.DataPlaneError(c, response.Unauthorized)
 			return
 		}
 
-		key := strings.TrimPrefix(auth, "Bearer ")
 		// 落库只存哈希：对来访明文 Key 求摘要后比对
 		apiKey, err := apiKeyRepo.GetByKeyHash(c.Request.Context(), model.HashApiKey(key))
 		if err != nil || apiKey == nil {

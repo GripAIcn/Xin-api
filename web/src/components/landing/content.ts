@@ -24,7 +24,7 @@ export const features: FeatureItem[] = [
   {
     icon: PlugZap,
     title: '统一 API 接入',
-    desc: '标准化 OpenAI、Anthropic Claude、DeepSeek 等主流大模型接口，一个 /v1/chat/completions 端点完成统一接入。',
+    desc: '标准化 OpenAI、Anthropic Claude、DeepSeek、Gemini 等主流大模型接口，兼容 /v1/chat/completions、/v1/responses 与 Gemini generateContent 三种入站协议。',
   },
   {
     icon: Scale,
@@ -129,7 +129,7 @@ export const faqItems: FaqItem[] = [
   },
   {
     q: '支持哪些模型与协议？',
-    a: '无缝兼容 OpenAI、Anthropic Claude、DeepSeek 等主流大模型，客户端通过统一的 /v1/chat/completions 端点接入，无需为不同供应商维护多套代码。',
+    a: '无缝兼容 OpenAI、Anthropic Claude、DeepSeek、Gemini 等主流大模型，客户端可通过 /v1/chat/completions、/v1/responses 或 Gemini 原生 generateContent 端点接入，无需为不同供应商维护多套代码。',
   },
   {
     q: '如何保障渠道的高可用？',

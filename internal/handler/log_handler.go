@@ -128,7 +128,7 @@ func (h *LogHandler) Get(c *gin.Context) {
 		return
 	}
 	if detail == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 

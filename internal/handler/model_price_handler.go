@@ -47,7 +47,7 @@ func (h *ModelPriceHandler) CreatePrice(c *gin.Context) {
 		return
 	}
 	if existing != nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.Conflict)
 		return
 	}
 
@@ -101,7 +101,7 @@ func (h *ModelPriceHandler) GetPrice(c *gin.Context) {
 		return
 	}
 	if p == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 
@@ -132,7 +132,7 @@ func (h *ModelPriceHandler) UpdatePrice(c *gin.Context) {
 		return
 	}
 	if p == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 
@@ -145,7 +145,7 @@ func (h *ModelPriceHandler) UpdatePrice(c *gin.Context) {
 			return
 		}
 		if dup != nil && dup.ID != id {
-			response.AdminFail(c, response.InvalidParams)
+			response.AdminFail(c, response.Conflict)
 			return
 		}
 	}
@@ -191,7 +191,7 @@ func (h *ModelPriceHandler) UpdatePriceStatus(c *gin.Context) {
 		return
 	}
 	if p == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 
@@ -220,7 +220,7 @@ func (h *ModelPriceHandler) DeletePrice(c *gin.Context) {
 		return
 	}
 	if p == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 
@@ -230,7 +230,7 @@ func (h *ModelPriceHandler) DeletePrice(c *gin.Context) {
 		return
 	}
 
-	response.AdminSuccess(c, "价格方案删除成功")
+	response.AdminSuccessMsg(c, "价格方案删除成功")
 }
 
 // ListPriceModels 查询绑定到指定价格方案的「渠道 × 模型」明细
@@ -248,7 +248,7 @@ func (h *ModelPriceHandler) ListPriceModels(c *gin.Context) {
 		return
 	}
 	if p == nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.NotFound)
 		return
 	}
 

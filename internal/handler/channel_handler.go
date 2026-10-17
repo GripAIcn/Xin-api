@@ -88,7 +88,7 @@ func (h *ChannelHandler) DeleteChannel(c *gin.Context) {
 	// 清除缓存
 	h.invalidateChannelCache(c.Request.Context())
 
-	response.AdminSuccess(c, "渠道删除成功")
+	response.AdminSuccessMsg(c, "渠道删除成功")
 }
 
 // UpdateChannel 覆盖更新渠道（用于管理后台编辑保存动作）
@@ -262,7 +262,7 @@ func (h *ChannelHandler) CreateChannelModel(c *gin.Context) {
 		return
 	}
 	if existing != nil {
-		response.AdminFail(c, response.InvalidParams)
+		response.AdminFail(c, response.Conflict)
 		return
 	}
 
@@ -371,7 +371,7 @@ func (h *ChannelHandler) UpdateChannelModel(c *gin.Context) {
 			return
 		}
 		if dup != nil {
-			response.AdminFail(c, response.InvalidParams)
+			response.AdminFail(c, response.Conflict)
 			return
 		}
 	}
@@ -439,7 +439,7 @@ func (h *ChannelHandler) DeleteChannelModel(c *gin.Context) {
 	}
 
 	h.invalidateModelCache(ctx)
-	response.AdminSuccess(c, "模型删除成功")
+	response.AdminSuccessMsg(c, "模型删除成功")
 }
 
 // UpdateChannelModelStatus 启用/禁用渠道模型

@@ -131,6 +131,18 @@ func (r *logRepo) List(ctx context.Context, q form.LogListQuery, scopeUserID *in
 	if q.RequestID != "" {
 		base = base.Where("request_logs.request_id = ?", q.RequestID)
 	}
+	if q.UpstreamReqID != "" {
+		base = base.Where("request_logs.upstream_req_id = ?", q.UpstreamReqID)
+	}
+	if q.Provider != "" {
+		base = base.Where("request_logs.provider = ?", q.Provider)
+	}
+	if q.Protocol != "" {
+		base = base.Where("request_logs.protocol = ?", q.Protocol)
+	}
+	if q.IsStream != nil {
+		base = base.Where("request_logs.is_stream = ?", *q.IsStream)
+	}
 	if q.Status != "" {
 		base = base.Where("request_logs.status = ?", q.Status)
 	}

@@ -61,7 +61,7 @@ func main() {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:9090", "http://127.0.0.1:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "x-goog-api-key"},
 		ExposeHeaders:    []string{middleware.HeaderRequestID},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,

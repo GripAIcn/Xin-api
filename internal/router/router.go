@@ -8,6 +8,7 @@ import (
 	"Xin-api/config"
 	"Xin-api/internal/adapter"
 	"Xin-api/internal/handler"
+	"Xin-api/internal/inbound"
 	"Xin-api/internal/middleware"
 	"Xin-api/internal/routing"
 	"Xin-api/internal/service"
@@ -23,6 +24,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	logRepo := postgresql.NewLogRepo(db)
 	userHandler := handler.NewUserHandler(userRepo, cfg.JWT, logRepo)
 	logHandler := handler.NewLogHandler(logRepo)
+	dashboardHandler := handler.NewDashboardHandler(postgresql.NewDashboardRepo(db))
 	apiKeyRepo := postgresql.NewApiKeyRepo(db)
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeyRepo)
 	channelRepo := postgresql.NewChannelRepo(db)
@@ -73,6 +75,9 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			protected.GET("/logs", logHandler.List)                 // 日志列表（分页 + 多维过滤）
 			protected.GET("/logs/:id", logHandler.Get)              // 日志详情（含计费明细）
 			protected.GET("/billing-logs", logHandler.ListBillings) // 账单日志（消费/充值/退款合并，分页 + 多维过滤）
+
+			// 仪表盘统计：所有登录用户可访问，非管理员强制仅统计本人数据
+			protected.GET("/dashboard/stats", dashboardHandler.Stats) // 概览 / 趋势 / 排行
 
 			// API Key：所有登录用户均可管理，但仓储/业务层按当前用户 user_id 隔离
 			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)        // 分发新 Key
@@ -127,12 +132,14 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		adapterGroup.Register(adapter.NewAnthropicAdapter())
 		adapterGroup.Register(adapter.NewGeminiAdapter())
 
+		inboundRegistry := inbound.NewRegistry()
 		chatHandler := handler.NewChatHandler(
 			channelRepo,
 			rdb,
 			cfg.Cache.ChannelExpireTime,
 			channelRouter, breaker, streamProxy,
 			adapterGroup,
+			inboundRegistry,
 			logRepo,
 			userRepo,
 			cfg.Server.GatewayNode,
@@ -142,7 +149,15 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		dataPlane := v1.Group("")
 		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))
 		{
-			dataPlane.POST("/chat/completions", chatHandler.HandleDataPlane)
+			dataPlane.POST("/chat/completions", chatHandler.HandleDataPlane) // OpenAI Chat 兼容
+			dataPlane.POST("/responses", chatHandler.HandleResponses)        // OpenAI Responses API
+		}
+
+		// Gemini 原生路径不在 /v1 前缀下，单独挂载（:model 捕获整段，如 gemini-2.0-flash:generateContent）
+		geminiPlane := r.Group("/v1beta")
+		geminiPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))
+		{
+			geminiPlane.POST("/models/:model", chatHandler.HandleGemini)
 		}
 	}
 }

@@ -413,6 +413,10 @@ export interface LogListQuery {
   user_id?: number
   api_key_id?: number
   request_id?: string
+  provider?: string
+  protocol?: string
+  is_stream?: boolean
+  upstream_req_id?: string
   status?: LogStatus
   start_time?: string
   end_time?: string
@@ -532,4 +536,67 @@ export interface AggregateChannelMetricsResult {
   end_time: string
   rows: number
   duration_ms: number
+}
+
+// === 仪表盘统计 ===
+
+export type DashboardRange = 'today' | '7d' | '30d'
+
+// 概览指标（所选时间范围聚合）
+export interface DashboardOverview {
+  request_count: number
+  success_count: number
+  error_count: number
+  success_rate: number // 0~1 小数
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  total_cost: number
+  currency: string
+  avg_latency_ms: number
+  avg_ttft_ms: number
+}
+
+// 趋势分桶点（今日按小时、近 N 天按天）
+export interface DashboardTrendPoint {
+  bucket_start: string
+  request_count: number
+  success_count: number
+  error_count: number
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  total_cost: number
+}
+
+export interface DashboardModelRank {
+  model: string
+  request_count: number
+  total_tokens: number
+  total_cost: number
+}
+
+export interface DashboardChannelRank {
+  channel_id: number
+  channel_name: string | null
+  request_count: number
+  success_rate: number
+  avg_latency_ms: number
+}
+
+export interface DashboardErrorRank {
+  error_type: string
+  count: number
+}
+
+// GET /v1/dashboard/stats 返回体
+export interface DashboardStats {
+  range: string
+  start_time: string
+  end_time: string
+  overview: DashboardOverview
+  trend: DashboardTrendPoint[]
+  top_models: DashboardModelRank[]
+  top_channels: DashboardChannelRank[]
+  top_errors: DashboardErrorRank[]
 }

@@ -20,6 +20,13 @@ type StreamProxy struct {
 	client *http.Client
 }
 
+// ResponseEncoder 把适配器产出的 OpenAI Chat 响应（或 SSE 块）再编码为入站协议格式
+// 由入站 Codec 实现；nil 表示透传（保持 OpenAI Chat 形态）
+type ResponseEncoder interface {
+	EncodeResponse(openAIResponse []byte) ([]byte, error)
+	EncodeStreamChunk(openAISSESChunk []byte) ([]byte, error)
+}
+
 // ForwardResult 单次转发的上游信息快照
 type ForwardResult struct {
 	StatusCode          int    // 上游/本地 HTTP 状态码
@@ -58,6 +65,7 @@ func (p *StreamProxy) Forward(
 	upReq *adapter.UpstreamRequest,
 	adpt adapter.ProviderAdapter,
 	externalModel string,
+	encoder ResponseEncoder,
 	captureResponseBody bool,
 ) (*ForwardResult, error) {
 	start := time.Now()
@@ -94,7 +102,7 @@ func (p *StreamProxy) Forward(
 
 	// 流式：上游返回 SSE 时逐事件转换下发
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return p.forwardStream(c, resp, adpt, externalModel, captureResponseBody)
+		return p.forwardStream(c, resp, adpt, externalModel, encoder, captureResponseBody)
 	}
 
 	// 非流式：读取完整响应并转换
@@ -114,7 +122,15 @@ func (p *StreamProxy) Forward(
 			LatencyMs:     time.Since(start).Milliseconds(),
 		}, err
 	}
-	c.Data(http.StatusOK, "application/json", converted)
+
+	// 写回客户端前按入站协议再编码（计费元信息仍从 OpenAI 格式字节解析）
+	mout := converted
+	if encoder != nil {
+		if encoded, encErr := encoder.EncodeResponse(converted); encErr == nil {
+			mout = encoded
+		}
+	}
+	c.Data(http.StatusOK, "application/json", mout)
 
 	result := &ForwardResult{
 		StatusCode:    http.StatusOK,
@@ -122,7 +138,7 @@ func (p *StreamProxy) Forward(
 		LatencyMs:     time.Since(start).Milliseconds(),
 	}
 	if captureResponseBody {
-		result.ResponseBody = converted
+		result.ResponseBody = mout
 	}
 	// 解析转换后的 OpenAI 格式 body（字段缺失不影响结果，仅作为兜底/计费信息）
 	result.mergeMeta(parseOpenAIMeta(converted), false)
@@ -130,7 +146,7 @@ func (p *StreamProxy) Forward(
 }
 
 // forwardStream 逐 SSE 事件读取上游流，经适配器转换后写回客户端，并采集转发信息
-func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt adapter.ProviderAdapter, externalModel string, captureResponseBody bool) (*ForwardResult, error) {
+func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt adapter.ProviderAdapter, externalModel string, encoder ResponseEncoder, captureResponseBody bool) (*ForwardResult, error) {
 	start := time.Now()
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/event-stream")
@@ -157,24 +173,33 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 				return false
 			}
 			if len(converted) > 0 {
-				if !firstChunkWritten {
-					firstChunkWritten = true
-					result.TTFTMs = time.Since(start).Milliseconds()
-				}
-				// 解析转换后的 chunk 元信息（最后一次非空值生效）
+				// 解析转换后的 OpenAI chunk 元信息（最后一次非空值生效），必须编码前完成
 				result.mergeMeta(parseOpenAIMeta(sseDataPayload(converted)), true)
-				// 按上限累积转换后的响应原文（用于 request_payloads）
-				if captureResponseBody && captured.Len() < maxCapturedResponseBytes {
-					remaining := maxCapturedResponseBytes - captured.Len()
-					if len(converted) <= remaining {
-						captured.Write(converted)
-					} else {
-						captured.Write(converted[:remaining])
+				// 写回客户端前按入站协议再编码
+				mout := converted
+				if encoder != nil {
+					if encoded, encErr := encoder.EncodeStreamChunk(converted); encErr == nil {
+						mout = encoded
 					}
 				}
-				if _, writeErr := w.Write(converted); writeErr != nil {
-					writeAborted = true
-					return false
+				if len(mout) > 0 {
+					if !firstChunkWritten {
+						firstChunkWritten = true
+						result.TTFTMs = time.Since(start).Milliseconds()
+					}
+					// 按上限累积写回客户端的响应原文（用于 request_payloads）
+					if captureResponseBody && captured.Len() < maxCapturedResponseBytes {
+						remaining := maxCapturedResponseBytes - captured.Len()
+						if len(mout) <= remaining {
+							captured.Write(mout)
+						} else {
+							captured.Write(mout[:remaining])
+						}
+					}
+					if _, writeErr := w.Write(mout); writeErr != nil {
+						writeAborted = true
+						return false
+					}
 				}
 			}
 		}
