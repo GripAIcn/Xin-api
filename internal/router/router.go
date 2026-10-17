@@ -134,6 +134,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			adapterGroup,
 			logRepo,
 			userRepo,
+			cfg.Server.GatewayNode,
 		)
 		dataPlane := v1.Group("")
 		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))

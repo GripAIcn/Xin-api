@@ -9,6 +9,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"Xin-api/internal/model"
+	"Xin-api/internal/requestctx"
 	"Xin-api/pkg/response"
 )
 
@@ -115,6 +116,12 @@ func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 
 		c.Set(CtxUserIDKey, apiKey.UserID)
 		c.Set(CtxAPIKeyIDKey, apiKey.ID)
+
+		// 同步写入请求上下文，后续链路直接从 RequestContext 读取身份信息
+		if rc := requestctx.Get(c); rc != nil {
+			rc.UserID = apiKey.UserID
+			rc.APIKeyID = apiKey.ID
+		}
 
 		c.Next()
 	}

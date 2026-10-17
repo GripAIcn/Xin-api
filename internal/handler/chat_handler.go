@@ -9,12 +9,12 @@ import (
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
 	"Xin-api/internal/adapter"
 	"Xin-api/internal/middleware"
 	"Xin-api/internal/model"
+	"Xin-api/internal/requestctx"
 	"Xin-api/internal/service"
 	"Xin-api/internal/store/postgresql"
 	"Xin-api/pkg/response"
@@ -31,6 +31,7 @@ type ChatHandler struct {
 	adapterGroup *adapter.Registry
 	logRepo      postgresql.LogRepo  // 请求日志 / 计费落库
 	userRepo     postgresql.UserRepo // 读取用户余额
+	gatewayNode  string              // 网关实例标识（落库 gateway_node）
 }
 
 // NewChatHandler 创建聊天补全处理器
@@ -44,6 +45,7 @@ func NewChatHandler(
 	adapterGroup *adapter.Registry,
 	logRepo postgresql.LogRepo,
 	userRepo postgresql.UserRepo,
+	gatewayNode string,
 ) *ChatHandler {
 	return &ChatHandler{
 		channelRepo:  channelRepo,
@@ -55,6 +57,7 @@ func NewChatHandler(
 		adapterGroup: adapterGroup,
 		logRepo:      logRepo,
 		userRepo:     userRepo,
+		gatewayNode:  gatewayNode,
 	}
 }
 
@@ -63,6 +66,52 @@ func NewChatHandler(
 func strPtr(s string) *string { return &s }
 func i64Ptr(v int64) *int64   { return &v }
 func i32Ptr(v int) *int       { return &v }
+
+// 当前选路策略快照（WeightedRRBalancer）
+const routeStrategyWeighted = "weighted"
+
+// gatewayNodePtr 网关实例标识；未配置时返回 nil，避免写入空串
+func (h *ChatHandler) gatewayNodePtr() *string {
+	if h.gatewayNode == "" {
+		return nil
+	}
+	return &h.gatewayNode
+}
+
+// localErrorStatus 本地错误类型到 HTTP 状态码的映射，保证错误日志 status_code 可对账
+func localErrorStatus(errType string) int {
+	switch errType {
+	case "invalid_request":
+		return 400
+	case "insufficient_balance":
+		return 403
+	case "no_channel", "no_adapter":
+		return 503
+	case "forward_failed":
+		return 502
+	default:
+		return 500
+	}
+}
+
+// upstreamErrorCode 从上游错误响应体中提取 error.code / error.type，统一加 upstream: 前缀
+func upstreamErrorCode(body []byte, statusCode int) string {
+	var payload struct {
+		Error struct {
+			Code string `json:"code"`
+			Type string `json:"type"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err == nil {
+		if payload.Error.Code != "" {
+			return "upstream:" + payload.Error.Code
+		}
+		if payload.Error.Type != "" {
+			return "upstream:" + payload.Error.Type
+		}
+	}
+	return fmt.Sprintf("upstream:http_%d", statusCode)
+}
 
 // saveLog 持久化一条请求日志；写库失败仅记录日志，不阻断主流程
 func (h *ChatHandler) saveLog(ctx context.Context, log *model.RequestLog) {
@@ -88,11 +137,16 @@ func (h *ChatHandler) writeErrorLog(
 	provider *string,
 ) {
 	now := time.Now()
+	// 本地错误未显式传状态码时，按错误类型补齐，便于日志与响应对账
+	if statusCode == nil {
+		statusCode = i32Ptr(localErrorStatus(errType))
+	}
 	log := &model.RequestLog{
 		RequestID:    requestID,
 		UserID:       i64Ptr(userID),
 		APIKeyID:     i64Ptr(apiKeyID),
 		Model:        modelName,
+		Protocol:     strPtr("chat"),
 		LogType:      logType,
 		Status:       model.LogStatusError,
 		StatusCode:   statusCode,
@@ -100,9 +154,11 @@ func (h *ChatHandler) writeErrorLog(
 		UsageSource:  model.UsageSourceUpstream,
 		ErrorStage:   strPtr(stage),
 		ErrorType:    strPtr(errType),
+		ErrorCode:    strPtr(errType),
 		ErrorMessage: strPtr(errMsg),
 		ChannelID:    channelID,
 		Provider:     provider,
+		GatewayNode:  h.gatewayNodePtr(),
 		StartedAt:    &startedAt,
 		CompletedAt:  &now,
 	}
@@ -161,9 +217,12 @@ func (h *ChatHandler) getUpstreamModelWithCache(ctx context.Context, channelID i
 // HandleDataPlane 通用数据面请求处理
 // 入站协议固定为 OpenAI Chat；选中渠道后按渠道 provider 选择适配器完成协议转换与转发
 func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
+	// 请求上下文由中间件创建；此处兜底 Ensure，保证 request_id 与起始时间唯一
+	rc := requestctx.Ensure(c)
 	ctx := c.Request.Context()
-	requestID := uuid.NewString()
-	startedAt := time.Now()
+	requestID := rc.RequestID
+	startedAt := rc.StartTime
+	rc.Protocol = "chat"
 
 	// 0. 读取鉴权上下文（由 ApiKeyAuth 注入，类型均为 int64）
 	uidVal, uidOK := c.Get(middleware.CtxUserIDKey)
@@ -192,6 +251,7 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 	}
 	_ = json.Unmarshal(body, &streamMeta)
 	isStream := streamMeta.Stream
+	rc.IsStream = isStream
 
 	// 1. 入站协议固定为 OpenAI Chat，用 openai 适配器提取对外模型名
 	inbound, err := h.adapterGroup.GetAdapter("openai")
@@ -208,6 +268,7 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		response.DataPlaneError(c, response.InvalidParams)
 		return
 	}
+	rc.Model = modelName
 
 	// 2. 路由前余额校验
 	user, err := h.userRepo.GetByID(ctx, uint(userID))
@@ -272,6 +333,8 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 		response.DataPlaneError(c, response.ServiceUnavailable)
 		return
 	}
+	rc.ChannelID = selected.ID
+	rc.Provider = selected.Provider
 
 	// 5. 按渠道 provider 选择出站适配器
 	adpt, err := h.adapterGroup.GetAdapter(selected.Provider)
@@ -337,22 +400,26 @@ func (h *ChatHandler) writeForwardErrorLog(
 ) {
 	now := time.Now()
 	log := &model.RequestLog{
-		RequestID:    requestID,
-		UserID:       i64Ptr(userID),
-		APIKeyID:     i64Ptr(apiKeyID),
-		Model:        modelName,
-		ChannelID:    i64Ptr(selected.ID),
-		Provider:     strPtr(selected.Provider),
-		Protocol:     strPtr("chat"),
-		LogType:      model.LogTypeError,
-		Status:       model.LogStatusError,
-		IsStream:     isStream,
-		UsageSource:  model.UsageSourceUpstream,
-		ErrorStage:   strPtr(model.ErrorStageLocal),
-		ErrorType:    strPtr("forward_failed"),
-		ErrorMessage: strPtr(proxyErr.Error()),
-		StartedAt:    &startedAt,
-		CompletedAt:  &now,
+		RequestID:     requestID,
+		UserID:        i64Ptr(userID),
+		APIKeyID:      i64Ptr(apiKeyID),
+		Model:         modelName,
+		ChannelID:     i64Ptr(selected.ID),
+		Provider:      strPtr(selected.Provider),
+		Protocol:      strPtr("chat"),
+		LogType:       model.LogTypeError,
+		Status:        model.LogStatusError,
+		IsStream:      isStream,
+		UsageSource:   model.UsageSourceUpstream,
+		ErrorStage:    strPtr(model.ErrorStageLocal),
+		ErrorType:     strPtr("forward_failed"),
+		ErrorCode:     strPtr("forward_failed"),
+		ErrorMessage:  strPtr(proxyErr.Error()),
+		RouteStrategy: strPtr(routeStrategyWeighted),
+		RouteWeight:   i32Ptr(selected.Weight),
+		GatewayNode:   h.gatewayNodePtr(),
+		StartedAt:     &startedAt,
+		CompletedAt:   &now,
 	}
 	// 命中上游模型映射时记录实际上游名
 	if upstreamModel != "" {
@@ -379,6 +446,7 @@ func (h *ChatHandler) writeForwardErrorLog(
 		}
 		log.ErrorStage = strPtr(model.ErrorStageUpstream)
 		log.ErrorType = strPtr("upstream_error")
+		log.ErrorCode = strPtr(upstreamErrorCode(ue.Body, ue.StatusCode))
 		log.ErrorMessage = strPtr(msg)
 		log.StatusCode = i32Ptr(ue.StatusCode)
 	}
@@ -476,6 +544,8 @@ func (h *ChatHandler) settleSuccess(
 		IsStream:            res.IsStream,
 		IsCancelled:         res.IsCancelled,
 		UsageSource:         usageSource,
+		RouteStrategy:       strPtr(routeStrategyWeighted),
+		RouteWeight:         i32Ptr(selected.Weight),
 		InputTokens:         input,
 		OutputTokens:        output,
 		CachedInputTokens:   cached,
@@ -483,6 +553,7 @@ func (h *ChatHandler) settleSuccess(
 		ReasoningTokens:     reasoning,
 		TotalCost:           totalCost,
 		Currency:            currency,
+		GatewayNode:         h.gatewayNodePtr(),
 		StartedAt:           &startedAt,
 		CompletedAt:         &completedAt,
 	}
@@ -503,6 +574,12 @@ func (h *ChatHandler) settleSuccess(
 	}
 	if res.LatencyMs > 0 {
 		log.LatencyMs = i64Ptr(res.LatencyMs)
+		// 生成耗时 = 总延迟 − 首 token 延迟；无 TTFT（非流式）时取总延迟
+		generationMs := res.LatencyMs
+		if res.TTFTMs > 0 && res.LatencyMs >= res.TTFTMs {
+			generationMs = res.LatencyMs - res.TTFTMs
+		}
+		log.GenerationMs = i64Ptr(generationMs)
 	}
 	if clientIP != "" {
 		log.ClientIP = &clientIP

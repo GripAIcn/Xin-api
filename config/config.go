@@ -56,7 +56,8 @@ type RedisConfig struct {
 
 // ServerConfig 服务运行时配置
 type ServerConfig struct {
-	Port string
+	Port        string
+	GatewayNode string // 网关实例标识，落库 request_logs.gateway_node
 }
 
 // Load 显式加载并装配全局配置（替代隐式 init）
@@ -77,7 +78,8 @@ func Load() *Config {
 			Expire: getEnvToTimeDuration("JWT_EXPIRE", 24*time.Hour),
 		},
 		Server: ServerConfig{
-			Port: getEnv("PROXY_PORT", "8080"), // 默认 8080 端口
+			Port:        getEnv("PROXY_PORT", "8080"), // 默认 8080 端口
+			GatewayNode: getEnv("GATEWAY_NODE", defaultGatewayNode()),
 		},
 		Redis: RedisConfig{
 			Host:     getEnv("REDIS_HOST", "127.0.0.1"),
@@ -146,4 +148,12 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return val
+}
+
+// defaultGatewayNode 默认使用主机名作为网关实例标识（K8s 下通常为 Pod 名）
+func defaultGatewayNode() string {
+	if hostname, err := os.Hostname(); err == nil && strings.TrimSpace(hostname) != "" {
+		return hostname
+	}
+	return "xin-api"
 }

@@ -54,11 +54,15 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery()) // 引入崩溃恢复切面，防止单点故障引发多米诺骨牌级雪崩
 
+	// 请求上下文中间件：生成 xin_req_* 请求 ID 并回写 X-Request-Id 响应头
+	r.Use(middleware.RequestContextMiddleware())
+
 	// CORS 中间件 — 允许前端开发服务器跨域访问
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:9090", "http://127.0.0.1:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{middleware.HeaderRequestID},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
