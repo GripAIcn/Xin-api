@@ -19,6 +19,10 @@ type LogRepo interface {
 	Create(ctx context.Context, log *model.RequestLog) error
 	// CreateWithBilling 同一事务内写入请求日志并扣减用户余额、落计费流水
 	CreateWithBilling(ctx context.Context, log *model.RequestLog, billing *model.BillingRecord) error
+	// CreatePayload 写入请求/响应原文（需先写入对应 request_logs 行）
+	CreatePayload(ctx context.Context, payload *model.RequestPayload) error
+	// CreateAudit 写入一条控制面审计日志
+	CreateAudit(ctx context.Context, audit *model.AuditLog) error
 	// List 分页查询日志列表；scopeUserID 非空时强制限定该用户
 	List(ctx context.Context, q form.LogListQuery, scopeUserID *int64) (*response.PageData[model.LogListItem], error)
 	// ListBilling 分页查询账单流水（消费 billing_records + 充值/退款 request_logs 合并）；scopeUserID 非空时强制限定该用户
@@ -42,6 +46,14 @@ func (r *logRepo) Create(ctx context.Context, log *model.RequestLog) error {
 	return r.db.WithContext(ctx).Create(log).Error
 }
 
+func (r *logRepo) CreatePayload(ctx context.Context, payload *model.RequestPayload) error {
+	return r.db.WithContext(ctx).Create(payload).Error
+}
+
+func (r *logRepo) CreateAudit(ctx context.Context, audit *model.AuditLog) error {
+	return r.db.WithContext(ctx).Create(audit).Error
+}
+
 // CreateWithBilling 同一事务内：写日志 → 锁定用户余额 → 条件扣减（防负）→ 写计费流水。
 // 说明：billing_records.request_id 有 UNIQUE 约束，重复写入会报错（正常防护）；
 // 不显式写入 total_tokens（数据库生成列，只读）。
@@ -58,7 +70,7 @@ func (r *logRepo) CreateWithBilling(ctx context.Context, log *model.RequestLog, 
 		}
 
 		before := user.Balance
-		after := before - billing.TotalCost
+		after := model.Money{Decimal: before.Decimal.Sub(billing.TotalCost.Decimal)}
 		billing.BalanceBefore = &before
 		billing.BalanceAfter = &after
 
@@ -375,7 +387,7 @@ func (r *logRepo) GetByID(ctx context.Context, id int64) (*model.LogDetail, erro
 
 	// 历史快照兜底：早期记录写入时未命中价格方案（单价全为 0），
 	// 按当前绑定补全「单价」展示；成本与扣费保持记录原值，不做回溯结算。
-	if b.InputPrice == 0 && b.OutputPrice == 0 && b.CachedInputPrice == 0 && b.CacheCreationPrice == 0 {
+	if b.InputPrice.IsZero() && b.OutputPrice.IsZero() && b.CachedInputPrice.IsZero() && b.CacheCreationPrice.IsZero() {
 		var channelID int64
 		if b.ChannelID != nil {
 			channelID = *b.ChannelID

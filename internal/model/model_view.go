@@ -5,19 +5,19 @@ import "time"
 // ModelChannelEntry 「渠道 × 模型」明细行（JOIN 渠道信息），供模型管理页按逻辑模型名聚合展示。
 // 说明：Name 为对外（逻辑）模型名，仅用于上层按名分组，不单独序列化到明细中（分组结果见 ModelGroup.Name）。
 type ModelChannelEntry struct {
-	Name               string      `gorm:"column:name" json:"-"`
-	ModelID            int64       `gorm:"column:model_id" json:"model_id"`
-	ChannelID          int64       `gorm:"column:channel_id" json:"channel_id"`
-	ChannelName        string      `gorm:"column:channel_name" json:"channel_name"`
-	ChannelProvider    string      `gorm:"column:channel_provider" json:"channel_provider"`
-	ChannelStatus      string      `gorm:"column:channel_status" json:"channel_status"`
-	UpstreamModel      string      `gorm:"column:upstream_model" json:"upstream_model"`
-	Status             string      `gorm:"column:status" json:"status"`
-	ContextLength      *int        `gorm:"column:context_length" json:"context_length,omitempty"`
-	MaxOutputTokens    *int        `gorm:"column:max_output_tokens" json:"max_output_tokens,omitempty"`
-	Capabilities       StringArray `gorm:"column:capabilities" json:"capabilities"`
-	ModelPriceID       *int64      `gorm:"column:model_price_id" json:"model_price_id,omitempty"`
-	PriceName          *string     `gorm:"column:price_name" json:"price_name,omitempty"`
+	Name            string      `gorm:"column:name" json:"-"`
+	ModelID         int64       `gorm:"column:model_id" json:"model_id"`
+	ChannelID       int64       `gorm:"column:channel_id" json:"channel_id"`
+	ChannelName     string      `gorm:"column:channel_name" json:"channel_name"`
+	ChannelProvider string      `gorm:"column:channel_provider" json:"channel_provider"`
+	ChannelStatus   string      `gorm:"column:channel_status" json:"channel_status"`
+	UpstreamModel   string      `gorm:"column:upstream_model" json:"upstream_model"`
+	Status          string      `gorm:"column:status" json:"status"`
+	ContextLength   *int        `gorm:"column:context_length" json:"context_length,omitempty"`
+	MaxOutputTokens *int        `gorm:"column:max_output_tokens" json:"max_output_tokens,omitempty"`
+	Capabilities    StringArray `gorm:"column:capabilities" json:"capabilities"`
+	ModelPriceID    *int64      `gorm:"column:model_price_id" json:"model_price_id,omitempty"`
+	PriceName       *string     `gorm:"column:price_name" json:"price_name,omitempty"`
 }
 
 // ChannelModelView 渠道下的模型明细（LEFT JOIN 价格方案绑定）。

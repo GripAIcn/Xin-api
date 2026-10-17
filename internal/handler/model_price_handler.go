@@ -33,6 +33,10 @@ func (h *ModelPriceHandler) CreatePrice(c *gin.Context) {
 	if !h.bindAndValidate(c, &req) {
 		return
 	}
+	if !pricesNonNegative(req.InputPrice, req.OutputPrice, req.CachedInputPrice, req.CacheCreationPrice) {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
 	ctx := c.Request.Context()
 
 	// 方案名判重
@@ -113,6 +117,10 @@ func (h *ModelPriceHandler) UpdatePrice(c *gin.Context) {
 
 	var req form.UpdateModelPriceReq
 	if !h.bindAndValidate(c, &req) {
+		return
+	}
+	if !pricesNonNegative(req.InputPrice, req.OutputPrice, req.CachedInputPrice, req.CacheCreationPrice) {
+		response.AdminFail(c, response.InvalidParams)
 		return
 	}
 
@@ -265,6 +273,16 @@ func (h *ModelPriceHandler) parsePathInt64(c *gin.Context, name string) (int64, 
 		return 0, false
 	}
 	return id, true
+}
+
+// pricesNonNegative 校验价格均非负（Money 为结构体，validator 的 gte=0 不适用）
+func pricesNonNegative(prices ...model.Money) bool {
+	for _, p := range prices {
+		if p.IsNegative() {
+			return false
+		}
+	}
+	return true
 }
 
 // bindAndValidate 参数校验辅助方法

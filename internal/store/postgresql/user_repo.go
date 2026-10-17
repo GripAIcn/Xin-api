@@ -27,7 +27,7 @@ type UserRepo interface {
 	// UpdateStatus 更新用户状态
 	UpdateStatus(ctx context.Context, id uint, status string) error
 	// RechargeBalance 原子累加用户余额（只增不减）
-	RechargeBalance(ctx context.Context, id uint, amount float64) error
+	RechargeBalance(ctx context.Context, id uint, amount model.Money) error
 }
 
 type userRepo struct {
@@ -111,6 +111,6 @@ func (r *userRepo) UpdateStatus(ctx context.Context, id uint, status string) err
 	return nil
 }
 
-func (r *userRepo) RechargeBalance(ctx context.Context, id uint, amount float64) error {
+func (r *userRepo) RechargeBalance(ctx context.Context, id uint, amount model.Money) error {
 	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).Update("balance", gorm.Expr("balance + ?", amount)).Error
 }

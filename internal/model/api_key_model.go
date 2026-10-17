@@ -24,12 +24,12 @@ const (
 // 说明：不存明文 Key，仅存 key_hash；明文仅在创建时返回一次。
 type ApiKey struct {
 	ID         int64          `gorm:"column:id;primaryKey;autoIncrement;comment:代理主键" json:"id"`
-	KeyHash    string         `gorm:"column:key_hash;type:varchar(255);not null;comment:Key 的哈希（不存明文）" json:"-"`
+	KeyHash    string         `gorm:"column:key_hash;type:varchar(255);not null;uniqueIndex:uq_api_keys_key_hash_active,where:deleted_at IS NULL;comment:Key 的哈希（不存明文）" json:"-"`
 	Name       string         `gorm:"column:name;type:varchar(100);comment:备注名" json:"name"`
-	UserID     int64          `gorm:"column:user_id;not null;comment:所属用户 users.id" json:"user_id"`
-	Status     string         `gorm:"column:status;type:varchar(32);not null;default:active;comment:状态 active-启用 disabled-禁用" json:"status"`
+	UserID     int64          `gorm:"column:user_id;not null;index:idx_api_keys_user_id;comment:所属用户 users.id" json:"user_id"`
+	Status     string         `gorm:"column:status;type:varchar(32);not null;default:active;check:chk_api_keys_status,status = 'active' OR status = 'disabled';comment:状态 active-启用 disabled-禁用" json:"status"`
 	ExpiresAt  *time.Time     `gorm:"column:expires_at;comment:过期时间，NULL=永不过期" json:"expires_at,omitempty"`
 	LastUsedAt *time.Time     `gorm:"column:last_used_at;comment:最近使用时间" json:"last_used_at,omitempty"`
 	CreatedAt  time.Time      `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;index" json:"-"`
+	DeletedAt  gorm.DeletedAt `gorm:"column:deleted_at;index:idx_api_keys_deleted_at" json:"-"`
 }

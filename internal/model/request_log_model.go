@@ -41,28 +41,28 @@ const (
 // 说明：total_tokens 为数据库生成列（只读）。
 type RequestLog struct {
 	ID                  int64      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	RequestID           string     `gorm:"column:request_id;type:varchar(64);not null;uniqueIndex:uq_request_logs_request,priority:1;comment:Xin API 侧请求 ID" json:"request_id"`
+	RequestID           string     `gorm:"column:request_id;type:varchar(64);not null;uniqueIndex:uq_request_logs_request;comment:Xin API 侧请求 ID" json:"request_id"`
 	UpstreamReqID       *string    `gorm:"column:upstream_req_id;type:varchar(128);comment:上游返回 ID" json:"upstream_req_id,omitempty"`
-	UserID              *int64     `gorm:"column:user_id;comment:所属用户（不建外键）" json:"user_id,omitempty"`
-	APIKeyID            *int64     `gorm:"column:api_key_id;comment:所属 Key（不建外键）" json:"api_key_id,omitempty"`
-	Model               string     `gorm:"column:model;type:varchar(128);not null;comment:对外（逻辑）模型名" json:"model"`
+	UserID              *int64     `gorm:"column:user_id;index:idx_request_logs_user_created,priority:1;comment:所属用户（不建外键）" json:"user_id,omitempty"`
+	APIKeyID            *int64     `gorm:"column:api_key_id;index:idx_request_logs_api_key_created,priority:1;comment:所属 Key（不建外键）" json:"api_key_id,omitempty"`
+	Model               string     `gorm:"column:model;type:varchar(128);not null;index:idx_request_logs_model_created,priority:1;comment:对外（逻辑）模型名" json:"model"`
 	UpstreamModel       *string    `gorm:"column:upstream_model;type:varchar(128);comment:实际上游模型名" json:"upstream_model,omitempty"`
-	ChannelID           *int64     `gorm:"column:channel_id;comment:命中渠道" json:"channel_id,omitempty"`
+	ChannelID           *int64     `gorm:"column:channel_id;index:idx_request_logs_channel_created,priority:1;comment:命中渠道" json:"channel_id,omitempty"`
 	Provider            *string    `gorm:"column:provider;type:varchar(64);comment:供应商" json:"provider,omitempty"`
 	Protocol            *string    `gorm:"column:protocol;type:varchar(64);comment:请求协议 chat/responses/gemini" json:"protocol,omitempty"`
-	LogType             string     `gorm:"column:log_type;type:varchar(32);not null;comment:日志类型" json:"log_type"`
-	Status              string     `gorm:"column:status;type:varchar(32);not null;comment:状态 success/error" json:"status"`
+	LogType             string     `gorm:"column:log_type;type:varchar(32);not null;check:chk_request_logs_log_type,log_type ~ '^(consumption|error|system|management|login|refund|recharge)$';index:idx_request_logs_log_type_created,priority:1;comment:日志类型" json:"log_type"`
+	Status              string     `gorm:"column:status;type:varchar(32);not null;check:chk_request_logs_status,status = 'success' OR status = 'error';comment:状态 success/error" json:"status"`
 	StatusCode          *int       `gorm:"column:status_code;comment:HTTP 状态码" json:"status_code,omitempty"`
 	FinishReason        *string    `gorm:"column:finish_reason;type:varchar(64);comment:上游结束原因" json:"finish_reason,omitempty"`
 	IsStream            bool       `gorm:"column:is_stream;default:false;comment:是否流式" json:"is_stream"`
 	IsCancelled         bool       `gorm:"column:is_cancelled;default:false;comment:是否被中断" json:"is_cancelled"`
-	CancelledBy         *string    `gorm:"column:cancelled_by;type:varchar(32);comment:中断方 client/upstream" json:"cancelled_by,omitempty"`
+	CancelledBy         *string    `gorm:"column:cancelled_by;type:varchar(32);check:chk_request_logs_cancelled_by,cancelled_by = 'client' OR cancelled_by = 'upstream';comment:中断方 client/upstream" json:"cancelled_by,omitempty"`
 	RetryCount          int        `gorm:"column:retry_count;not null;default:0;comment:实际重试次数" json:"retry_count"`
 	RetryChannels       Int64Array `gorm:"column:retry_channels;type:bigint[];default:'{}';comment:重试跨过的渠道 ID 序列" json:"retry_channels"`
-	UsageSource         string     `gorm:"column:usage_source;type:varchar(32);not null;default:upstream;comment:用量来源 upstream/estimated" json:"usage_source"`
+	UsageSource         string     `gorm:"column:usage_source;type:varchar(32);not null;default:upstream;check:chk_request_logs_usage_source,usage_source = 'upstream' OR usage_source = 'estimated';comment:用量来源 upstream/estimated" json:"usage_source"`
 	RouteStrategy       *string    `gorm:"column:route_strategy;type:varchar(32);comment:选路策略快照" json:"route_strategy,omitempty"`
 	RouteWeight         *int       `gorm:"column:route_weight;comment:命中渠道权重快照" json:"route_weight,omitempty"`
-	InputTokens         int64      `gorm:"column:input_tokens;default:0;comment:总输入 tokens" json:"input_tokens"`
+	InputTokens         int64      `gorm:"column:input_tokens;default:0;check:chk_request_logs_input_tokens,input_tokens >= cached_input_tokens + cache_creation_tokens;comment:总输入 tokens" json:"input_tokens"`
 	OutputTokens        int64      `gorm:"column:output_tokens;default:0;comment:输出 tokens" json:"output_tokens"`
 	TotalTokens         int64      `gorm:"column:total_tokens;type:bigint GENERATED ALWAYS AS (input_tokens + output_tokens) STORED;->;comment:总 tokens（生成列）" json:"total_tokens"`
 	CachedInputTokens   int64      `gorm:"column:cached_input_tokens;default:0;comment:缓存命中输入 tokens" json:"cached_input_tokens"`
@@ -71,9 +71,9 @@ type RequestLog struct {
 	TTFTMs              *int64     `gorm:"column:ttft_ms;comment:首 token 延迟（ms）" json:"ttft_ms,omitempty"`
 	LatencyMs           *int64     `gorm:"column:latency_ms;comment:总延迟（ms）" json:"latency_ms,omitempty"`
 	GenerationMs        *int64     `gorm:"column:generation_ms;comment:生成耗时（ms）" json:"generation_ms,omitempty"`
-	TotalCost           float64    `gorm:"column:total_cost;type:numeric(20,8);default:0;comment:本次请求计费金额" json:"total_cost"`
+	TotalCost           Money      `gorm:"column:total_cost;type:numeric(20,8);default:0;comment:本次请求计费金额" json:"total_cost"`
 	Currency            string     `gorm:"column:currency;type:varchar(16);not null;default:USD;comment:成本币种快照" json:"currency"`
-	ErrorStage          *string    `gorm:"column:error_stage;type:varchar(32);comment:错误归因阶段 upstream/local" json:"error_stage,omitempty"`
+	ErrorStage          *string    `gorm:"column:error_stage;type:varchar(32);check:chk_request_logs_error_stage,error_stage = 'upstream' OR error_stage = 'local';comment:错误归因阶段 upstream/local" json:"error_stage,omitempty"`
 	ErrorType           *string    `gorm:"column:error_type;type:varchar(64);comment:错误类型细分" json:"error_type,omitempty"`
 	ErrorCode           *string    `gorm:"column:error_code;type:varchar(64);comment:错误 code" json:"error_code,omitempty"`
 	ErrorMessage        *string    `gorm:"column:error_message;type:text;comment:错误信息" json:"error_message,omitempty"`
@@ -81,5 +81,5 @@ type RequestLog struct {
 	GatewayNode         *string    `gorm:"column:gateway_node;type:varchar(128);comment:网关实例标识" json:"gateway_node,omitempty"`
 	StartedAt           *time.Time `gorm:"column:started_at;comment:请求开始时间" json:"started_at,omitempty"`
 	CompletedAt         *time.Time `gorm:"column:completed_at;comment:请求完成时间" json:"completed_at,omitempty"`
-	CreatedAt           time.Time  `gorm:"column:created_at;autoCreateTime;uniqueIndex:uq_request_logs_request,priority:2" json:"created_at"`
+	CreatedAt           time.Time  `gorm:"column:created_at;autoCreateTime;index:idx_request_logs_created_at,sort:desc;index:idx_request_logs_user_created,priority:2,sort:desc;index:idx_request_logs_api_key_created,priority:2,sort:desc;index:idx_request_logs_model_created,priority:2,sort:desc;index:idx_request_logs_channel_created,priority:2,sort:desc;index:idx_request_logs_log_type_created,priority:2,sort:desc" json:"created_at"`
 }

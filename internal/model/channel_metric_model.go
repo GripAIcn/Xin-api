@@ -9,7 +9,7 @@ type ChannelMetric struct {
 	Model             string    `gorm:"column:model;type:varchar(128);primaryKey;comment:对外（逻辑）模型名" json:"model"`
 	WindowStart       time.Time `gorm:"column:window_start;primaryKey;comment:窗口起始时间" json:"window_start"`
 	WindowSize        int       `gorm:"column:window_size;type:integer;not null;comment:基窗口长度（秒），固定 60" json:"window_size"`
-	RequestCount      int64     `gorm:"column:request_count;default:0;comment:总请求数" json:"request_count"`
+	RequestCount      int64     `gorm:"column:request_count;default:0;check:chk_channel_metrics_counts,request_count = success_count + error_count + timeout_count;comment:总请求数" json:"request_count"`
 	SuccessCount      int64     `gorm:"column:success_count;default:0;comment:成功数" json:"success_count"`
 	ErrorCount        int64     `gorm:"column:error_count;default:0;comment:失败数" json:"error_count"`
 	TimeoutCount      int64     `gorm:"column:timeout_count;default:0;comment:超时数" json:"timeout_count"`
@@ -25,7 +25,7 @@ type ChannelMetric struct {
 	TPOT              float64   `gorm:"column:tpot;type:numeric(12,2) GENERATED ALWAYS AS (sum_generation_ms::numeric / NULLIF(total_output_tokens, 0)) STORED;->;comment:每输出 token 平均生成耗时（生成列）" json:"tpot"`
 	RPM               float64   `gorm:"column:rpm;type:numeric(12,2) GENERATED ALWAYS AS (request_count::numeric * 60 / NULLIF(window_size, 0)) STORED;->;comment:每分钟请求数（生成列）" json:"rpm"`
 	TPM               float64   `gorm:"column:tpm;type:numeric(12,2) GENERATED ALWAYS AS ((total_input_tokens + total_output_tokens)::numeric * 60 / NULLIF(window_size, 0)) STORED;->;comment:每分钟 token 数（生成列）" json:"tpm"`
-	TotalCost         float64   `gorm:"column:total_cost;type:numeric(20,8);default:0;comment:成本合计" json:"total_cost"`
+	TotalCost         Money     `gorm:"column:total_cost;type:numeric(20,8);default:0;comment:成本合计" json:"total_cost"`
 	Currency          string    `gorm:"column:currency;type:varchar(16);not null;default:USD;comment:币种" json:"currency"`
 	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime;comment:最近更新时间" json:"updated_at"`
 }

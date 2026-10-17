@@ -18,7 +18,7 @@ type LogListItem struct {
 	InputTokens   int64     `gorm:"column:input_tokens" json:"input_tokens"`
 	OutputTokens  int64     `gorm:"column:output_tokens" json:"output_tokens"`
 	TotalTokens   int64     `gorm:"column:total_tokens" json:"total_tokens"`
-	TotalCost     float64   `gorm:"column:total_cost" json:"total_cost"`
+	TotalCost     Money     `gorm:"column:total_cost" json:"total_cost"`
 	Currency      string    `gorm:"column:currency" json:"currency"`
 	LatencyMs     *int64    `gorm:"column:latency_ms" json:"latency_ms,omitempty"`
 	CreatedAt     time.Time `gorm:"column:created_at" json:"created_at"`
@@ -26,10 +26,10 @@ type LogListItem struct {
 
 // PriceSnapshot 计价单价快照（billing_records 单价 + ratio + 币种）
 type PriceSnapshot struct {
-	InputPrice         float64 `json:"input_price"`
-	OutputPrice        float64 `json:"output_price"`
-	CachedInputPrice   float64 `json:"cached_input_price"`
-	CacheCreationPrice float64 `json:"cache_creation_price"`
+	InputPrice         Money   `json:"input_price"`
+	OutputPrice        Money   `json:"output_price"`
+	CachedInputPrice   Money   `json:"cached_input_price"`
+	CacheCreationPrice Money   `json:"cache_creation_price"`
 	Ratio              float64 `json:"ratio"`
 	Currency           string  `json:"currency"`
 }
@@ -46,13 +46,13 @@ type BillingDetail struct {
 	CachedInputTokens   int64         `json:"cached_input_tokens"`
 	CacheCreationTokens int64         `json:"cache_creation_tokens"`
 	Price               PriceSnapshot `json:"price"`
-	InputCost           float64       `json:"input_cost"`
-	OutputCost          float64       `json:"output_cost"`
-	CachedInputCost     float64       `json:"cached_input_cost"`
-	CacheCreationCost   float64       `json:"cache_creation_cost"`
-	TotalCost           float64       `json:"total_cost"`
-	BalanceBefore       *float64      `json:"balance_before,omitempty"`
-	BalanceAfter        *float64      `json:"balance_after,omitempty"`
+	InputCost           Money         `json:"input_cost"`
+	OutputCost          Money         `json:"output_cost"`
+	CachedInputCost     Money         `json:"cached_input_cost"`
+	CacheCreationCost   Money         `json:"cache_creation_cost"`
+	TotalCost           Money         `json:"total_cost"`
+	BalanceBefore       *Money        `json:"balance_before,omitempty"`
+	BalanceAfter        *Money        `json:"balance_after,omitempty"`
 	Status              string        `json:"status"`
 	CreatedAt           time.Time     `json:"created_at"`
 }

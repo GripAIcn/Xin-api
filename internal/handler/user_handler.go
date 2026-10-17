@@ -9,13 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"Xin-api/config"
 	"Xin-api/internal/form"
 	"Xin-api/internal/middleware"
 	"Xin-api/internal/model"
+	"Xin-api/internal/requestctx"
 	"Xin-api/internal/store/postgresql"
 	"Xin-api/pkg/response"
 )
@@ -61,9 +61,10 @@ func (h *UserHandler) Login(c *gin.Context) {
 	var req form.UserLoginReq
 
 	// 入口即生成登录日志所需的请求 ID、开始时间与客户端 IP
-	requestID := uuid.NewString()
+	requestID := requestctx.Ensure(c).RequestID
 	startedAt := time.Now()
 	clientIP := c.ClientIP()
+	userAgent := c.Request.UserAgent()
 
 	// 1. 参数绑定与校验
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -89,6 +90,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		logger.Warn(c.Request.Context(), "user not found: %s", req.Username)
 		// 用户不存在：无法关联用户，记一条失败登录日志
 		h.writeLoginLog(c.Request.Context(), requestID, nil, clientIP, startedAt, false, "user not found")
+		h.writeLoginAudit(c.Request.Context(), nil, req.Username, clientIP, userAgent, "user not found", false)
 		response.AdminFail(c, response.Unauthorized) // 统一凭证错误响应
 		return
 	}
@@ -98,6 +100,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		logger.Warn(c.Request.Context(), "disabled user login attempt: %s (id=%d)", user.Username, user.ID)
 		uid := int64(user.ID)
 		h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, false, "user disabled")
+		h.writeLoginAudit(c.Request.Context(), &uid, user.Username, clientIP, userAgent, "user disabled", false)
 		response.AdminFail(c, response.Unauthorized)
 		return
 	}
@@ -107,6 +110,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		logger.Warn(c.Request.Context(), "password mismatch for user: %s", req.Username)
 		uid := int64(user.ID)
 		h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, false, "invalid password")
+		h.writeLoginAudit(c.Request.Context(), &uid, user.Username, clientIP, userAgent, "invalid password", false)
 		response.AdminFail(c, response.Unauthorized)
 		return
 	}
@@ -125,6 +129,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	// 登录成功日志（写库失败不阻断主流程）
 	uid := int64(user.ID)
 	h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, true, "")
+	h.writeLoginAudit(c.Request.Context(), &uid, user.Username, clientIP, userAgent, "", true)
 
 	response.AdminSuccess(c, form.UserLoginResponse{
 		Token:    token,
@@ -186,7 +191,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		Phone:    req.Phone,
 		Role:     model.UserRoleUser,     // 默认创建为普通用户
 		Status:   model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
-		Balance:  0,
+		Balance:  model.Money{},
 		Currency: "USD",
 		Quota:    nil,
 	}
@@ -305,7 +310,7 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 // RechargeBalance 管理员为用户充值（仅增加余额）
 func (h *UserHandler) RechargeBalance(c *gin.Context) {
 	// 入口即生成充值审计日志所需的请求 ID、开始时间与客户端 IP
-	requestID := uuid.NewString()
+	requestID := requestctx.Ensure(c).RequestID
 	startedAt := time.Now()
 	clientIP := c.ClientIP()
 
@@ -321,6 +326,11 @@ func (h *UserHandler) RechargeBalance(c *gin.Context) {
 		return
 	}
 	if err := h.validate.Struct(req); err != nil {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+	// Money 为结构体，validator 的 gt=0 不适用，改为 decimal 判定
+	if !req.Amount.IsPositive() {
 		response.AdminFail(c, response.InvalidParams)
 		return
 	}
@@ -354,7 +364,7 @@ func (h *UserHandler) RechargeBalance(c *gin.Context) {
 	// 充值成功日志：金额写入 total_cost 便于审计，币种取被充值用户币种
 	h.writeRechargeLog(c.Request.Context(), requestID, int64(id), req.Amount, updated.Currency, clientIP, startedAt)
 
-	logger.Info(c.Request.Context(), "recharge balance success: user=%d amount=%f", uint(id), req.Amount)
+	logger.Info(c.Request.Context(), "recharge balance success: user=%d amount=%s", uint(id), req.Amount.String())
 	response.AdminSuccess(c, toUserResponse(*updated))
 }
 
@@ -393,9 +403,48 @@ func (h *UserHandler) writeLoginLog(ctx context.Context, requestID string, userI
 	}
 }
 
+// writeLoginAudit 写入一条控制面审计日志（action=login）。
+// 登录接口位于公开路由，无法经过 AuditLog 中间件，因此在此显式落库；写库失败不阻断登录流程。
+func (h *UserHandler) writeLoginAudit(ctx context.Context, userID *int64, username, clientIP, userAgent, errMsg string, success bool) {
+	if h.logRepo == nil {
+		return
+	}
+
+	audit := &model.AuditLog{
+		Action: "login",
+		Result: model.AuditResultSuccess,
+	}
+	if !success {
+		audit.Result = model.AuditResultFailure
+	}
+	if userID != nil {
+		targetType := "user"
+		targetID := strconv.FormatInt(*userID, 10)
+		audit.UserID = userID
+		audit.TargetType = &targetType
+		audit.TargetID = &targetID
+	}
+	if username != "" {
+		audit.UserName = &username
+	}
+	if errMsg != "" {
+		audit.ErrorMessage = &errMsg
+	}
+	if clientIP != "" {
+		audit.ClientIP = &clientIP
+	}
+	if userAgent != "" {
+		audit.UserAgent = &userAgent
+	}
+
+	if err := h.logRepo.CreateAudit(ctx, audit); err != nil {
+		logger.Error(ctx, "write login audit failed: %v", err)
+	}
+}
+
 // writeRechargeLog 写入一条充值审计日志（log_type=recharge）。
 // 约定：本次充值金额写入 total_cost，便于日志列表「费用」列展示；日志写库失败不阻断主流程。
-func (h *UserHandler) writeRechargeLog(ctx context.Context, requestID string, userID int64, amount float64, currency string, clientIP string, startedAt time.Time) {
+func (h *UserHandler) writeRechargeLog(ctx context.Context, requestID string, userID int64, amount model.Money, currency string, clientIP string, startedAt time.Time) {
 	// 防御：未注入日志仓储时跳过
 	if h.logRepo == nil {
 		return

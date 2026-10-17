@@ -24,6 +24,12 @@ type ProxyConfig struct {
 	MaxBodyMB      int           // 最大请求体 MB
 }
 
+// LogConfig 日志落库开关（请求/响应原文默认关闭，避免历史数据膨胀）
+type LogConfig struct {
+	RequestBody  bool // 是否落库 request_payloads.request_body
+	ResponseBody bool // 是否落库 request_payloads.response_body
+}
+
 // Config 全局配置大包装结构体（便于未来横向扩展）
 type Config struct {
 	JWT            JWTConfig
@@ -32,6 +38,7 @@ type Config struct {
 	Cache          CacheConfig
 	CircuitBreaker CircuitBreakerConfig
 	Proxy          ProxyConfig
+	Log            LogConfig
 }
 
 // CacheConfig 缓存配置
@@ -99,6 +106,10 @@ func Load() *Config {
 			RequestTimeout: getEnvToTimeDuration("PROXY_REQUEST_TIMEOUT", 120*time.Second),
 			MaxBodyMB:      getEnvToInt("PROXY_MAX_BODY_MB", 10),
 		},
+		Log: LogConfig{
+			RequestBody:  getEnvToBool("LOG_REQUEST_BODY", false),
+			ResponseBody: getEnvToBool("LOG_RESPONSE_BODY", false),
+		},
 	}
 }
 
@@ -138,6 +149,21 @@ func getEnvToInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return n
+}
+
+// getEnvToBool 读取布尔型环境变量
+func getEnvToBool(key string, defaultValue bool) bool {
+	val := os.Getenv(key)
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return defaultValue
+	}
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		log.Printf("[CONFIG] [WARN] parse env %s value '%s' to bool failed: %v, using default: %t", key, val, err, defaultValue)
+		return defaultValue
+	}
+	return b
 }
 
 // getEnv 辅助工具：读取字符串环境变量，若为空则返回默认值

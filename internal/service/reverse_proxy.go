@@ -29,14 +29,18 @@ type ForwardResult struct {
 	CachedInputTokens   int64
 	CacheCreationTokens int64
 	ReasoningTokens     int64
-	HasUsage            bool   // 是否成功解析到上游 usage
-	TTFTMs              int64  // 首 token 延迟（毫秒）
-	LatencyMs           int64  // 总耗时（毫秒）
+	HasUsage            bool  // 是否成功解析到上游 usage
+	TTFTMs              int64 // 首 token 延迟（毫秒）
+	LatencyMs           int64 // 总耗时（毫秒）
 	FinishReason        string
 	IsStream            bool
 	IsCancelled         bool
 	CancelledBy         string // "client" 或 "upstream"
+	ResponseBody        []byte // 转换后写回客户端的响应原文（仅在开启采集时填充）
 }
+
+// maxCapturedResponseBytes 单次请求最多保留的响应原文字节数，避免流式响应无限膨胀
+const maxCapturedResponseBytes = 1 << 20
 
 // NewStreamProxy 创建代理
 func NewStreamProxy(timeout time.Duration) *StreamProxy {
@@ -54,6 +58,7 @@ func (p *StreamProxy) Forward(
 	upReq *adapter.UpstreamRequest,
 	adpt adapter.ProviderAdapter,
 	externalModel string,
+	captureResponseBody bool,
 ) (*ForwardResult, error) {
 	start := time.Now()
 	upstreamURL := strings.TrimRight(channel.BaseURL, "/") + upReq.Endpoint
@@ -73,20 +78,23 @@ func (p *StreamProxy) Forward(
 	}
 	defer resp.Body.Close()
 
-	// 非 200 状态码视为上游错误，透传响应体
+	// 非 200 状态码视为上游错误；不在此处写出响应，交由调用方决定是否重试/透传
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		c.Data(resp.StatusCode, "application/json", respBody)
-		return &ForwardResult{
+		result := &ForwardResult{
 			StatusCode:    resp.StatusCode,
 			UpstreamReqID: extractUpstreamReqID(resp),
 			LatencyMs:     time.Since(start).Milliseconds(),
-		}, &UpstreamError{StatusCode: resp.StatusCode, Body: respBody}
+		}
+		if captureResponseBody {
+			result.ResponseBody = respBody
+		}
+		return result, &UpstreamError{StatusCode: resp.StatusCode, Body: respBody}
 	}
 
 	// 流式：上游返回 SSE 时逐事件转换下发
 	if strings.Contains(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return p.forwardStream(c, resp, adpt, externalModel)
+		return p.forwardStream(c, resp, adpt, externalModel, captureResponseBody)
 	}
 
 	// 非流式：读取完整响应并转换
@@ -113,13 +121,16 @@ func (p *StreamProxy) Forward(
 		UpstreamReqID: extractUpstreamReqID(resp),
 		LatencyMs:     time.Since(start).Milliseconds(),
 	}
+	if captureResponseBody {
+		result.ResponseBody = converted
+	}
 	// 解析转换后的 OpenAI 格式 body（字段缺失不影响结果，仅作为兜底/计费信息）
 	result.mergeMeta(parseOpenAIMeta(converted), false)
 	return result, nil
 }
 
 // forwardStream 逐 SSE 事件读取上游流，经适配器转换后写回客户端，并采集转发信息
-func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt adapter.ProviderAdapter, externalModel string) (*ForwardResult, error) {
+func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt adapter.ProviderAdapter, externalModel string, captureResponseBody bool) (*ForwardResult, error) {
 	start := time.Now()
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/event-stream")
@@ -136,6 +147,7 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 	var firstChunkWritten bool
 	var writeAborted bool
 	var readFailed bool
+	var captured bytes.Buffer
 
 	c.Stream(func(w io.Writer) bool {
 		event, readErr := readSSEEvent(reader)
@@ -151,6 +163,15 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 				}
 				// 解析转换后的 chunk 元信息（最后一次非空值生效）
 				result.mergeMeta(parseOpenAIMeta(sseDataPayload(converted)), true)
+				// 按上限累积转换后的响应原文（用于 request_payloads）
+				if captureResponseBody && captured.Len() < maxCapturedResponseBytes {
+					remaining := maxCapturedResponseBytes - captured.Len()
+					if len(converted) <= remaining {
+						captured.Write(converted)
+					} else {
+						captured.Write(converted[:remaining])
+					}
+				}
 				if _, writeErr := w.Write(converted); writeErr != nil {
 					writeAborted = true
 					return false
@@ -164,6 +185,9 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 	})
 
 	result.LatencyMs = time.Since(start).Milliseconds()
+	if captureResponseBody && captured.Len() > 0 {
+		result.ResponseBody = captured.Bytes()
+	}
 
 	switch {
 	case c.Request.Context().Err() != nil, writeAborted:
@@ -221,8 +245,8 @@ func sseDataPayload(chunk []byte) []byte {
 
 // openaiUsage 转换后（OpenAI 格式）响应中的 usage 字段
 type openaiUsage struct {
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
+	PromptTokens        int64 `json:"prompt_tokens"`
+	CompletionTokens    int64 `json:"completion_tokens"`
 	PromptTokensDetails *struct {
 		CachedTokens int64 `json:"cached_tokens"`
 	} `json:"prompt_tokens_details"`

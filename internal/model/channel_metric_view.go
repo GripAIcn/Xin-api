@@ -22,11 +22,11 @@ type ChannelMetricSummary struct {
 	RPM          float64 `gorm:"column:rpm" json:"rpm"`
 	TPM          float64 `gorm:"column:tpm" json:"tpm"`
 
-	TotalInputTokens  int64   `gorm:"column:total_input_tokens" json:"total_input_tokens"`
-	TotalOutputTokens int64   `gorm:"column:total_output_tokens" json:"total_output_tokens"`
-	TotalTokens       int64   `gorm:"column:total_tokens" json:"total_tokens"`
-	TotalCost         float64 `gorm:"column:total_cost" json:"total_cost"`
-	Currency          string  `gorm:"column:currency" json:"currency"`
+	TotalInputTokens  int64  `gorm:"column:total_input_tokens" json:"total_input_tokens"`
+	TotalOutputTokens int64  `gorm:"column:total_output_tokens" json:"total_output_tokens"`
+	TotalTokens       int64  `gorm:"column:total_tokens" json:"total_tokens"`
+	TotalCost         Money  `gorm:"column:total_cost" json:"total_cost"`
+	Currency          string `gorm:"column:currency" json:"currency"`
 
 	LastWindowStart *time.Time `gorm:"column:last_window_start" json:"last_window_start"`
 }

@@ -64,7 +64,7 @@ func quoteArrayElem(s string) string {
 		var b strings.Builder
 		b.WriteByte('"')
 		for _, r := range s {
-		if r == '"' || r == '\\' {
+			if r == '"' || r == '\\' {
 				b.WriteByte('\\')
 			}
 			b.WriteRune(r)

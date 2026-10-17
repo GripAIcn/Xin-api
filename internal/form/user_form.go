@@ -1,6 +1,10 @@
 package form
 
-import "time"
+import (
+	"time"
+
+	"Xin-api/internal/model"
+)
 
 // UserLoginReq 登录请求结构
 type UserLoginReq struct {
@@ -47,23 +51,24 @@ type AdminResetPasswordReq struct {
 }
 
 // RechargeBalanceReq 管理员为用户充值请求（仅增加余额）
+// 金额使用 decimal 解析，具体 >0 校验在 handler 中完成。
 type RechargeBalanceReq struct {
-	Amount float64 `json:"amount" validate:"required,gt=0"`
+	Amount model.Money `json:"amount" validate:"required"`
 }
 
 // UserResponse 用户安全字段（不含密码）
 type UserResponse struct {
-	ID          uint       `json:"id"`
-	Username    string     `json:"username"`
-	Email       *string    `json:"email,omitempty"`
-	Phone       *string    `json:"phone,omitempty"`
-	Role        string     `json:"role"`
-	Status      string     `json:"status"`
-	Balance     float64    `json:"balance"`
-	Currency    string     `json:"currency"`
-	Quota       *float64   `json:"quota,omitempty"`
-	UsedQuota   float64    `json:"used_quota"`
-	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          uint         `json:"id"`
+	Username    string       `json:"username"`
+	Email       *string      `json:"email,omitempty"`
+	Phone       *string      `json:"phone,omitempty"`
+	Role        string       `json:"role"`
+	Status      string       `json:"status"`
+	Balance     model.Money  `json:"balance"`
+	Currency    string       `json:"currency"`
+	Quota       *model.Money `json:"quota,omitempty"`
+	UsedQuota   model.Money  `json:"used_quota"`
+	LastLoginAt *time.Time   `json:"last_login_at,omitempty"`
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
 }

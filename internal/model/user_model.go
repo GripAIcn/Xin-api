@@ -21,11 +21,11 @@ type User struct {
 	Password    string     `gorm:"column:password;type:varchar(255);not null;comment:bcrypt 单向加密加盐密文" json:"-"`
 	Email       *string    `gorm:"column:email;type:varchar(255);unique;comment:邮箱（唯一，可空）" json:"email,omitempty"`
 	Phone       *string    `gorm:"column:phone;type:varchar(32);comment:手机号" json:"phone,omitempty"`
-	Role        string     `gorm:"column:role;type:varchar(32);not null;default:admin;comment:角色 admin-管理员 user-普通用户" json:"role"`
-	Status      string     `gorm:"column:status;type:varchar(32);not null;default:active;comment:状态 active-启用 disabled-禁用" json:"status"`
-	Balance     float64    `gorm:"column:balance;type:numeric(20,8);not null;default:0;comment:余额" json:"balance"`
-	Quota       *float64   `gorm:"column:quota;type:numeric(20,8);comment:总额度上限，NULL=不限额" json:"quota,omitempty"`
-	UsedQuota   float64    `gorm:"column:used_quota;type:numeric(20,8);not null;default:0;comment:累计已用额度" json:"used_quota"`
+	Role        string     `gorm:"column:role;type:varchar(32);not null;default:admin;check:chk_users_role,role = 'admin' OR role = 'user';comment:角色 admin-管理员 user-普通用户" json:"role"`
+	Status      string     `gorm:"column:status;type:varchar(32);not null;default:active;check:chk_users_status,status = 'active' OR status = 'disabled';comment:状态 active-启用 disabled-禁用" json:"status"`
+	Balance     Money      `gorm:"column:balance;type:numeric(20,8);not null;default:0;comment:余额" json:"balance"`
+	Quota       *Money     `gorm:"column:quota;type:numeric(20,8);comment:总额度上限，NULL=不限额" json:"quota,omitempty"`
+	UsedQuota   Money      `gorm:"column:used_quota;type:numeric(20,8);not null;default:0;comment:累计已用额度" json:"used_quota"`
 	Currency    string     `gorm:"column:currency;type:varchar(16);not null;default:USD;comment:余额币种" json:"currency"`
 	RPMLimit    *int       `gorm:"column:rpm_limit;comment:账户级每分钟请求数上限，NULL=不限" json:"rpm_limit,omitempty"`
 	TPMLimit    *int       `gorm:"column:tpm_limit;comment:账户级每分钟 tokens 上限，NULL=不限" json:"tpm_limit,omitempty"`

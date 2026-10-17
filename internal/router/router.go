@@ -9,6 +9,7 @@ import (
 	"Xin-api/internal/adapter"
 	"Xin-api/internal/handler"
 	"Xin-api/internal/middleware"
+	"Xin-api/internal/routing"
 	"Xin-api/internal/service"
 	"Xin-api/internal/store/postgresql"
 )
@@ -29,7 +30,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	channelHandler := handler.NewChannelHandler(channelRepo, modelPriceRepo, rdb)
 	modelPriceHandler := handler.NewModelPriceHandler(modelPriceRepo)
 	channelMetricHandler := handler.NewChannelMetricHandler(postgresql.NewChannelMetricRepo(db), metricAggregator)
-	balancer := service.NewWeightedRRBalancer()
+	channelRouter := routing.NewWeightedRouter(service.NewWeightedRRBalancer(), breaker)
 	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout)
 
 	// 2. 创建 v1 版本的统一根路由组
@@ -47,7 +48,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		// 权限受控路由组 (Protected Group)：必须通过 JWT 拦截器
 		// ==========================================
 		protectedUser := v1.Group("/users")
-		protectedUser.Use(middleware.JWTAuth(cfg.JWT.Secret)) // ⚡️ 注入你刚才写的鉴权中间件
+		protectedUser.Use(middleware.JWTAuth(cfg.JWT.Secret), middleware.AuditLog(logRepo)) // ⚡️ 注入鉴权 + 控制面审计中间件
 		{
 			// —— 自助接口（所有登录用户）——
 			protectedUser.GET("/profile", userHandler.GetProfile)      // 获取当前登录用户资料（亦用于前端 token 校验）
@@ -66,7 +67,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		}
 
 		protected := v1.Group("")
-		protected.Use(middleware.JWTAuth(cfg.JWT.Secret))
+		protected.Use(middleware.JWTAuth(cfg.JWT.Secret), middleware.AuditLog(logRepo))
 		{
 			// 请求日志查询：所有登录用户可访问，仓储层按当前用户隔离，管理员可查全部
 			protected.GET("/logs", logHandler.List)                 // 日志列表（分页 + 多维过滤）
@@ -130,11 +131,13 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			channelRepo,
 			rdb,
 			cfg.Cache.ChannelExpireTime,
-			balancer, breaker, streamProxy,
+			channelRouter, breaker, streamProxy,
 			adapterGroup,
 			logRepo,
 			userRepo,
 			cfg.Server.GatewayNode,
+			cfg.Log.RequestBody,
+			cfg.Log.ResponseBody,
 		)
 		dataPlane := v1.Group("")
 		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))

@@ -5,16 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/shopspring/decimal"
 
 	"Xin-api/internal/adapter"
 	"Xin-api/internal/middleware"
 	"Xin-api/internal/model"
 	"Xin-api/internal/requestctx"
+	"Xin-api/internal/routing"
 	"Xin-api/internal/service"
 	"Xin-api/internal/store/postgresql"
 	"Xin-api/pkg/response"
@@ -25,13 +28,16 @@ type ChatHandler struct {
 	channelRepo  postgresql.ChannelRepo
 	redis        *redis.Client
 	cacheExpire  time.Duration
-	balancer     service.ChannelBalancer
+	router       routing.Router
 	breaker      service.ChannelBreaker
 	proxy        *service.StreamProxy
 	adapterGroup *adapter.Registry
 	logRepo      postgresql.LogRepo  // 请求日志 / 计费落库
 	userRepo     postgresql.UserRepo // 读取用户余额
 	gatewayNode  string              // 网关实例标识（落库 gateway_node）
+
+	logRequestBody  bool // 是否落库请求原文
+	logResponseBody bool // 是否落库响应原文
 }
 
 // NewChatHandler 创建聊天补全处理器
@@ -39,25 +45,28 @@ func NewChatHandler(
 	channelRepo postgresql.ChannelRepo,
 	rdb *redis.Client,
 	cacheExpire time.Duration,
-	balancer service.ChannelBalancer,
+	router routing.Router,
 	breaker service.ChannelBreaker,
 	streamProxy *service.StreamProxy,
 	adapterGroup *adapter.Registry,
 	logRepo postgresql.LogRepo,
 	userRepo postgresql.UserRepo,
 	gatewayNode string,
+	logRequestBody, logResponseBody bool,
 ) *ChatHandler {
 	return &ChatHandler{
-		channelRepo:  channelRepo,
-		redis:        rdb,
-		cacheExpire:  cacheExpire,
-		balancer:     balancer,
-		breaker:      breaker,
-		proxy:        streamProxy,
-		adapterGroup: adapterGroup,
-		logRepo:      logRepo,
-		userRepo:     userRepo,
-		gatewayNode:  gatewayNode,
+		channelRepo:     channelRepo,
+		redis:           rdb,
+		cacheExpire:     cacheExpire,
+		router:          router,
+		breaker:         breaker,
+		proxy:           streamProxy,
+		adapterGroup:    adapterGroup,
+		logRepo:         logRepo,
+		userRepo:        userRepo,
+		gatewayNode:     gatewayNode,
+		logRequestBody:  logRequestBody,
+		logResponseBody: logResponseBody,
 	}
 }
 
@@ -67,8 +76,34 @@ func strPtr(s string) *string { return &s }
 func i64Ptr(v int64) *int64   { return &v }
 func i32Ptr(v int) *int       { return &v }
 
-// 当前选路策略快照（WeightedRRBalancer）
-const routeStrategyWeighted = "weighted"
+// routeStrategy 返回选路策略快照，route 为空时回退为加权轮询
+func routeStrategy(route *routing.RouteResult) string {
+	if route == nil || route.Strategy == "" {
+		return routing.StrategyWeighted
+	}
+	return route.Strategy
+}
+
+// routeWeight 返回命中渠道权重快照
+func routeWeight(route *routing.RouteResult) int {
+	if route == nil {
+		return 0
+	}
+	return route.Weight
+}
+
+// shouldRetry 判断一次转发失败是否值得跨渠道重试
+// 4xx（除 429）通常是请求本身问题，换渠道也无意义；网络/5xx 可重试
+func shouldRetry(res *service.ForwardResult, err error) bool {
+	if err == nil {
+		return false
+	}
+	var ue *service.UpstreamError
+	if errors.As(err, &ue) {
+		return ue.StatusCode == http.StatusTooManyRequests || ue.StatusCode >= 500
+	}
+	return true
+}
 
 // gatewayNodePtr 网关实例标识；未配置时返回 nil，避免写入空串
 func (h *ChatHandler) gatewayNodePtr() *string {
@@ -113,13 +148,40 @@ func upstreamErrorCode(body []byte, statusCode int) string {
 	return fmt.Sprintf("upstream:http_%d", statusCode)
 }
 
-// saveLog 持久化一条请求日志；写库失败仅记录日志，不阻断主流程
-func (h *ChatHandler) saveLog(ctx context.Context, log *model.RequestLog) {
+// saveLog 持久化一条请求日志，并按开关写入请求/响应原文；写库失败仅记录日志，不阻断主流程
+func (h *ChatHandler) saveLog(ctx context.Context, log *model.RequestLog, requestBody, responseBody []byte) {
 	if h.logRepo == nil {
 		return
 	}
 	if err := h.logRepo.Create(ctx, log); err != nil {
 		logger.Error(ctx, "write request log failed: %v", err)
+		return
+	}
+	h.savePayload(ctx, log, requestBody, responseBody)
+}
+
+// savePayload 按开关写入 request_payloads；created_at 与父行 request_logs 保持一致
+func (h *ChatHandler) savePayload(ctx context.Context, log *model.RequestLog, requestBody, responseBody []byte) {
+	if h.logRepo == nil || (!h.logRequestBody && !h.logResponseBody) {
+		return
+	}
+	payload := &model.RequestPayload{
+		RequestID: log.RequestID,
+		CreatedAt: log.CreatedAt,
+	}
+	if h.logRequestBody && len(requestBody) > 0 {
+		body := string(requestBody)
+		payload.RequestBody = &body
+	}
+	if h.logResponseBody && len(responseBody) > 0 {
+		body := string(responseBody)
+		payload.ResponseBody = &body
+	}
+	if payload.RequestBody == nil && payload.ResponseBody == nil {
+		return
+	}
+	if err := h.logRepo.CreatePayload(ctx, payload); err != nil {
+		logger.Error(ctx, "write request payload failed: %v", err)
 	}
 }
 
@@ -135,6 +197,7 @@ func (h *ChatHandler) writeErrorLog(
 	statusCode *int,
 	channelID *int64,
 	provider *string,
+	requestBody []byte,
 ) {
 	now := time.Now()
 	// 本地错误未显式传状态码时，按错误类型补齐，便于日志与响应对账
@@ -166,7 +229,7 @@ func (h *ChatHandler) writeErrorLog(
 	if clientIP != "" {
 		log.ClientIP = &clientIP
 	}
-	h.saveLog(ctx, log)
+	h.saveLog(ctx, log, requestBody, nil)
 }
 
 // getChannelsWithCache 优先从缓存获取渠道，未命中则查数据库
@@ -240,7 +303,7 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 	body, err := c.GetRawData()
 	if err != nil {
 		h.writeErrorLog(ctx, requestID, "", userID, apiKeyID, clientIP, false, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "invalid_request", "read request body failed", nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "invalid_request", "read request body failed", nil, nil, nil, nil)
 		response.DataPlaneError(c, response.InvalidParams)
 		return
 	}
@@ -257,14 +320,14 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 	inbound, err := h.adapterGroup.GetAdapter("openai")
 	if err != nil {
 		h.writeErrorLog(ctx, requestID, "", userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "no_adapter", err.Error(), nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "no_adapter", err.Error(), nil, nil, nil, body)
 		response.DataPlaneError(c, response.ServiceUnavailable)
 		return
 	}
 	modelName, err := inbound.ExtractModel(body)
 	if err != nil {
 		h.writeErrorLog(ctx, requestID, "", userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "invalid_request", err.Error(), nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "invalid_request", err.Error(), nil, nil, nil, body)
 		response.DataPlaneError(c, response.InvalidParams)
 		return
 	}
@@ -274,19 +337,19 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 	user, err := h.userRepo.GetByID(ctx, uint(userID))
 	if err != nil {
 		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "internal_error", err.Error(), nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "internal_error", err.Error(), nil, nil, nil, body)
 		response.DataPlaneError(c, response.InternalError)
 		return
 	}
 	if user == nil {
 		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "internal_error", "user not found", nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "internal_error", "user not found", nil, nil, nil, body)
 		response.DataPlaneError(c, response.Unauthorized)
 		return
 	}
-	if user.Balance <= 0 {
+	if !user.Balance.IsPositive() {
 		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "insufficient_balance", "insufficient balance", nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "insufficient_balance", "insufficient balance", nil, nil, nil, body)
 		response.DataPlaneError(c, response.Forbidden)
 		return
 	}
@@ -296,94 +359,133 @@ func (h *ChatHandler) HandleDataPlane(c *gin.Context) {
 	if err != nil {
 		logger.Error(ctx, "list channels failed: %v", err)
 		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "no_channel", err.Error(), nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "no_channel", err.Error(), nil, nil, nil, body)
 		response.DataPlaneError(c, response.InternalError)
 		return
 	}
 	if len(channels) == 0 {
 		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "no_channel", "no active channel for model", nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "no_channel", "no active channel for model", nil, nil, nil, body)
 		response.DataPlaneError(c, response.ServiceUnavailable)
 		return
 	}
 
-	// 4. 负载均衡 + 熔断检查
-	balancerKey := modelName
-	var selected *model.Channel
-	for attempts := 0; attempts < len(channels); attempts++ {
-		candidate := h.balancer.Select(balancerKey, channels)
-		if candidate == nil {
+	// 4. 选路（priority 优先，同级加权轮询）+ 跨渠道重试
+	excluded := make([]int64, 0, 2)
+	retryChannels := make([]int64, 0, 2)
+	var (
+		route         *routing.RouteResult
+		selected      *model.Channel
+		adpt          adapter.ProviderAdapter
+		upstreamModel string
+		upReq         *adapter.UpstreamRequest
+		res           *service.ForwardResult
+		proxyErr      error
+		maxAttempts   int
+	)
+
+	for attempt := 1; ; attempt++ {
+		route, err = h.router.Route(ctx, routing.RouteRequest{
+			Model:             modelName,
+			Protocol:          "chat",
+			Channels:          channels,
+			ExcludeChannelIDs: excluded,
+		})
+		if err != nil {
+			proxyErr = err
 			break
 		}
-		healthy, _ := h.breaker.IsHealthy(ctx, candidate.ID)
-		if healthy {
-			selected = candidate
-			break
-		}
-		for i, ch := range channels {
-			if ch.ID == candidate.ID {
-				channels = append(channels[:i], channels[i+1:]...)
-				break
+		selected = route.Channel
+
+		// 重试预算取自首个命中渠道的 max_retries（含首次请求）
+		if maxAttempts == 0 {
+			maxAttempts = selected.MaxRetries + 1
+			if maxAttempts < 1 {
+				maxAttempts = 1
 			}
 		}
+
+		// 5. 按渠道 provider 选择出站适配器
+		adpt, err = h.adapterGroup.GetAdapter(selected.Provider)
+		if err != nil {
+			logger.Error(ctx, "no adapter for provider %s: %v", selected.Provider, err)
+			h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
+				model.LogTypeError, model.ErrorStageLocal, "no_adapter", err.Error(), nil, i64Ptr(selected.ID), strPtr(selected.Provider), body)
+			response.DataPlaneError(c, response.ServiceUnavailable)
+			return
+		}
+
+		// 6. 解析上游模型映射（命中则改写为上游名，未命中透传对外名）
+		upstreamModel = h.getUpstreamModelWithCache(ctx, selected.ID, modelName)
+
+		// 7. 由适配器构造上游请求（含协议转换与鉴权头）
+		upReq, err = adpt.BuildUpstreamRequest(body, upstreamModel, selected.APIKey)
+		if err != nil {
+			logger.Error(ctx, "build upstream request failed: %v", err)
+			h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
+				model.LogTypeError, model.ErrorStageLocal, "invalid_request", err.Error(), nil, i64Ptr(selected.ID), strPtr(selected.Provider), body)
+			response.DataPlaneError(c, response.InvalidParams)
+			return
+		}
+
+		// 8. 转发并按需把响应转换回 OpenAI 格式（model 回写为对外名）
+		logger.Info(ctx, "routing to channel %s (id=%d) via %s adapter",
+			selected.Name, selected.ID, adpt.Name())
+		res, proxyErr = h.proxy.Forward(c, selected, upReq, adpt, modelName, h.logResponseBody)
+		h.breaker.Record(ctx, selected.ID, proxyErr)
+
+		if proxyErr == nil {
+			break
+		}
+
+		// 流式响应已开始输出或客户端已中断，无法换渠道重试
+		if (res != nil && (res.IsStream || res.IsCancelled)) || c.Writer.Written() {
+			break
+		}
+		if !shouldRetry(res, proxyErr) || attempt >= maxAttempts {
+			break
+		}
+
+		// 记录失败渠道并排除后重新选路
+		retryChannels = append(retryChannels, selected.ID)
+		excluded = append(excluded, selected.ID)
 	}
+
+	// 9. 选路失败（无可用渠道）：可能发生在首次或重试时全部渠道被排除
 	if selected == nil {
 		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "no_channel", "no healthy channel available", nil, nil, nil)
+			model.LogTypeError, model.ErrorStageLocal, "no_channel", proxyErr.Error(), nil, nil, nil, body)
 		response.DataPlaneError(c, response.ServiceUnavailable)
 		return
 	}
 	rc.ChannelID = selected.ID
 	rc.Provider = selected.Provider
 
-	// 5. 按渠道 provider 选择出站适配器
-	adpt, err := h.adapterGroup.GetAdapter(selected.Provider)
-	if err != nil {
-		logger.Error(ctx, "no adapter for provider %s: %v", selected.Provider, err)
-		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "no_adapter", err.Error(), nil, i64Ptr(selected.ID), strPtr(selected.Provider))
-		response.DataPlaneError(c, response.ServiceUnavailable)
-		return
-	}
-
-	// 6. 解析上游模型映射（命中则改写为上游名，未命中透传对外名）
-	upstreamModel := h.getUpstreamModelWithCache(ctx, selected.ID, modelName)
-
-	// 7. 由适配器构造上游请求（含协议转换与鉴权头）
-	upReq, err := adpt.BuildUpstreamRequest(body, upstreamModel, selected.APIKey)
-	if err != nil {
-		logger.Error(ctx, "build upstream request failed: %v", err)
-		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "invalid_request", err.Error(), nil, i64Ptr(selected.ID), strPtr(selected.Provider))
-		response.DataPlaneError(c, response.InvalidParams)
-		return
-	}
-
-	// 8. 转发并按需把响应转换回 OpenAI 格式（model 回写为对外名）
-	logger.Info(ctx, "routing to channel %s (id=%d) via %s adapter",
-		selected.Name, selected.ID, adpt.Name())
-	res, proxyErr := h.proxy.Forward(c, selected, upReq, adpt, modelName)
-
-	// 9. 记录熔断结果
-	h.breaker.Record(ctx, selected.ID, proxyErr)
-
 	if proxyErr != nil {
 		logger.Error(ctx, "service to channel %s failed: %v", selected.Name, proxyErr)
 		h.writeForwardErrorLog(ctx, requestID, modelName, upstreamModel, userID, apiKeyID, clientIP, isStream,
-			startedAt, selected, res, proxyErr)
-		// Forward 失败时通常已把响应写给了客户端，切勿再调用 DataPlaneError
+			startedAt, selected, route, retryChannels, res, proxyErr, body)
+		// Forward 不再向客户端写出错误响应；此处统一回写（已写出则跳过）
+		if !c.Writer.Written() {
+			var ue *service.UpstreamError
+			if errors.As(proxyErr, &ue) {
+				c.Data(ue.StatusCode, "application/json", ue.Body)
+			} else {
+				response.DataPlaneError(c, response.ServiceUnavailable)
+			}
+		}
 		return
 	}
 
 	// 理论成功时不应出现 res == nil，按本地错误兜底，避免 panic
 	if res == nil {
 		h.writeErrorLog(ctx, requestID, modelName, userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "forward_failed", "nil forward result", nil, i64Ptr(selected.ID), strPtr(selected.Provider))
+			model.LogTypeError, model.ErrorStageLocal, "forward_failed", "nil forward result", nil, i64Ptr(selected.ID), strPtr(selected.Provider), body)
 		return
 	}
 
 	// 10. 成功：组装请求日志与计费流水并落库
-	h.settleSuccess(ctx, requestID, modelName, upstreamModel, userID, apiKeyID, clientIP, startedAt, body, selected, user, res)
+	h.settleSuccess(ctx, requestID, modelName, upstreamModel, userID, apiKeyID, clientIP, startedAt, body, selected, route, retryChannels, user, res)
 }
 
 // writeForwardErrorLog 转发失败后落一条错误日志（区分上游错误 / 本地失败）
@@ -395,8 +497,11 @@ func (h *ChatHandler) writeForwardErrorLog(
 	isStream bool,
 	startedAt time.Time,
 	selected *model.Channel,
+	route *routing.RouteResult,
+	retryChannels []int64,
 	res *service.ForwardResult,
 	proxyErr error,
+	requestBody []byte,
 ) {
 	now := time.Now()
 	log := &model.RequestLog{
@@ -415,8 +520,10 @@ func (h *ChatHandler) writeForwardErrorLog(
 		ErrorType:     strPtr("forward_failed"),
 		ErrorCode:     strPtr("forward_failed"),
 		ErrorMessage:  strPtr(proxyErr.Error()),
-		RouteStrategy: strPtr(routeStrategyWeighted),
-		RouteWeight:   i32Ptr(selected.Weight),
+		RetryCount:    len(retryChannels),
+		RetryChannels: model.Int64Array(retryChannels),
+		RouteStrategy: strPtr(routeStrategy(route)),
+		RouteWeight:   i32Ptr(routeWeight(route)),
 		GatewayNode:   h.gatewayNodePtr(),
 		StartedAt:     &startedAt,
 		CompletedAt:   &now,
@@ -451,7 +558,11 @@ func (h *ChatHandler) writeForwardErrorLog(
 		log.StatusCode = i32Ptr(ue.StatusCode)
 	}
 
-	h.saveLog(ctx, log)
+	var responseBody []byte
+	if res != nil {
+		responseBody = res.ResponseBody
+	}
+	h.saveLog(ctx, log, requestBody, responseBody)
 }
 
 // settleSuccess 成功转发后组装日志 + 计费流水并在同一事务内落库
@@ -463,6 +574,8 @@ func (h *ChatHandler) settleSuccess(
 	startedAt time.Time,
 	body []byte,
 	selected *model.Channel,
+	route *routing.RouteResult,
+	retryChannels []int64,
 	user *model.User,
 	res *service.ForwardResult,
 ) {
@@ -496,19 +609,20 @@ func (h *ChatHandler) settleSuccess(
 	}
 
 	var (
-		inputPrice, outputPrice, cachedInputPrice, cacheCreationPrice, ratio float64
-		inputCost, outputCost, cachedInputCost, cacheCreationCost, totalCost float64
+		inputPrice, outputPrice, cachedInputPrice, cacheCreationPrice        model.Money
+		inputCost, outputCost, cachedInputCost, cacheCreationCost, totalCost model.Money
+		ratio                                                                decimal.Decimal
 	)
 
 	if price == nil {
 		// 未命中价格：按零成本记账，但仍落一条计费流水
-		ratio = 1
+		ratio = decimal.NewFromInt(1)
 	} else {
 		inputPrice = price.InputPrice
 		outputPrice = price.OutputPrice
 		cachedInputPrice = price.CachedInputPrice
 		cacheCreationPrice = price.CacheCreationPrice
-		ratio = price.Ratio
+		ratio = decimal.NewFromFloat(price.Ratio)
 		if price.Currency != "" {
 			currency = price.Currency
 		}
@@ -519,15 +633,20 @@ func (h *ChatHandler) settleSuccess(
 			normalInput = 0
 		}
 		// 价格方案单价单位为「币种 / 1M tokens」，按实际 tokens 折算
-		const priceUnit = 1_000_000
-		cachedInputCost = float64(cached) * cachedInputPrice / priceUnit
-		cacheCreationCost = float64(cacheCreation) * cacheCreationPrice / priceUnit
+		priceUnit := decimal.NewFromInt(1_000_000)
+		cachedInputCost = model.Money{Decimal: decimal.NewFromInt(cached).
+			Mul(cachedInputPrice.Decimal).Div(priceUnit)}
+		cacheCreationCost = model.Money{Decimal: decimal.NewFromInt(cacheCreation).
+			Mul(cacheCreationPrice.Decimal).Div(priceUnit)}
 		// 输入总成本 = 普通输入成本 + 缓存命中成本 + 缓存创建成本
-		inputCost = (float64(normalInput)*inputPrice +
-			float64(cached)*cachedInputPrice +
-			float64(cacheCreation)*cacheCreationPrice) / priceUnit
-		outputCost = float64(output) * outputPrice / priceUnit
-		totalCost = (inputCost + outputCost) * ratio
+		inputCost = model.Money{Decimal: decimal.NewFromInt(normalInput).
+			Mul(inputPrice.Decimal).
+			Add(decimal.NewFromInt(cached).Mul(cachedInputPrice.Decimal)).
+			Add(decimal.NewFromInt(cacheCreation).Mul(cacheCreationPrice.Decimal)).
+			Div(priceUnit)}
+		outputCost = model.Money{Decimal: decimal.NewFromInt(output).
+			Mul(outputPrice.Decimal).Div(priceUnit)}
+		totalCost = model.Money{Decimal: inputCost.Decimal.Add(outputCost.Decimal).Mul(ratio)}
 	}
 
 	log := &model.RequestLog{
@@ -544,8 +663,10 @@ func (h *ChatHandler) settleSuccess(
 		IsStream:            res.IsStream,
 		IsCancelled:         res.IsCancelled,
 		UsageSource:         usageSource,
-		RouteStrategy:       strPtr(routeStrategyWeighted),
-		RouteWeight:         i32Ptr(selected.Weight),
+		RetryCount:          len(retryChannels),
+		RetryChannels:       model.Int64Array(retryChannels),
+		RouteStrategy:       strPtr(routeStrategy(route)),
+		RouteWeight:         i32Ptr(routeWeight(route)),
 		InputTokens:         input,
 		OutputTokens:        output,
 		CachedInputTokens:   cached,
@@ -600,7 +721,7 @@ func (h *ChatHandler) settleSuccess(
 		OutputPrice:         outputPrice,
 		CachedInputPrice:    cachedInputPrice,
 		CacheCreationPrice:  cacheCreationPrice,
-		Ratio:               ratio,
+		Ratio:               ratio.InexactFloat64(),
 		InputCost:           inputCost,
 		OutputCost:          outputCost,
 		CachedInputCost:     cachedInputCost,
@@ -612,5 +733,7 @@ func (h *ChatHandler) settleSuccess(
 	// 同一事务写日志 + 扣减余额 + 落计费流水；失败仅记录，不影响已发出的响应
 	if err := h.logRepo.CreateWithBilling(ctx, log, billing); err != nil {
 		logger.Error(ctx, "write log with billing failed: %v", err)
+		return
 	}
+	h.savePayload(ctx, log, body, res.ResponseBody)
 }
