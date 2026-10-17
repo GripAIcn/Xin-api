@@ -42,6 +42,13 @@ func main() {
 	// 启动熔断恢复协程
 	go breaker.RecoveryLoop(context.Background(), cfg.CircuitBreaker.RecoveryInterval)
 
+	// 5.1 渠道指标聚合：启动回填最近 7 天，之后每 60 秒增量重算
+	metricRepo := postgresql.NewChannelMetricRepo(db)
+	metricAggregator := service.NewChannelMetricAggregator(metricRepo)
+	metricCtx, cancelMetrics := context.WithCancel(context.Background())
+	defer cancelMetrics()
+	go metricAggregator.Run(metricCtx)
+
 	// 6. 构建无状态控制面 Engine
 	//gin.SetMode(gin.ReleaseMode) // 生产环境切换为 Release 模式以榨干 Gin 的性能
 	r := gin.New()
@@ -57,7 +64,7 @@ func main() {
 	}))
 
 	// 6. 【控制面】动态路由与核心鉴权切面总装
-	router.SetupRouter(r, db, *cfg, breaker, rdb)
+	router.SetupRouter(r, db, *cfg, breaker, rdb, metricAggregator)
 
 	// 7. 静态前端 SPA (生产模式)
 	r.StaticFile("/", "./web/dist/index.html")
@@ -87,6 +94,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("[CONTROL-PLANE] Shutting down server safely...")
+	cancelMetrics() // 停止渠道指标聚合协程
 
 	// 给未能处理完的请求 5 秒的宽限撤退时间 (Context Timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

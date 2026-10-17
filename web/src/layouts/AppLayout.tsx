@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  Activity,
   Boxes,
   ChevronsUpDown,
   CircleDollarSign,
@@ -57,6 +58,7 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
         ...(isAdmin
           ? [
               { name: '渠道管理', path: '/channels', icon: Waypoints },
+              { name: '渠道监控', path: '/monitoring', icon: Activity },
               { name: '模型管理', path: '/models', icon: Boxes },
               { name: '定价管理', path: '/pricing', icon: CircleDollarSign },
             ]

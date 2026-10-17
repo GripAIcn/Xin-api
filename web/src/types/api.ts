@@ -464,3 +464,72 @@ export interface BillingLogQuery {
   start_time?: string
   end_time?: string
 }
+
+// === 渠道指标监控 ===
+
+export type ChannelMetricRange = '1h' | '6h' | '24h' | '7d'
+export type ChannelMetricDimension = 'channel' | 'model' | 'channel_model'
+
+// 指标跨窗口二次聚合行（GET /v1/channel-metrics 的元素）
+export interface ChannelMetricSummary {
+  channel_id: number | null
+  channel_name: string | null
+  channel_provider: string | null
+  channel_status: string | null
+  model: string | null
+  request_count: number
+  success_count: number
+  error_count: number
+  timeout_count: number
+  success_rate: number
+  avg_latency_ms: number
+  avg_ttft_ms: number
+  tpot: number
+  rpm: number
+  tpm: number
+  total_input_tokens: number
+  total_output_tokens: number
+  total_tokens: number
+  total_cost: number
+  currency: string
+  last_window_start: string | null
+}
+
+// 指标趋势分桶点（GET /v1/channel-metrics/trend 的元素）
+export interface ChannelMetricTrendPoint {
+  bucket_start: string
+  request_count: number
+  success_count: number
+  avg_ttft_ms: number
+  avg_latency_ms: number
+  tpot: number
+  success_rate: number
+}
+
+// 指标汇总查询参数
+export interface ChannelMetricQuery {
+  range?: ChannelMetricRange
+  dimension?: ChannelMetricDimension
+  channel_id?: number
+  model?: string
+}
+
+// 指标趋势查询参数
+export interface ChannelMetricTrendQuery {
+  range?: ChannelMetricRange
+  channel_id?: number
+  model?: string
+}
+
+// 手动范围聚合入参（POST /v1/channel-metrics/aggregate）
+export interface AggregateChannelMetricsRequest {
+  start_time: string
+  end_time: string
+}
+
+export interface AggregateChannelMetricsResult {
+  start_time: string
+  end_time: string
+  rows: number
+  duration_ms: number
+}

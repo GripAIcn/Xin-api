@@ -185,6 +185,7 @@ Try Xin API Admin Dashboard at [http://api.gripai.cn/](http://api.gripai.cn/)
 - **📊 Dashboard**: System overview, request statistics
 - **👥 User Management**: User accounts and permissions
 - **🔌 Channel Management**: Configure upstream LLM channels with weighted routing, one-click channel health testing, and per-channel model management (create/update/delete, enable/disable, fetch models from upstream)
+- **📈 Channel Monitoring**: View aggregated success rate, TTFT, latency, TPOT, RPM/TPM and trend charts by channel / model (aggregated every minute, with a 7-day backfill on startup)
 - **🗂️ Model Management**: View all channel models aggregated by logical model name; cross-channel create/edit and enable/disable
 - **🔑 API Key Management**: Distribute and manage API keys
 - **⚙️ System Settings**: Global configuration

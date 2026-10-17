@@ -15,7 +15,8 @@ import (
 
 // SetupRouter 统一注册控制面管理后台路由
 func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
-	breaker *service.CircuitBreaker, rdb *redis.Client) {
+	breaker *service.CircuitBreaker, rdb *redis.Client,
+	metricAggregator *service.ChannelMetricAggregator) {
 	// 1. 初始化 Handler（注入底层的 DB 仓库和配置）
 	userRepo := postgresql.NewUserRepo(db)
 	logRepo := postgresql.NewLogRepo(db)
@@ -27,6 +28,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	modelPriceRepo := postgresql.NewModelPriceRepo(db)
 	channelHandler := handler.NewChannelHandler(channelRepo, modelPriceRepo, rdb)
 	modelPriceHandler := handler.NewModelPriceHandler(modelPriceRepo)
+	channelMetricHandler := handler.NewChannelMetricHandler(postgresql.NewChannelMetricRepo(db), metricAggregator)
 	balancer := service.NewWeightedRRBalancer()
 	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout)
 
@@ -55,11 +57,11 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			// —— 管理员接口（在 JWTAuth 基础上追加 RequireAdmin 校验）——
 			adminUser := protectedUser.Group("").Use(middleware.RequireAdmin())
 			{
-				adminUser.POST("", userHandler.CreateUser)                        // 创建新账户
-				adminUser.GET("", userHandler.ListUsers)                          // 查询用户列表
-				adminUser.PUT("/:id/status", userHandler.UpdateUserStatus)        // 启用/禁用指定用户
+				adminUser.POST("", userHandler.CreateUser)                            // 创建新账户
+				adminUser.GET("", userHandler.ListUsers)                              // 查询用户列表
+				adminUser.PUT("/:id/status", userHandler.UpdateUserStatus)            // 启用/禁用指定用户
 				adminUser.POST("/:id/reset-password", userHandler.AdminResetPassword) // 重置指定用户密码
-				adminUser.POST("/:id/recharge", userHandler.RechargeBalance)      // 为指定用户充值
+				adminUser.POST("/:id/recharge", userHandler.RechargeBalance)          // 为指定用户充值
 			}
 		}
 
@@ -67,8 +69,8 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		protected.Use(middleware.JWTAuth(cfg.JWT.Secret))
 		{
 			// 请求日志查询：所有登录用户可访问，仓储层按当前用户隔离，管理员可查全部
-			protected.GET("/logs", logHandler.List)    // 日志列表（分页 + 多维过滤）
-			protected.GET("/logs/:id", logHandler.Get) // 日志详情（含计费明细）
+			protected.GET("/logs", logHandler.List)                 // 日志列表（分页 + 多维过滤）
+			protected.GET("/logs/:id", logHandler.Get)              // 日志详情（含计费明细）
 			protected.GET("/billing-logs", logHandler.ListBillings) // 账单日志（消费/充值/退款合并，分页 + 多维过滤）
 
 			// API Key：所有登录用户均可管理，但仓储/业务层按当前用户 user_id 隔离
@@ -86,27 +88,32 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 				adminChannel.POST("/channels/:id/test", channelHandler.TestChannel) // 测试单个渠道
 
 				// 渠道模型管理
-				adminChannel.POST("/channels/:id/models", channelHandler.CreateChannelModel)              // 为渠道新增模型
-				adminChannel.GET("/channels/:id/models", channelHandler.ListChannelModels)                // 列出渠道下全部模型（含禁用）
-				adminChannel.GET("/channels/:id/models/available", channelHandler.FetchUpstreamModels)    // 获取上游可用模型
-				adminChannel.PUT("/channels/:id/models/:modelId", channelHandler.UpdateChannelModel)      // 编辑模型
-				adminChannel.DELETE("/channels/:id/models/:modelId", channelHandler.DeleteChannelModel)   // 软删除模型
+				adminChannel.POST("/channels/:id/models", channelHandler.CreateChannelModel)                      // 为渠道新增模型
+				adminChannel.GET("/channels/:id/models", channelHandler.ListChannelModels)                        // 列出渠道下全部模型（含禁用）
+				adminChannel.GET("/channels/:id/models/available", channelHandler.FetchUpstreamModels)            // 获取上游可用模型
+				adminChannel.PUT("/channels/:id/models/:modelId", channelHandler.UpdateChannelModel)              // 编辑模型
+				adminChannel.DELETE("/channels/:id/models/:modelId", channelHandler.DeleteChannelModel)           // 软删除模型
 				adminChannel.PUT("/channels/:id/models/:modelId/status", channelHandler.UpdateChannelModelStatus) // 启用/禁用模型
 
 				// 模型管理：按逻辑模型名聚合查询全部渠道模型
 				adminChannel.GET("/models", channelHandler.ListModels) // 按逻辑模型名聚合查询（模型管理页）
 
 				// 价格方案管理
-				adminChannel.POST("/prices", modelPriceHandler.CreatePrice)              // 新增价格方案
-				adminChannel.GET("/prices", modelPriceHandler.ListPrices)                // 价格方案列表（含绑定模型数）
-				adminChannel.GET("/prices/:id", modelPriceHandler.GetPrice)              // 价格方案详情
-				adminChannel.PUT("/prices/:id", modelPriceHandler.UpdatePrice)           // 编辑价格方案
+				adminChannel.POST("/prices", modelPriceHandler.CreatePrice)                 // 新增价格方案
+				adminChannel.GET("/prices", modelPriceHandler.ListPrices)                   // 价格方案列表（含绑定模型数）
+				adminChannel.GET("/prices/:id", modelPriceHandler.GetPrice)                 // 价格方案详情
+				adminChannel.PUT("/prices/:id", modelPriceHandler.UpdatePrice)              // 编辑价格方案
 				adminChannel.PUT("/prices/:id/status", modelPriceHandler.UpdatePriceStatus) // 启用/禁用价格方案
-				adminChannel.DELETE("/prices/:id", modelPriceHandler.DeletePrice)        // 删除价格方案
-				adminChannel.GET("/prices/:id/models", modelPriceHandler.ListPriceModels) // 查看绑定该方案的模型
+				adminChannel.DELETE("/prices/:id", modelPriceHandler.DeletePrice)           // 删除价格方案
+				adminChannel.GET("/prices/:id/models", modelPriceHandler.ListPriceModels)   // 查看绑定该方案的模型
 
 				// 渠道批量测试
 				adminChannel.POST("/channels/test", channelHandler.TestAllChannels) // 测试所有渠道
+
+				// 渠道指标监控
+				adminChannel.GET("/channel-metrics", channelMetricHandler.List)                 // 按渠道/模型维度汇总
+				adminChannel.GET("/channel-metrics/trend", channelMetricHandler.Trend)          // TTFT / 延迟走势
+				adminChannel.POST("/channel-metrics/aggregate", channelMetricHandler.Aggregate) // 手动范围聚合补数
 			}
 		}
 

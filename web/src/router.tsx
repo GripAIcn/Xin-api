@@ -10,6 +10,7 @@ import LandingView from '@/pages/LandingView'
 import LoginView from '@/pages/LoginView'
 import LogsView from '@/pages/LogsView'
 import ModelsView from '@/pages/ModelsView'
+import MonitoringView from '@/pages/MonitoringView'
 import PricingView from '@/pages/PricingView'
 import SettingsView from '@/pages/SettingsView'
 import UsersView from '@/pages/UsersView'
@@ -140,6 +141,14 @@ export const router = createBrowserRouter([
                 element: (
                   <Page title="模型管理">
                     <ModelsView />
+                  </Page>
+                ),
+              },
+              {
+                path: 'monitoring',
+                element: (
+                  <Page title="渠道监控">
+                    <MonitoringView />
                   </Page>
                 ),
               },
