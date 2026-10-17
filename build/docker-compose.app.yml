@@ -1,0 +1,47 @@
+# ============================================
+# 复用宿主机已有 PostgreSQL / Redis 与 Nginx 的单服务部署
+# 适用场景：服务器上已有 pg、redis 容器和对外 Nginx，仅需部署 Xin-api 应用
+#
+# 使用方式（在项目根目录执行）：
+#   docker build -f build/Dockerfile -t xin-api:latest .
+#   docker-compose -f build/docker-compose.app.yml up -d
+#
+# 应用使用 host 网络，直接监听 .env 中的 PROXY_PORT（默认 8080），
+# 由宿主机 Nginx 将 api.gripai.cn 反向代理到 127.0.0.1:8080。
+# ============================================
+
+version: "3.7"
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  app:
+    image: xin-api:latest
+    container_name: xin-api-app
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 15s
+    network_mode: host
+    security_opt:
+      - no-new-privileges:true
+    env_file:
+      - ../.env
+    environment:
+      TZ: Asia/Shanghai
+      GIN_MODE: ${GIN_MODE:-release}
+      # host 网络下通过回环地址访问宿主机已映射的 pg / redis
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: ${REDIS_PORT:-6379}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider \"http://127.0.0.1:$${PROXY_PORT}/\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging

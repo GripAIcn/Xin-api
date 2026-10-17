@@ -1,7 +1,7 @@
 # ============================================
 # 阶段一：前端构建（Vite 多入口：index.html + app.html）
 # ============================================
-FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 
@@ -18,7 +18,7 @@ RUN npm run build
 # ============================================
 # 阶段二：Go 后端构建
 # ============================================
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS go-builder
+FROM golang:1.25-alpine AS go-builder
 
 ARG TARGETOS
 ARG TARGETARCH
