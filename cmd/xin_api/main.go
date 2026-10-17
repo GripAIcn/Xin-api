@@ -72,6 +72,8 @@ func main() {
 	// 预渲染的公开文档页
 	r.StaticFile("/docs", "./web/dist/docs/index.html")
 	r.Static("/assets", "./web/dist/assets")
+	// 本地字体等 public 静态资源，避免被 NoRoute 回退为 HTML
+	r.Static("/fonts", "./web/dist/fonts")
 	r.NoRoute(func(c *gin.Context) {
 		c.File("./web/dist/app.html")
 	})
