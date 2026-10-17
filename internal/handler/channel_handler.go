@@ -497,6 +497,11 @@ func (h *ChannelHandler) FetchUpstreamModels(c *gin.Context) {
 			response.AdminFail(c, response.InvalidParams)
 			return
 		}
+		var upstreamErr *service.UpstreamHTTPError
+		if errors.As(err, &upstreamErr) {
+			response.AdminFailMsg(c, response.InternalError, upstreamErr.AdminMessage())
+			return
+		}
 		response.AdminFail(c, response.InternalError)
 		return
 	}
