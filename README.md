@@ -20,21 +20,23 @@
 
 ## ✨ 项目简介
 
-Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容 OpenAI、Anthropic Claude、DeepSeek、Gemini 等主流大模型，实现标准化统一 API 接入。
+Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容 OpenAI、Anthropic Claude、DeepSeek、Gemini 等主流大模型，提供统一 API 接入、渠道路由、计费结算与可观测能力。
 
 ### 核心特性
 
-- **🎯 统一 API 接入**: 标准化不同大模型的 API 接口，数据面同时提供 `/v1/chat/completions`、`/v1/responses`、`/v1beta/models/{model}:generateContent` 三种入站协议端点，统一路由到上游供应商
-- **🔀 智能分发**: 基于权重的负载均衡，自动将请求分发到最佳渠道
-- **🛡️ 熔断保护**: 分布式熔断器，自动隔离故障渠道，防止雪崩效应
-- **⚡ 限流控制**: 基于 Redis 的分布式限流器，支持 RPM/TPM 多维度限流
-- **👥 统一渠道管理**: 集中管理上游供应商渠道，配置权重与状态，并支持渠道级「模型管理」（增删改、启用/禁用、从上游拉取模型）
-- **�️ 模型管理**: 以逻辑模型名为维度聚合展示各渠道的可用模型，支持跨渠道批量新增、编辑与启用/禁用
-- **� 模型名映射**: 按「渠道 × 对外模型名」登记上游真实模型名，转发时自动改写为上游名、响应回写对外名
-- **🧩 多协议适配**: 入站统一 OpenAI Chat，出站按渠道供应商适配 OpenAI / DeepSeek / Anthropic / Gemini
+- **🎯 统一 API 接入**: 数据面同时提供 `/v1/chat/completions`、`/v1/responses`、`/v1beta/models/{model}:generateContent` 三种入站协议端点，统一路由到上游供应商
+- **🔀 智能分发**: 按「优先级 + 同级加权轮询」选路，失败自动重试并排除已失败渠道
+- **🛡️ 熔断保护**: 基于 Redis 的分布式被动熔断，连续失败达到阈值后自动隔离渠道，并按恢复间隔探测恢复
+- **⚡ 限流能力（预留）**: 已实现基于 Redis 的令牌桶限流中间件，当前版本尚未挂载到数据面，`rpm_limit` / `tpm_limit` 暂未生效
+- **👥 统一渠道管理**: 集中管理上游供应商渠道，配置权重、优先级与状态，并支持渠道级「模型管理」（增删改、启用/禁用、从上游拉取模型）
+- **🗂️ 模型管理**: 以逻辑模型名为维度聚合展示各渠道的可用模型，支持跨渠道批量新增、编辑与启用/禁用
+- **🔁 模型名映射**: 按「渠道 × 对外模型名」登记上游真实模型名，转发时自动改写为上游名、响应回写对外名
+- **🧩 多协议适配**: 入站支持 OpenAI Chat、OpenAI Responses、Gemini 原生协议；出站按渠道供应商适配 OpenAI / DeepSeek / Anthropic / Gemini
+- **💰 计费与结算**: 价格方案支持 USD / CNY 计价，按配置汇率折算为 CNY 结算，并记录余额变动与汇率快照
 - **🔑 API Key 管理**: 灵活的 API Key 分发和吊销机制
 - **🧪 渠道健康检测**: 手动一键测试渠道状态，支持单渠道/批量测试多模型连通性
-- **📊 全链路追踪**: 完整的请求链路追踪和审计日志（可扩展）
+- **📋 全链路日志**: 请求日志、账单日志与审计日志，可选落库请求/响应原文（默认关闭）
+- **📈 渠道指标聚合**: 60 秒窗口聚合成功率、TTFT、延迟、TPOT、RPM/TPM，启动自动回填最近 7 天
 - **🌐 Web 管理后台**: 基于 React 19 + Tailwind CSS 的现代化管理界面
 - **🐳 容器化部署**: 开箱即用的 Docker Compose 部署方案
 
@@ -46,11 +48,11 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 
 | 层级 | 技术 |
 |------|------|
-| **前端** | React 19 + TypeScript + Vite + Tailwind CSS + shadcn/ui |
-| **后端** | Go 1.25 + Gin + GORM + JWT |
-| **数据库** | PostgreSQL 16（元数据存储） |
-| **缓存** | Redis 7（限流、熔断、渠道查询缓存） |
-| **代理** | Nginx（反向代理、静态资源） |
+| **前端** | React 19 + TypeScript + Vite + Tailwind CSS + Radix UI + Zustand |
+| **后端** | Go 1.25 + Gin 1.12 + GORM + JWT |
+| **数据库** | PostgreSQL 16（元数据存储，启动时 AutoMigrate 建表） |
+| **缓存** | Redis 7（渠道查询缓存、熔断状态） |
+| **代理** | Nginx（反向代理、SSE 透传） |
 | **部署** | Docker + Docker Compose |
 
 ---
@@ -60,7 +62,7 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 ### 环境要求
 
 - Go 1.25+
-- Node.js 22+
+- Node.js 22+（前端 `engines` 要求 `^20.19.0 || >=22.12.0`）
 - PostgreSQL 16+
 - Redis 7+
 - Docker & Docker Compose（推荐）
@@ -72,21 +74,20 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 git clone https://github.com/GripAIcn/Xin-api.git
 cd Xin-api
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env 修改数据库密码、JWT密钥等
+# 2. 配置环境变量（Compose 读取 build/.env）
+cp .env.example build/.env
+# 编辑 build/.env 修改数据库密码、Redis 密码、JWT 密钥等
 
-# 3. 启动服务
+# 3. 构建并启动服务
 cd build
-./scripts/deploy.sh start
-
-# 或直接使用 docker-compose
-# docker-compose up -d --build
+docker compose up -d --build
 
 # 4. 访问服务
 # Web 管理后台: http://localhost
 # API 地址: http://localhost/v1
 ```
+
+首次启动时后端会自动创建数据库、执行 GORM `AutoMigrate` 建表，并创建默认管理员账号 `admin / 12345678`，登录后请立即修改密码。
 
 ### 本地开发部署
 
@@ -108,12 +109,12 @@ docker run -d --name xin-redis \
 #### 2. 启动后端服务
 
 ```bash
-# 配置环境变量
+# 配置环境变量（需与上面启动的 PostgreSQL / Redis 密码一致）
 cp .env.example .env
 
 # 安装依赖并运行
 go mod download
-go run cmd/xin_api/main.go
+go run ./cmd/xin_api/main.go
 ```
 
 #### 3. 启动前端开发服务
@@ -124,7 +125,7 @@ npm install
 npm run dev
 ```
 
-前端开发服务器默认运行在 `http://localhost:5173`
+前端开发服务器默认运行在 `http://localhost:5173`，开发模式已允许跨域访问后端。
 
 ---
 
@@ -132,32 +133,36 @@ npm run dev
 
 ### 环境变量
 
-| 变量 | 默认值            | 说明 |
-|------|----------------|------|
-| `PROXY_PORT` | `8080`         | 后端服务端口 |
-| `NGINX_HTTP_PORT` | `80`           | Nginx HTTP 端口（Docker Compose 使用） |
-| `NGINX_HTTPS_PORT` | `443`          | Nginx HTTPS 端口（Docker Compose 使用） |
-| `GIN_MODE` | `release`      | 运行模式（debug/release）|
-| `LOG_LEVEL` | `info`         | 日志级别 |
-| `POSTGRES_HOST` | `127.0.0.1`    | PostgreSQL 主机 |
-| `POSTGRES_USER` | `root`         | PostgreSQL 用户名 |
-| `POSTGRES_PASSWORD` | `123456`       | PostgreSQL 密码 |
-| `POSTGRES_DB` | `gateway`      | PostgreSQL 数据库名 |
-| `POSTGRES_PORT` | `5432`         | PostgreSQL 端口 |
-| `REDIS_HOST` | `127.0.0.1`    | Redis 主机 |
-| `REDIS_PORT` | `6379`         | Redis 端口 |
-| `REDIS_PASSWORD` | `123456`       | Redis 密码 |
-| `REDIS_DB` | `1`            | Redis 数据库编号 |
-| `REDIS_POOL_SIZE` | `20`           | Redis 连接池大小 |
-| `JWT_SECRET` | `123456zbcd+-` | JWT 签名密钥（生产务必更换） |
-| `JWT_EXPIRE` | `24h`          | JWT 过期时间 |
-| `CB_FAILURE_THRESHOLD` | `5`            | 熔断失败阈值 |
-| `CB_RECOVERY_INTERVAL` | `60s`          | 熔断恢复间隔 |
-| `CACHE_CHANNEL_EXPIRE` | `300s`         | 渠道缓存过期时间 |
-| `PROXY_REQUEST_TIMEOUT` | `180s`         | 上游请求超时 |
-| `PROXY_MAX_BODY_MB` | `10`           | 最大请求体大小（MB） |
-| `DEFAULT_RPM` | `60`           | 默认每分钟请求数限制（Docker Compose 使用） |
-| `DEFAULT_TPM` | `100000`       | 默认每分钟 Token 数限制（Docker Compose 使用） |
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `PROXY_PORT` | `8080` | 后端服务端口 |
+| `GATEWAY_NODE` | 主机名 | 网关实例标识，落库 `request_logs.gateway_node` |
+| `GIN_MODE` | `release`（`.env.example`） | Gin 运行模式（debug/release） |
+| `LOG_LEVEL` | `info` | 预留，当前代码未读取 |
+| `POSTGRES_HOST` | `127.0.0.1` | PostgreSQL 主机 |
+| `POSTGRES_USER` | `root` | PostgreSQL 用户名 |
+| `POSTGRES_PASSWORD` | 空 | PostgreSQL 密码（Compose 默认 `123456`） |
+| `POSTGRES_DB` | `gateway` | 数据库名，不存在时启动自动创建 |
+| `POSTGRES_PORT` | `5432` | PostgreSQL 端口 |
+| `REDIS_HOST` | `127.0.0.1` | Redis 主机 |
+| `REDIS_PORT` | `6379` | Redis 端口 |
+| `REDIS_PASSWORD` | 空 | Redis 密码（Compose 默认 `123456`） |
+| `REDIS_DB` | `0` | Redis 数据库编号 |
+| `REDIS_POOL_SIZE` | `20` | Redis 连接池大小 |
+| `JWT_SECRET` | `xin-api-default-secret-key-2026` | JWT 签名密钥（生产务必更换） |
+| `JWT_EXPIRE` | `24h` | JWT 过期时间 |
+| `CB_FAILURE_THRESHOLD` | `5` | 熔断连续失败阈值 |
+| `CB_RECOVERY_INTERVAL` | `60s` | 熔断恢复探测间隔 |
+| `CACHE_CHANNEL_EXPIRE` | `300s` | 渠道缓存过期时间 |
+| `LOG_REQUEST_BODY` | `false` | 是否落库请求原文到 `request_payloads` |
+| `LOG_RESPONSE_BODY` | `false` | 是否落库响应原文（流式响应最多保留 1 MiB） |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | 上游请求超时 |
+| `PROXY_MAX_BODY_MB` | `10` | 最大请求体大小（MB） |
+| `USD_CNY_RATE` | `7.2` | USD→CNY 初始结算汇率（仅首次写入 `exchange_rates`） |
+| `NGINX_HTTP_PORT` | `80` | Nginx HTTP 端口（仅 Compose 使用） |
+| `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS 端口（仅 Compose 使用） |
+| `DEFAULT_RPM` | `60` | 预留，当前未生效 |
+| `DEFAULT_TPM` | `100000` | 预留，当前未生效 |
 
 ---
 
@@ -183,12 +188,15 @@ npm run dev
 ### 管理后台功能
 
 - **📊 仪表盘**: 请求量 / 成功率 / Token 用量 / 费用 / 平均延迟总览（支持今日、近 7 天、近 30 天切换），含请求量、Token、费用趋势图与模型、渠道、错误排行
-- **👥 用户管理**: 用户账号、权限管理
-- **🔌 渠道管理**: 配置上游大模型渠道、权重分配、一键测试渠道连通性，并支持渠道级模型管理（增删改、启用/禁用、从上游拉取模型）
-- **📈 渠道监控**: 按渠道 / 模型维度查看成功率、TTFT、延迟、TPOT、RPM/TPM 等聚合指标与趋势图（每分钟聚合，启动自动回填最近 7 天）
-- **🗂️ 模型管理**: 按逻辑模型名聚合查看全部渠道模型，支持跨渠道新增/编辑、启用/禁用
-- **🔑 API Key 管理**: 分发和管理 API Key
-- **⚙️ 系统设置**: 全局配置
+- **🔑 API Key 管理**: 分发、查看和吊销当前用户的 API Key
+- **📋 请求日志**: 按时间、用户、模型、渠道、状态、日志类型等维度筛选，查看单条请求的计费明细
+- **🧾 账单日志**: 消费 / 充值 / 退款合并视图，支持分页与多维过滤
+- **👤 账户与余额**: 查看个人资料与余额，修改邮箱/手机号与登录密码
+- **👥 用户管理**（管理员）: 创建账号、启用/禁用、重置密码、为用户充值
+- **🔌 渠道管理**（管理员）: 配置上游大模型渠道、优先级与权重、一键测试渠道连通性，并支持渠道级模型管理（增删改、启用/禁用、从上游拉取模型）
+- **🗂️ 模型管理**（管理员）: 按逻辑模型名聚合查看全部渠道模型，支持跨渠道新增/编辑、启用/禁用
+- **📈 渠道监控**（管理员）: 按渠道 / 模型维度查看成功率、TTFT、延迟、TPOT、RPM/TPM 等聚合指标与趋势图（每分钟增量聚合，启动自动回填最近 7 天）
+- **💰 定价管理**（管理员）: 维护价格方案（USD/CNY 计价）与模型绑定，配置 USD→CNY 结算汇率
 
 ---
 
@@ -202,15 +210,14 @@ npm run dev
 
 ```
 build/
-├── Dockerfile              # 前后端统一多阶段构建（Node.js + Go + Alpine）
-├── Dockerfile.nginx        # Nginx 反向代理配置
-├── docker-compose.yml      # 服务编排（PostgreSQL + Redis + App + Nginx）
-├── .dockerignore          # Docker 构建忽略文件
-├── nginx/                 # Nginx 配置文件
+├── Dockerfile                   # 前后端统一多阶段构建（Node.js + Go + Alpine）
+├── Dockerfile.nginx             # Nginx 反向代理镜像
+├── docker-compose.yml           # 服务编排（PostgreSQL + Redis + App + Nginx）
+├── .dockerignore                # build/ 目录构建忽略规则
+├── nginx/                       # Nginx 配置文件
 │   ├── nginx.conf
-│   └── default.conf
-└── scripts/
-    └── deploy.sh          # 部署脚本
+│   └── default.conf.template    # 站点模板（启动时注入 PROXY_PORT）
+└── README.md                    # 部署说明
 ```
 
 启动命令：
@@ -218,45 +225,29 @@ build/
 ```bash
 cd build
 
-# 一键启动所有服务
-./scripts/deploy.sh start
+# 准备环境变量（首次部署）
+cp ../.env.example .env
 
-# 或构建并启动所有服务
-docker-compose up -d --build
+# 构建并启动所有服务
+docker compose up -d --build
 
 # 查看服务状态
-docker-compose ps
+docker compose ps
 
 # 查看应用日志
-docker-compose logs -f app
+docker compose logs -f app
 
 # 停止服务
-docker-compose down
-```
-
-### 部署脚本命令
-
-```bash
-./scripts/deploy.sh start    # 启动所有服务
-./scripts/deploy.sh stop     # 停止所有服务
-./scripts/deploy.sh restart  # 重启所有服务
-./scripts/deploy.sh logs     # 查看所有日志
-./scripts/deploy.sh logs app      # 查看应用日志（前后端）
-./scripts/deploy.sh logs nginx    # 查看 Nginx 日志
-./scripts/deploy.sh logs postgres # 查看数据库日志
-./scripts/deploy.sh logs redis    # 查看缓存日志
-./scripts/deploy.sh status   # 查看服务状态
-./scripts/deploy.sh build    # 重新构建镜像
-./scripts/deploy.sh health   # 检查服务健康状态
-./scripts/deploy.sh update   # 更新代码并重启服务
+docker compose down
 ```
 
 ### 服务架构
 
 ```
 用户请求 → Nginx (80/443)
-    ├── /v1/*  → 后端 API 服务 (app:8080)
-    └── /*     → 前端静态文件 (app:8080)
+    ├── /v1/*      → 后端 API 服务 (app:8080)
+    ├── /v1beta/*  → Gemini 兼容接口 (app:8080)
+    └── /*         → 前端静态文件 (app:8080，由后端统一提供)
 
 后端依赖：PostgreSQL + Redis
 ```
@@ -266,25 +257,26 @@ docker-compose down
 | 服务 | 容器端口 | 主机端口 | 说明 |
 |------|---------|---------|------|
 | Nginx | 80/443 | 80/443 | Web 入口（统一） |
-| Xin-api | 8080 | - | 后端 + 前端静态文件（内部） |
-| PostgreSQL | 5432 | 5432 | 数据库 |
-| Redis | 6379 | 6379 | 缓存服务 |
+| Xin-api | 8080 | - | 后端 + 前端静态文件（仅内部） |
+| PostgreSQL | 5432 | 127.0.0.1:5432 | 数据库（仅本机可访问） |
+| Redis | 6379 | 127.0.0.1:6379 | 缓存服务（仅本机可访问） |
 
 ### 数据持久化
 
 数据通过 Docker Volumes 自动持久化：
 
-- `postgres_data`: PostgreSQL 数据
-- `redis_data`: Redis 数据
-- `nginx_logs`: Nginx 日志
+- `xin-api_postgres_data`: PostgreSQL 数据
+- `xin-api_redis_data`: Redis 数据（AOF）
+- `xin-api_nginx_logs`: Nginx 日志
 
 ### 生产环境建议
 
-1. **修改默认密码**: 务必修改数据库和 Redis 密码
-2. **更换 JWT 密钥**: 使用强随机字符串作为 JWT_SECRET
+1. **修改默认密码**: 务必修改数据库和 Redis 密码，并修改默认管理员密码
+2. **更换 JWT 密钥**: 使用强随机字符串作为 `JWT_SECRET`
 3. **启用 HTTPS**: 配置 Nginx SSL 证书
-4. **配置日志轮转**: 防止日志占满磁盘
-5. **定期备份**: 定期备份 PostgreSQL 数据
+4. **控制端口暴露**: 生产环境仅暴露 Nginx 的 80/443 端口
+5. **配置日志轮转**: 防止日志占满磁盘
+6. **定期备份**: 定期备份 PostgreSQL 数据
 
 ---
 

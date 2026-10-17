@@ -4,319 +4,271 @@
 
 - [目录结构](#目录结构)
 - [快速开始](#快速开始)
-  - [1. 环境准备](#1-环境准备)
-  - [2. 配置环境变量](#2-配置环境变量)
-  - [3. 启动服务](#3-启动服务)
-  - [4. 访问服务](#4-访问服务)
-- [部署脚本使用](#部署脚本使用)
-- [服务架构](#服务架构)
-  - [端口映射](#端口映射)
+- [服务架构与端口](#服务架构与端口)
+- [环境变量](#环境变量)
 - [数据持久化](#数据持久化)
-- [生产环境部署建议](#生产环境部署建议)
-  - [1. 安全配置](#1-安全配置)
-  - [2. 性能优化](#2-性能优化)
-  - [3. 日志管理](#3-日志管理)
-  - [4. 备份策略](#4-备份策略)
+- [日常运维](#日常运维)
+- [备份与恢复](#备份与恢复)
+- [升级与回滚](#升级与回滚)
+- [生产环境建议](#生产环境建议)
 - [故障排查](#故障排查)
-  - [查看服务日志](#查看服务日志)
-  - [常见问题](#常见问题)
-- [更新升级](#更新升级)
-- [卸载清理](#卸载清理)
-- [联系支持](#联系支持)
 
 ## 目录结构
 
 ```
 build/
-├── Dockerfile              # Go 后端多阶段构建（包含前端静态文件）
-├── Dockerfile.nginx        # Nginx 反向代理配置
-├── docker-compose.yml      # 服务编排
-├── .dockerignore          # Docker 构建忽略文件
+├── Dockerfile                   # Go 后端 + 前端多阶段构建
+├── Dockerfile.nginx             # Nginx 反向代理镜像
+├── docker-compose.yml           # 四服务编排（postgres / redis / app / nginx）
+├── .dockerignore                # 部署目录构建忽略规则
 ├── nginx/
-│   ├── nginx.conf         # Nginx 主配置
-│   └── default.conf       # 站点配置
-├── scripts/
-│   └── deploy.sh          # 部署脚本
-└── README.md              # 本文件
-web/                        # 前端源码目录（已集成到后端构建）
-├── src/
-├── public/
-└── package.json
+│   ├── nginx.conf               # Nginx 主配置
+│   └── default.conf.template    # 站点配置模板（启动时注入 PROXY_PORT）
+├── README.md                    # 本文件
+└── README.en.md                 # 英文版
 ```
+
+> 应用镜像的构建上下文是**仓库根目录**，因此构建缓存与排除规则由根目录的 `.dockerignore` 决定。
 
 ## 快速开始
 
-### 1. 环境准备
+### 1. 环境要求
 
-确保已安装：
-- Docker >= 20.10
-- Docker Compose >= 2.0
+- Docker Engine >= 24.0
+- Docker Compose v2（`docker compose` 子命令，不再需要 `docker-compose`）
+- 可用内存建议 >= 2 GB（前端 `vite build` 较吃内存）
 
 ### 2. 配置环境变量
 
 ```bash
-# 复制环境变量模板
+cd build
 cp ../.env.example .env
-
-# 编辑 .env 文件，修改以下关键配置
-vim .env
 ```
 
-**关键配置项：**
+启动前至少修改以下三项：
 
 ```env
-# 数据库配置（生产环境务必修改密码）
-POSTGRES_USER=root
 POSTGRES_PASSWORD=your-strong-password
-POSTGRES_DB=gateway
-
-# Redis 配置
 REDIS_PASSWORD=your-redis-password
-
-# JWT 密钥（生产环境务必修改为随机强密码）
-JWT_SECRET=your-jwt-secret-key-min-32-chars
-
-# 运行模式
-GIN_MODE=release
+JWT_SECRET=your-random-secret-at-least-32-chars   # openssl rand -base64 48
 ```
 
-### 3. 启动服务
-
-使用部署脚本一键启动：
+### 3. 启动
 
 ```bash
-# 进入 build 目录
-cd build
-
-# 启动所有服务
-./scripts/deploy.sh start
+# 在 build 目录执行
+docker compose up -d --build
 ```
 
-或使用 Docker Compose 命令：
+首次构建会依次完成：前端 `npm ci` + `vite build` → Go 编译 → 打包运行镜像。
+`app` 会等待 PostgreSQL / Redis 健康检查通过后再启动，`nginx` 会等待 `app` 健康后再启动。
+
+### 4. 验证
 
 ```bash
-docker-compose up -d --build
+docker compose ps          # 四个服务均应为 healthy
+curl http://localhost/     # 返回落地页 HTML
 ```
 
-### 4. 访问服务
+访问 `http://localhost` 进入 Web 界面，默认管理员账号为 `admin / 12345678`，**登录后请立即修改密码**。
 
-- **Web 界面**: http://localhost
-- **API 地址**: http://localhost/v1
-
-## 部署脚本使用
+### 5. 停止
 
 ```bash
-./scripts/deploy.sh [命令]
-
-命令:
-  start    启动所有服务
-  stop     停止所有服务
-  restart  重启所有服务
-  logs     查看日志 (可选: 指定服务名)
-  status   查看服务状态
-  build    重新构建镜像
-  reset    完全重置（删除所有数据）
-  update   更新代码并重启服务
-  help     显示帮助信息
+docker compose down        # 停止并删除容器，保留数据卷
 ```
 
-### 常用命令示例
-
-```bash
-# 启动服务
-./scripts/deploy.sh start
-
-# 查看所有服务状态
-./scripts/deploy.sh status
-
-# 查看应用日志
-./scripts/deploy.sh logs app
-
-# 实时查看 Nginx 日志
-./scripts/deploy.sh logs -f nginx
-
-# 重启服务
-./scripts/deploy.sh restart
-
-# 停止服务
-./scripts/deploy.sh stop
-
-# 更新到最新版本
-./scripts/deploy.sh update
-```
-
-## 服务架构
+## 服务架构与端口
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Docker Compose                       │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │    Nginx     │  │  Xin-api     │  │  PostgreSQL  │       │
-│  │   (80/443)   │  │   (8080)     │  │    (5432)    │       │
-│  └──────┬───────┘  └──────────────┘  └──────────────┘       │
-│         │                                                    │
-│         │  静态文件                                          │
-│         │  API 代理                                          │
-│         ▼                                                    │
-│  ┌──────────────┐                                            │
-│  │    Redis     │                                            │
-│  │    (6379)    │                                            │
-│  └──────────────┘                                            │
-└─────────────────────────────────────────────────────────────┘
+浏览器 / SDK
+    │
+    ▼
+┌───────────────┐        ┌──────────────────────────┐
+│    nginx      │──────▶ │  app（Go，非 root 运行）  │
+│  80 / 443     │        │  容器内 8080             │
+└───────────────┘        └───────┬──────────┬───────┘
+                                 │          │
+                          ┌──────▼───┐  ┌───▼──────┐
+                          │ postgres │  │  redis   │
+                          │   5432   │  │  6379    │
+                          └──────────┘  └──────────┘
 ```
-
-### 端口映射
 
 | 服务 | 容器端口 | 主机端口 | 说明 |
 |------|---------|---------|------|
-| Nginx | 80/443 | 80/443 | Web 入口 |
-| Xin-api | 8080 | 8080 | API 服务 |
-| PostgreSQL | 5432 | 5432 | 数据库 |
-| Redis | 6379 | 6379 | 缓存服务 |
+| nginx | 80 / 443 | `${NGINX_HTTP_PORT:-80}` / `${NGINX_HTTPS_PORT:-443}` | 唯一对外入口 |
+| app | `${PROXY_PORT:-8080}` | 不映射 | 仅集群内部访问，`expose` |
+| postgres | 5432 | `127.0.0.1:${POSTGRES_PORT:-5432}` | 仅绑定回环地址，供本机调试 |
+| redis | 6379 | `127.0.0.1:${REDIS_PORT:-6379}` | 仅绑定回环地址，供本机调试 |
+
+> 443 端口已预留映射，但当前 Nginx 未配置 TLS 监听。需要 HTTPS 时请挂载证书并在 `default.conf.template` 中增加 `listen 443 ssl;` 的 server 块。
+
+对外暴露的接口：
+
+| 路径 | 协议 |
+|------|------|
+| `/v1/chat/completions` | OpenAI Chat Completions |
+| `/v1/responses` | OpenAI Responses |
+| `/v1beta/models/{model}:generateContent` | Gemini |
+
+`/v1/` 与 `/v1beta/` 均已关闭 `proxy_buffering`，SSE 流式响应会逐块透传，不会被 Nginx 攒批。
+
+## 环境变量
+
+完整清单见仓库根目录 [.env.example](../.env.example)。常用项：
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `PROXY_PORT` | `8080` | 后端监听端口，同时驱动 Nginx upstream 端口 |
+| `NGINX_HTTP_PORT` / `NGINX_HTTPS_PORT` | `80` / `443` | Nginx 对外端口 |
+| `GIN_MODE` | `release` | `release` 或 `debug` |
+| `GATEWAY_NODE` | 空（取 hostname） | 写入 `request_logs.gateway_node` |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `root` / `123456` / `gateway` | 首次启动时由 postgres 镜像初始化 |
+| `REDIS_PASSWORD` / `REDIS_DB` | `123456` / `0` | Redis 密码与库号 |
+| `JWT_SECRET` / `JWT_EXPIRE` | 内置默认 / `24h` | Admin API 签名密钥与有效期 |
+| `CB_FAILURE_THRESHOLD` / `CB_RECOVERY_INTERVAL` | `5` / `60s` | 熔断阈值与恢复探测间隔 |
+| `CACHE_CHANNEL_EXPIRE` | `300s` | 渠道缓存池过期时间 |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | 上游请求超时 |
+| `PROXY_MAX_BODY_MB` | `10` | 请求体大小上限（Nginx 侧为 50 MB） |
+| `LOG_REQUEST_BODY` / `LOG_RESPONSE_BODY` | `false` | 是否落库请求/响应原文 |
+| `USD_CNY_RATE` | `7.2` | 美元计价模型的结算汇率 |
+
+> 修改 `.env` 中端口、密码等值后，执行 `docker compose up -d` 让容器重建生效。
+> 单独修改 `PROXY_PORT` 时无需改 Nginx 配置，模板会自动渲染新的 upstream 端口。
 
 ## 数据持久化
 
-数据通过 Docker Volumes 持久化存储：
-
-- `postgres_data`: PostgreSQL 数据
-- `redis_data`: Redis 数据
-- `nginx_logs`: Nginx 日志
-
-查看数据卷：
+| 卷名 | 挂载点 | 内容 |
+|------|--------|------|
+| `xin-api_postgres_data` | `/var/lib/postgresql/data` | 全部业务数据 |
+| `xin-api_redis_data` | `/data` | Redis AOF 持久化文件 |
+| `xin-api_nginx_logs` | `/var/log/nginx` | 访问日志 / 错误日志 |
 
 ```bash
-docker volume ls
-docker volume inspect build_postgres_data
+docker volume ls | grep xin-api
+docker volume inspect xin-api_postgres_data
 ```
 
-## 生产环境部署建议
-
-### 1. 安全配置
-
-- **修改默认密码**: 务必修改 `POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`
-- **关闭端口暴露**: 生产环境建议只暴露 Nginx 的 80/443 端口
-- **启用 HTTPS**: 配置 SSL 证书
-
-### 2. 性能优化
-
-编辑 `docker-compose.yml` 调整资源限制：
-
-```yaml
-services:
-  app:
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-```
-
-### 3. 日志管理
-
-配置日志轮转：
-
-```yaml
-services:
-  app:
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-```
-
-### 4. 备份策略
-
-定期备份 PostgreSQL 数据：
+## 日常运维
 
 ```bash
-# 备份数据库
-docker exec xin-api-postgres pg_dump -U root gateway > backup_$(date +%Y%m%d).sql
+# 查看状态（含健康检查结果）
+docker compose ps
 
-# 恢复数据库
-docker exec -i xin-api-postgres psql -U root gateway < backup_20240101.sql
+# 跟踪日志
+docker compose logs -f app
+docker compose logs -f nginx
+
+# 只重建并重启应用
+docker compose up -d --build app
+
+# 重启单个服务
+docker compose restart nginx
+
+# 进入应用容器排查
+docker compose exec app sh
+
+# 查看实际生效的环境变量
+docker compose exec app env
 ```
+
+日志已统一配置为 `json-file` 轮转（单文件 10 MB，保留 3 份），无需额外配置 logrotate。
+
+## 备份与恢复
+
+```bash
+# 备份（在 build 目录执行）
+docker compose exec -T postgres pg_dump -U root -d gateway \
+  > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# 恢复
+docker compose exec -T postgres psql -U root -d gateway < backup_20260101_030000.sql
+```
+
+数据库账号名取自 `.env` 中的 `POSTGRES_USER`，如已修改请同步替换命令中的 `root`。
+
+## 升级与回滚
+
+```bash
+# 1. 拉取新代码
+git pull
+
+# 2. 重新构建并滚动更新（PostgreSQL / Redis 容器不会重建，数据保留）
+docker compose up -d --build
+
+# 3. 清理悬空镜像
+docker image prune -f
+```
+
+回滚到上一个镜像时，可将 `docker-compose.yml` 中的 `image:` 改为固定 tag（如 `xin-api:20260101`），再执行 `docker compose up -d`。
+
+## 生产环境建议
+
+1. **改掉所有默认凭据**：`POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`JWT_SECRET`，并在首次登录后修改管理员密码。
+2. **仅暴露 80/443**：compose 已将数据库与 Redis 绑定到 `127.0.0.1`；如需完全移除此映射，删除对应 `ports` 段落。
+3. **启用 HTTPS**：挂载证书到 `nginx` 容器，增加 443 server 块并配置 HTTP 跳转。
+4. **限制资源**（compose v2 非 Swarm 模式下使用 `deploy.resources` 仅在 `docker compose --compatibility` 时生效，也可改用 `mem_limit` / `cpus`）：
+
+   ```yaml
+   services:
+     app:
+       mem_limit: 2g
+       cpus: 2.0
+   ```
+
+5. **接入外部数据库**：将 `POSTGRES_HOST` / `REDIS_HOST` 指向托管实例，并从 compose 中移除对应服务。
+6. **定期备份**：把上面的 `pg_dump` 命令加入 cron 或系统计划任务，并将备份文件转存到对象存储。
 
 ## 故障排查
 
-### 查看服务日志
+### 1. 端口被占用
 
 ```bash
-# 查看所有服务日志
-docker-compose logs
-
-# 查看特定服务日志
-docker-compose logs app
-docker-compose logs postgres
-docker-compose logs redis
-docker-compose logs nginx
-
-# 实时跟踪日志
-docker-compose logs -f app
+# Linux / macOS
+ss -tlnp | grep -E ':(80|443|5432|6379)\b'
+# Windows PowerShell
+Get-NetTCPConnection -LocalPort 80,443 -State Listen
 ```
 
-### 常见问题
+在 `.env` 中修改 `NGINX_HTTP_PORT` / `POSTGRES_PORT` / `REDIS_PORT` 后重新 `docker compose up -d`。
 
-#### 1. 端口被占用
+### 2. 应用一直 unhealthy
 
 ```bash
-# 检查端口占用
-netstat -tlnp | grep 80
-
-# 修改 docker-compose.yml 中的端口映射
+docker compose logs --tail=200 app
+docker compose exec app wget -q --spider http://127.0.0.1:8080/ && echo OK
 ```
 
-#### 2. 数据库连接失败
+常见原因：数据库密码与已有数据卷中的初始化密码不一致（PostgreSQL 只在空数据目录时应用 `POSTGRES_PASSWORD`）。
+此时需改回原密码，或删除卷后重建：`docker compose down -v`（会清空数据）。
+
+### 3. Nginx 502 Bad Gateway
 
 ```bash
-# 检查 PostgreSQL 状态
-docker-compose ps postgres
-docker-compose logs postgres
-
-# 进入数据库容器
-docker exec -it xin-api-postgres psql -U root -d gateway
+docker compose logs --tail=100 nginx
+docker compose ps app
 ```
 
-#### 3. 应用启动失败
+确认 `app` 为 healthy，且 `.env` 中的 `PROXY_PORT` 与实际监听端口一致。
+
+### 4. 流式响应一次性返回
+
+检查请求是否命中 `/v1/` 或 `/v1beta/` 前缀。只有这两个 location 关闭了 `proxy_buffering`；同时确认客户端未经过额外的 CDN / 网关缓冲。
+
+### 5. 前端页面 404 或白屏
+
+镜像内 `web/dist` 由构建阶段生成，若缺失说明前端构建失败：
 
 ```bash
-# 检查应用日志
-docker-compose logs app
-
-# 检查环境变量
-docker exec xin-api-app env
+docker compose build --no-cache app
+docker compose exec app ls -l web/dist
 ```
 
-## 更新升级
+### 6. 完全重建
 
 ```bash
-# 1. 拉取最新代码
-git pull
-
-# 2. 重新构建镜像
-docker-compose build --no-cache
-
-# 3. 重启服务
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
-
-## 卸载清理
-
-```bash
-# 停止并删除容器
-docker-compose down
-
-# 删除数据卷（谨慎操作！）
-docker-compose down -v
-
-# 删除镜像
-docker rmi build-app
-```
-
-## 联系支持
-
-如有问题，请查看项目文档或提交 Issue。

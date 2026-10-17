@@ -4,319 +4,270 @@
 
 - [Directory Structure](#directory-structure)
 - [Quick Start](#quick-start)
-  - [1. Environment Preparation](#1-environment-preparation)
-  - [2. Configure Environment Variables](#2-configure-environment-variables)
-  - [3. Start Services](#3-start-services)
-  - [4. Access Services](#4-access-services)
-- [Deployment Script Usage](#deployment-script-usage)
-- [Service Architecture](#service-architecture)
-  - [Port Mapping](#port-mapping)
+- [Architecture and Ports](#architecture-and-ports)
+- [Environment Variables](#environment-variables)
 - [Data Persistence](#data-persistence)
-- [Production Deployment Recommendations](#production-deployment-recommendations)
-  - [1. Security Configuration](#1-security-configuration)
-  - [2. Performance Optimization](#2-performance-optimization)
-  - [3. Log Management](#3-log-management)
-  - [4. Backup Strategy](#4-backup-strategy)
+- [Day-to-Day Operations](#day-to-day-operations)
+- [Backup and Restore](#backup-and-restore)
+- [Upgrade and Rollback](#upgrade-and-rollback)
+- [Production Recommendations](#production-recommendations)
 - [Troubleshooting](#troubleshooting)
-  - [View Service Logs](#view-service-logs)
-  - [Common Issues](#common-issues)
-- [Update and Upgrade](#update-and-upgrade)
-- [Uninstall and Cleanup](#uninstall-and-cleanup)
-- [Support](#support)
 
 ## Directory Structure
 
 ```
 build/
-├── Dockerfile              # Go backend multi-stage build (includes frontend static files)
-├── Dockerfile.nginx        # Nginx reverse proxy configuration
-├── docker-compose.yml      # Service orchestration
-├── .dockerignore          # Docker build ignore files
+├── Dockerfile                   # Go backend + frontend multi-stage build
+├── Dockerfile.nginx             # Nginx reverse proxy image
+├── docker-compose.yml           # Four services (postgres / redis / app / nginx)
+├── .dockerignore                # Ignore rules for the build/ context
 ├── nginx/
-│   ├── nginx.conf         # Nginx main configuration
-│   └── default.conf       # Site configuration
-├── scripts/
-│   └── deploy.sh          # Deployment script
-└── README.md              # This file
-web/                        # Frontend source directory (integrated into backend build)
-├── src/
-├── public/
-└── package.json
+│   ├── nginx.conf               # Nginx main configuration
+│   └── default.conf.template    # Site template (PROXY_PORT injected at startup)
+├── README.md                    # Chinese version
+└── README.en.md                 # This file
 ```
+
+> The application image is built from the **repository root**, so build exclusions come from the root `.dockerignore`.
 
 ## Quick Start
 
-### 1. Environment Preparation
+### 1. Requirements
 
-Ensure you have installed:
-- Docker >= 20.10
-- Docker Compose >= 2.0
+- Docker Engine >= 24.0
+- Docker Compose v2 (`docker compose`, not the legacy `docker-compose`)
+- At least 2 GB of RAM recommended (`vite build` is memory-hungry)
 
 ### 2. Configure Environment Variables
 
 ```bash
-# Copy environment variable template
+cd build
 cp ../.env.example .env
-
-# Edit .env file, modify the following key configurations
-vim .env
 ```
 
-**Key Configuration Items:**
+Change at least these three values before starting:
 
 ```env
-# Database configuration (be sure to change password in production)
-POSTGRES_USER=root
 POSTGRES_PASSWORD=your-strong-password
-POSTGRES_DB=gateway
-
-# Redis configuration
 REDIS_PASSWORD=your-redis-password
-
-# JWT secret (be sure to change to a random strong password in production)
-JWT_SECRET=your-jwt-secret-key-min-32-chars
-
-# Run mode
-GIN_MODE=release
+JWT_SECRET=your-random-secret-at-least-32-chars   # openssl rand -base64 48
 ```
 
-### 3. Start Services
-
-Start all services with one command using the deployment script:
+### 3. Start
 
 ```bash
-# Enter build directory
-cd build
-
-# Start all services
-./scripts/deploy.sh start
+# Run from the build directory
+docker compose up -d --build
 ```
 
-Or use Docker Compose commands:
+The first build runs `npm ci` + `vite build`, then compiles Go, then assembles the runtime image.
+`app` waits for healthy PostgreSQL / Redis, and `nginx` waits for a healthy `app`.
+
+### 4. Verify
 
 ```bash
-docker-compose up -d --build
+docker compose ps          # all four services should report healthy
+curl http://localhost/     # returns the landing page HTML
 ```
 
-### 4. Access Services
+Open `http://localhost` for the web console. The default administrator is `admin / 12345678` — **change it immediately after the first login**.
 
-- **Web Interface**: http://localhost
-- **API Address**: http://localhost/v1
-
-## Deployment Script Usage
+### 5. Stop
 
 ```bash
-./scripts/deploy.sh [command]
-
-Commands:
-  start    Start all services
-  stop     Stop all services
-  restart  Restart all services
-  logs     View logs (optional: specify service name)
-  status   View service status
-  build    Rebuild images
-  reset    Complete reset (delete all data)
-  update   Update code and restart services
-  help     Show help information
+docker compose down        # stops and removes containers, keeps volumes
 ```
 
-### Common Command Examples
-
-```bash
-# Start services
-./scripts/deploy.sh start
-
-# View all service status
-./scripts/deploy.sh status
-
-# View application logs
-./scripts/deploy.sh logs app
-
-# View Nginx logs in real-time
-./scripts/deploy.sh logs -f nginx
-
-# Restart services
-./scripts/deploy.sh restart
-
-# Stop services
-./scripts/deploy.sh stop
-
-# Update to latest version
-./scripts/deploy.sh update
-```
-
-## Service Architecture
+## Architecture and Ports
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Docker Compose                       │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │    Nginx     │  │  Xin-api     │  │  PostgreSQL  │       │
-│  │   (80/443)   │  │   (8080)     │  │    (5432)    │       │
-│  └──────┬───────┘  └──────────────┘  └──────────────┘       │
-│         │                                                    │
-│         │  Static files                                      │
-│         │  API proxy                                         │
-│         ▼                                                    │
-│  ┌──────────────┐                                            │
-│  │    Redis     │                                            │
-│  │    (6379)    │                                            │
-│  └──────────────┘                                            │
-└─────────────────────────────────────────────────────────────┘
+Browser / SDK
+    │
+    ▼
+┌───────────────┐        ┌──────────────────────────┐
+│    nginx      │──────▶ │  app (Go, non-root user)  │
+│  80 / 443     │        │  container port 8080      │
+└───────────────┘        └───────┬──────────┬────────┘
+                                 │          │
+                          ┌──────▼───┐  ┌───▼──────┐
+                          │ postgres │  │  redis   │
+                          │   5432   │  │  6379    │
+                          └──────────┘  └──────────┘
 ```
 
-### Port Mapping
+| Service | Container port | Host port | Notes |
+|---------|---------------|-----------|-------|
+| nginx | 80 / 443 | `${NGINX_HTTP_PORT:-80}` / `${NGINX_HTTPS_PORT:-443}` | Only public entry point |
+| app | `${PROXY_PORT:-8080}` | not published | Internal only, declared with `expose` |
+| postgres | 5432 | `127.0.0.1:${POSTGRES_PORT:-5432}` | Bound to loopback for local debugging |
+| redis | 6379 | `127.0.0.1:${REDIS_PORT:-6379}` | Bound to loopback for local debugging |
 
-| Service | Container Port | Host Port | Description |
-|---------|---------------|-----------|-------------|
-| Nginx | 80/443 | 80/443 | Web entry point |
-| Xin-api | 8080 | 8080 | API service |
-| PostgreSQL | 5432 | 5432 | Database |
-| Redis | 6379 | 6379 | Cache service |
+> Port 443 is mapped but no TLS listener is configured yet. To enable HTTPS, mount certificates and add a `listen 443 ssl;` server block to `default.conf.template`.
+
+Exposed API surfaces:
+
+| Path | Protocol |
+|------|----------|
+| `/v1/chat/completions` | OpenAI Chat Completions |
+| `/v1/responses` | OpenAI Responses |
+| `/v1beta/models/{model}:generateContent` | Gemini |
+
+`proxy_buffering` is disabled for both `/v1/` and `/v1beta/`, so SSE chunks are streamed straight through.
+
+## Environment Variables
+
+See [.env.example](../.env.example) for the full list. Common entries:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PROXY_PORT` | `8080` | Backend listen port; also drives the Nginx upstream |
+| `NGINX_HTTP_PORT` / `NGINX_HTTPS_PORT` | `80` / `443` | Published Nginx ports |
+| `GIN_MODE` | `release` | `release` or `debug` |
+| `GATEWAY_NODE` | empty (hostname) | Written to `request_logs.gateway_node` |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `root` / `123456` / `gateway` | Applied by the postgres image on first init |
+| `REDIS_PASSWORD` / `REDIS_DB` | `123456` / `0` | Redis credentials and database index |
+| `JWT_SECRET` / `JWT_EXPIRE` | built-in default / `24h` | Admin API signing key and lifetime |
+| `CB_FAILURE_THRESHOLD` / `CB_RECOVERY_INTERVAL` | `5` / `60s` | Circuit breaker threshold and probe interval |
+| `CACHE_CHANNEL_EXPIRE` | `300s` | Channel cache pool TTL |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | Upstream request timeout |
+| `PROXY_MAX_BODY_MB` | `10` | Request body limit (Nginx allows 50 MB) |
+| `LOG_REQUEST_BODY` / `LOG_RESPONSE_BODY` | `false` | Persist raw request/response bodies |
+| `USD_CNY_RATE` | `7.2` | Settlement rate for USD-priced models |
+
+> After editing ports or credentials in `.env`, run `docker compose up -d` to recreate containers.
+> Changing `PROXY_PORT` alone requires no Nginx edit — the template picks up the new upstream port.
 
 ## Data Persistence
 
-Data is persisted through Docker Volumes:
-
-- `postgres_data`: PostgreSQL data
-- `redis_data`: Redis data
-- `nginx_logs`: Nginx logs
-
-View data volumes:
+| Volume | Mount | Content |
+|--------|-------|---------|
+| `xin-api_postgres_data` | `/var/lib/postgresql/data` | All business data |
+| `xin-api_redis_data` | `/data` | Redis AOF files |
+| `xin-api_nginx_logs` | `/var/log/nginx` | Access and error logs |
 
 ```bash
-docker volume ls
-docker volume inspect build_postgres_data
+docker volume ls | grep xin-api
+docker volume inspect xin-api_postgres_data
 ```
 
-## Production Deployment Recommendations
-
-### 1. Security Configuration
-
-- **Change default passwords**: Be sure to modify `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`
-- **Close port exposure**: In production, only expose Nginx ports 80/443
-- **Enable HTTPS**: Configure SSL certificates
-
-### 2. Performance Optimization
-
-Edit `docker-compose.yml` to adjust resource limits:
-
-```yaml
-services:
-  app:
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-```
-
-### 3. Log Management
-
-Configure log rotation:
-
-```yaml
-services:
-  app:
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-```
-
-### 4. Backup Strategy
-
-Regularly backup PostgreSQL data:
+## Day-to-Day Operations
 
 ```bash
-# Backup database
-docker exec xin-api-postgres pg_dump -U root gateway > backup_$(date +%Y%m%d).sql
+# Status including health check results
+docker compose ps
 
-# Restore database
-docker exec -i xin-api-postgres psql -U root gateway < backup_20240101.sql
+# Follow logs
+docker compose logs -f app
+docker compose logs -f nginx
+
+# Rebuild and restart only the application
+docker compose up -d --build app
+
+# Restart a single service
+docker compose restart nginx
+
+# Shell into the application container
+docker compose exec app sh
+
+# Inspect effective environment variables
+docker compose exec app env
 ```
+
+Logs use `json-file` rotation (10 MB per file, 3 files); no logrotate setup is needed.
+
+## Backup and Restore
+
+```bash
+# Backup (run from the build directory)
+docker compose exec -T postgres pg_dump -U root -d gateway \
+  > backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Restore
+docker compose exec -T postgres psql -U root -d gateway < backup_20260101_030000.sql
+```
+
+The user comes from `POSTGRES_USER` in `.env`; replace `root` if you changed it.
+
+## Upgrade and Rollback
+
+```bash
+# 1. Pull new code
+git pull
+
+# 2. Rebuild and update (PostgreSQL / Redis containers stay untouched)
+docker compose up -d --build
+
+# 3. Remove dangling images
+docker image prune -f
+```
+
+To roll back, pin a fixed tag in `docker-compose.yml` (e.g. `image: xin-api:20260101`) and run `docker compose up -d`.
+
+## Production Recommendations
+
+1. **Rotate every default credential**: `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET`, and the admin password after first login.
+2. **Expose only 80/443**: PostgreSQL and Redis are already bound to `127.0.0.1`; delete their `ports` blocks to remove host access entirely.
+3. **Enable HTTPS**: mount certificates into the `nginx` container, add a 443 server block, and redirect HTTP to HTTPS.
+4. **Limit resources** (`deploy.resources` only applies under `docker compose --compatibility`; `mem_limit` / `cpus` works in plain Compose):
+
+   ```yaml
+   services:
+     app:
+       mem_limit: 2g
+       cpus: 2.0
+   ```
+
+5. **Use managed databases**: point `POSTGRES_HOST` / `REDIS_HOST` at external instances and drop the bundled services.
+6. **Schedule backups**: put the `pg_dump` command in cron / Task Scheduler and ship the dumps to object storage.
 
 ## Troubleshooting
 
-### View Service Logs
+### 1. Port already in use
 
 ```bash
-# View all service logs
-docker-compose logs
-
-# View specific service logs
-docker-compose logs app
-docker-compose logs postgres
-docker-compose logs redis
-docker-compose logs nginx
-
-# Real-time log tracking
-docker-compose logs -f app
+# Linux / macOS
+ss -tlnp | grep -E ':(80|443|5432|6379)\b'
+# Windows PowerShell
+Get-NetTCPConnection -LocalPort 80,443 -State Listen
 ```
 
-### Common Issues
+Change `NGINX_HTTP_PORT` / `POSTGRES_PORT` / `REDIS_PORT` in `.env` and run `docker compose up -d` again.
 
-#### 1. Port Occupied
+### 2. Application stays unhealthy
 
 ```bash
-# Check port usage
-netstat -tlnp | grep 80
-
-# Modify port mapping in docker-compose.yml
+docker compose logs --tail=200 app
+docker compose exec app wget -q --spider http://127.0.0.1:8080/ && echo OK
 ```
 
-#### 2. Database Connection Failed
+Usual cause: the database password no longer matches the credential stored in an existing volume (PostgreSQL only applies `POSTGRES_PASSWORD` to an empty data directory). Restore the original password, or wipe the volume with `docker compose down -v` (destroys data).
+
+### 3. Nginx returns 502
 
 ```bash
-# Check PostgreSQL status
-docker-compose ps postgres
-docker-compose logs postgres
-
-# Enter database container
-docker exec -it xin-api-postgres psql -U root -d gateway
+docker compose logs --tail=100 nginx
+docker compose ps app
 ```
 
-#### 3. Application Startup Failed
+Confirm `app` is healthy and that `PROXY_PORT` in `.env` matches the actual listen port.
+
+### 4. Streaming responses arrive all at once
+
+Verify the request hits the `/v1/` or `/v1beta/` prefix — only those locations disable `proxy_buffering`. Also make sure no CDN or extra gateway is buffering the response.
+
+### 5. Frontend returns 404 or a blank page
+
+`web/dist` is produced during the image build; if it is missing the frontend build failed:
 
 ```bash
-# Check application logs
-docker-compose logs app
-
-# Check environment variables
-docker exec xin-api-app env
+docker compose build --no-cache app
+docker compose exec app ls -l web/dist
 ```
 
-## Update and Upgrade
+### 6. Full rebuild
 
 ```bash
-# 1. Pull latest code
-git pull
-
-# 2. Rebuild images
-docker-compose build --no-cache
-
-# 3. Restart services
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
-
-## Uninstall and Cleanup
-
-```bash
-# Stop and remove containers
-docker-compose down
-
-# Delete data volumes (caution!)
-docker-compose down -v
-
-# Delete images
-docker rmi build-app
-```
-
-## Support
-
-If you have any questions, please check the project documentation or submit an Issue.
