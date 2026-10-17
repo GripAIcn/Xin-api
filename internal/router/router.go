@@ -18,7 +18,9 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	breaker *service.CircuitBreaker, rdb *redis.Client) {
 	// 1. 初始化 Handler（注入底层的 DB 仓库和配置）
 	userRepo := postgresql.NewUserRepo(db)
-	userHandler := handler.NewUserHandler(userRepo, cfg.JWT)
+	logRepo := postgresql.NewLogRepo(db)
+	userHandler := handler.NewUserHandler(userRepo, cfg.JWT, logRepo)
+	logHandler := handler.NewLogHandler(logRepo)
 	apiKeyRepo := postgresql.NewApiKeyRepo(db)
 	apiKeyHandler := handler.NewApiKeyHandler(apiKeyRepo)
 	channelRepo := postgresql.NewChannelRepo(db)
@@ -64,6 +66,11 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		protected := v1.Group("")
 		protected.Use(middleware.JWTAuth(cfg.JWT.Secret))
 		{
+			// 请求日志查询：所有登录用户可访问，仓储层按当前用户隔离，管理员可查全部
+			protected.GET("/logs", logHandler.List)    // 日志列表（分页 + 多维过滤）
+			protected.GET("/logs/:id", logHandler.Get) // 日志详情（含计费明细）
+			protected.GET("/billing-logs", logHandler.ListBillings) // 账单日志（消费/充值/退款合并，分页 + 多维过滤）
+
 			// API Key：所有登录用户均可管理，但仓储/业务层按当前用户 user_id 隔离
 			protected.POST("/apikeys", apiKeyHandler.CreateApiKey)        // 分发新 Key
 			protected.GET("/apikeys", apiKeyHandler.ListApiKeys)          // 查询当前用户的 Key 列表
@@ -118,6 +125,8 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			cfg.Cache.ChannelExpireTime,
 			balancer, breaker, streamProxy,
 			adapterGroup,
+			logRepo,
+			userRepo,
 		)
 		dataPlane := v1.Group("")
 		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))

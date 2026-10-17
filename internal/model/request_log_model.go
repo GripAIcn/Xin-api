@@ -58,7 +58,7 @@ type RequestLog struct {
 	IsCancelled         bool       `gorm:"column:is_cancelled;default:false;comment:是否被中断" json:"is_cancelled"`
 	CancelledBy         *string    `gorm:"column:cancelled_by;type:varchar(32);comment:中断方 client/upstream" json:"cancelled_by,omitempty"`
 	RetryCount          int        `gorm:"column:retry_count;not null;default:0;comment:实际重试次数" json:"retry_count"`
-	RetryChannels       []int64    `gorm:"column:retry_channels;type:bigint[];default:'{}';comment:重试跨过的渠道 ID 序列" json:"retry_channels"`
+	RetryChannels       Int64Array `gorm:"column:retry_channels;type:bigint[];default:'{}';comment:重试跨过的渠道 ID 序列" json:"retry_channels"`
 	UsageSource         string     `gorm:"column:usage_source;type:varchar(32);not null;default:upstream;comment:用量来源 upstream/estimated" json:"usage_source"`
 	RouteStrategy       *string    `gorm:"column:route_strategy;type:varchar(32);comment:选路策略快照" json:"route_strategy,omitempty"`
 	RouteWeight         *int       `gorm:"column:route_weight;comment:命中渠道权重快照" json:"route_weight,omitempty"`

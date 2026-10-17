@@ -293,3 +293,174 @@ export interface CreateApiKeyResponse extends ApiKey {
 export interface DeleteApiKeyRequest {
   id: number
 }
+
+// === 分页 ===
+
+// 控制面通用分页返回体（对应后端 response.PageData）
+export interface PageData<T> {
+  list: T[]
+  total: number
+  page: number
+  page_size: number
+}
+
+// === 日志（使用日志 + 消费记录）===
+
+export type LogType =
+  | 'consumption'
+  | 'error'
+  | 'system'
+  | 'management'
+  | 'login'
+  | 'refund'
+  | 'recharge'
+
+export type LogStatus = 'success' | 'error'
+
+// 日志列表行（GET /v1/logs 的 list 元素）
+export interface LogItem {
+  id: number
+  request_id: string
+  upstream_req_id?: string
+  log_type: LogType
+  status: LogStatus
+  model: string
+  channel_id?: number
+  channel_name?: string
+  api_key_id?: number
+  user_id?: number
+  user_name?: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  total_cost: number
+  currency: string
+  latency_ms?: number
+  created_at: string
+}
+
+// 计价单价快照（billing_records 单价 + ratio + 币种）
+export interface PriceSnapshot {
+  input_price: number
+  output_price: number
+  cached_input_price: number
+  cache_creation_price: number
+  ratio: number
+  currency: string
+}
+
+// 计费明细（消费记录，来自 billing_records）
+export interface BillingDetail {
+  id: number
+  request_id: string
+  model: string
+  channel_id?: number
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cached_input_tokens: number
+  cache_creation_tokens: number
+  price: PriceSnapshot
+  input_cost: number
+  output_cost: number
+  cached_input_cost: number
+  cache_creation_cost: number
+  total_cost: number
+  balance_before?: number
+  balance_after?: number
+  status: string
+  created_at: string
+}
+
+// 日志详情（GET /v1/logs/:id）
+export interface LogDetail extends LogItem {
+  upstream_model?: string
+  provider?: string
+  protocol?: string
+  status_code?: number
+  finish_reason?: string
+  is_stream: boolean
+  is_cancelled: boolean
+  cancelled_by?: string
+  retry_count: number
+  retry_channels: number[]
+  usage_source: string
+  route_strategy?: string
+  route_weight?: number
+  cached_input_tokens: number
+  cache_creation_tokens: number
+  reasoning_tokens: number
+  ttft_ms?: number
+  generation_ms?: number
+  error_stage?: string
+  error_type?: string
+  error_code?: string
+  error_message?: string
+  client_ip?: string
+  gateway_node?: string
+  started_at?: string
+  completed_at?: string
+  billing?: BillingDetail
+}
+
+// 日志列表查询参数（字段名与后端 query 一致，可直接作为 query 发送）
+export interface LogListQuery {
+  page?: number
+  page_size?: number
+  log_type?: LogType
+  model?: string
+  channel_id?: number
+  user_id?: number
+  api_key_id?: number
+  request_id?: string
+  status?: LogStatus
+  start_time?: string
+  end_time?: string
+}
+
+// === 账单日志（消费 / 充值 / 退款资金流水）===
+
+export type BillingLogSource = 'consumption' | 'recharge' | 'refund'
+
+// 账单流水行（GET /v1/billing-logs 的 list 元素，后端扁平结构）
+export interface BillingLogItem {
+  id: number
+  source: BillingLogSource
+  request_id: string
+  user_id?: number
+  user_name?: string
+  model: string
+  currency: string
+  // 带符号金额：消费为负，充值 / 退款为正
+  amount: number
+  balance_before?: number
+  balance_after?: number
+  status: string
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cached_input_tokens: number
+  cache_creation_tokens: number
+  input_price: number
+  output_price: number
+  cached_input_price: number
+  cache_creation_price: number
+  ratio: number
+  input_cost: number
+  output_cost: number
+  cached_input_cost: number
+  cache_creation_cost: number
+  created_at: string
+}
+
+// 账单流水查询参数（字段名与后端 query 一致，可直接作为 query 发送）
+export interface BillingLogQuery {
+  page?: number
+  page_size?: number
+  source?: BillingLogSource
+  user_id?: number
+  model?: string
+  request_id?: string
+  start_time?: string
+  end_time?: string
+}

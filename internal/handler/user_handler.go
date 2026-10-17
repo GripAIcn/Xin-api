@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"Xin-api/config"
@@ -22,15 +24,17 @@ import (
 type UserHandler struct {
 	userRepo postgresql.UserRepo
 	validate *validator.Validate
-	jwtCfg   config.JWTConfig // JWT 配置（密钥、过期时间）
+	jwtCfg   config.JWTConfig   // JWT 配置（密钥、过期时间）
+	logRepo  postgresql.LogRepo // 请求日志仓储（用于登录/充值等审计日志）
 }
 
 // NewUserHandler 构造函数注入依赖
-func NewUserHandler(repo postgresql.UserRepo, jwtCfg config.JWTConfig) *UserHandler {
+func NewUserHandler(repo postgresql.UserRepo, jwtCfg config.JWTConfig, logRepo postgresql.LogRepo) *UserHandler {
 	return &UserHandler{
 		userRepo: repo,
 		validate: validator.New(),
 		jwtCfg:   jwtCfg,
+		logRepo:  logRepo,
 	}
 }
 
@@ -56,6 +60,11 @@ func toUserResponse(u model.User) form.UserResponse {
 func (h *UserHandler) Login(c *gin.Context) {
 	var req form.UserLoginReq
 
+	// 入口即生成登录日志所需的请求 ID、开始时间与客户端 IP
+	requestID := uuid.NewString()
+	startedAt := time.Now()
+	clientIP := c.ClientIP()
+
 	// 1. 参数绑定与校验
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Error(c.Request.Context(), "bind login request failed: %v", err)
@@ -78,6 +87,8 @@ func (h *UserHandler) Login(c *gin.Context) {
 	}
 	if user == nil {
 		logger.Warn(c.Request.Context(), "user not found: %s", req.Username)
+		// 用户不存在：无法关联用户，记一条失败登录日志
+		h.writeLoginLog(c.Request.Context(), requestID, nil, clientIP, startedAt, false, "user not found")
 		response.AdminFail(c, response.Unauthorized) // 统一凭证错误响应
 		return
 	}
@@ -85,6 +96,8 @@ func (h *UserHandler) Login(c *gin.Context) {
 	// 2.1 禁用用户不可登录
 	if user.Status == model.UserStatusDisabled {
 		logger.Warn(c.Request.Context(), "disabled user login attempt: %s (id=%d)", user.Username, user.ID)
+		uid := int64(user.ID)
+		h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, false, "user disabled")
 		response.AdminFail(c, response.Unauthorized)
 		return
 	}
@@ -92,6 +105,8 @@ func (h *UserHandler) Login(c *gin.Context) {
 	// 3. 验证密码（bcrypt 比较）
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		logger.Warn(c.Request.Context(), "password mismatch for user: %s", req.Username)
+		uid := int64(user.ID)
+		h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, false, "invalid password")
 		response.AdminFail(c, response.Unauthorized)
 		return
 	}
@@ -106,6 +121,10 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	// 5. 返回成功响应
 	logger.Info(c.Request.Context(), "user login success: %s (id=%d)", user.Username, user.ID)
+
+	// 登录成功日志（写库失败不阻断主流程）
+	uid := int64(user.ID)
+	h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, true, "")
 
 	response.AdminSuccess(c, form.UserLoginResponse{
 		Token:    token,
@@ -285,6 +304,11 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 
 // RechargeBalance 管理员为用户充值（仅增加余额）
 func (h *UserHandler) RechargeBalance(c *gin.Context) {
+	// 入口即生成充值审计日志所需的请求 ID、开始时间与客户端 IP
+	requestID := uuid.NewString()
+	startedAt := time.Now()
+	clientIP := c.ClientIP()
+
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
 		response.AdminFail(c, response.InvalidParams)
@@ -327,8 +351,80 @@ func (h *UserHandler) RechargeBalance(c *gin.Context) {
 		return
 	}
 
+	// 充值成功日志：金额写入 total_cost 便于审计，币种取被充值用户币种
+	h.writeRechargeLog(c.Request.Context(), requestID, int64(id), req.Amount, updated.Currency, clientIP, startedAt)
+
 	logger.Info(c.Request.Context(), "recharge balance success: user=%d amount=%f", uint(id), req.Amount)
 	response.AdminSuccess(c, toUserResponse(*updated))
+}
+
+// writeLoginLog 写入一条登录审计日志（log_type=login）。
+// 说明：日志写库失败仅记录错误，绝不阻断登录主流程。
+func (h *UserHandler) writeLoginLog(ctx context.Context, requestID string, userID *int64, clientIP string, startedAt time.Time, success bool, errMsg string) {
+	// 防御：未注入日志仓储时跳过
+	if h.logRepo == nil {
+		return
+	}
+
+	now := time.Now()
+	log := &model.RequestLog{
+		RequestID:   requestID,
+		UserID:      userID,
+		Model:       "", // 非模型事件，显式写空串满足 NOT NULL 约束
+		LogType:     model.LogTypeLogin,
+		Status:      model.LogStatusSuccess,
+		UsageSource: model.UsageSourceUpstream, // 显式赋值，避免零值 "" 触发 NOT NULL 约束
+		Currency:    "USD",                     // 显式给出有效币种，避免落库空串
+		StartedAt:   &startedAt,
+		CompletedAt: &now,
+	}
+	if !success {
+		log.Status = model.LogStatusError
+	}
+	if errMsg != "" {
+		log.ErrorMessage = &errMsg
+	}
+	if clientIP != "" {
+		log.ClientIP = &clientIP
+	}
+
+	if err := h.logRepo.Create(ctx, log); err != nil {
+		logger.Error(ctx, "write login log failed: %v", err)
+	}
+}
+
+// writeRechargeLog 写入一条充值审计日志（log_type=recharge）。
+// 约定：本次充值金额写入 total_cost，便于日志列表「费用」列展示；日志写库失败不阻断主流程。
+func (h *UserHandler) writeRechargeLog(ctx context.Context, requestID string, userID int64, amount float64, currency string, clientIP string, startedAt time.Time) {
+	// 防御：未注入日志仓储时跳过
+	if h.logRepo == nil {
+		return
+	}
+	if currency == "" {
+		currency = "USD"
+	}
+
+	now := time.Now()
+	uid := userID
+	log := &model.RequestLog{
+		RequestID:   requestID,
+		UserID:      &uid, // 被充值用户（非操作管理员）
+		Model:       "",   // 非模型事件，显式写空串满足 NOT NULL 约束
+		LogType:     model.LogTypeRecharge,
+		Status:      model.LogStatusSuccess,
+		UsageSource: model.UsageSourceUpstream, // 显式赋值，避免零值 "" 触发 NOT NULL 约束
+		Currency:    currency,
+		TotalCost:   amount, // 审计用途：记录本次充值金额
+		StartedAt:   &startedAt,
+		CompletedAt: &now,
+	}
+	if clientIP != "" {
+		log.ClientIP = &clientIP
+	}
+
+	if err := h.logRepo.Create(ctx, log); err != nil {
+		logger.Error(ctx, "write recharge log failed: %v", err)
+	}
 }
 
 // GetProfile 获取当前登录用户的个人资料（所有登录用户可访问）

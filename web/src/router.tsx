@@ -3,10 +3,12 @@ import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom'
 
 import AppLayout from '@/layouts/AppLayout'
 import ApiKeysView from '@/pages/ApiKeysView'
+import BillingView from '@/pages/BillingView'
 import ChannelsView from '@/pages/ChannelsView'
 import DashboardView from '@/pages/DashboardView'
 import LandingView from '@/pages/LandingView'
 import LoginView from '@/pages/LoginView'
+import LogsView from '@/pages/LogsView'
 import ModelsView from '@/pages/ModelsView'
 import PricingView from '@/pages/PricingView'
 import SettingsView from '@/pages/SettingsView'
@@ -95,6 +97,22 @@ export const router = createBrowserRouter([
             element: (
               <Page title="API Key">
                 <ApiKeysView />
+              </Page>
+            ),
+          },
+          {
+            path: 'logs',
+            element: (
+              <Page title="日志">
+                <LogsView />
+              </Page>
+            ),
+          },
+          {
+            path: 'billing',
+            element: (
+              <Page title="账单日志">
+                <BillingView />
               </Page>
             ),
           },

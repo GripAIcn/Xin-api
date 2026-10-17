@@ -8,6 +8,8 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  ReceiptText,
+  ScrollText,
   Settings,
   UserCog,
   Users,
@@ -60,6 +62,8 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
             ]
           : []),
         { name: 'API Key', path: '/apikeys', icon: KeyRound },
+        { name: '日志', path: '/logs', icon: ScrollText },
+        { name: '账单日志', path: '/billing', icon: ReceiptText },
       ],
     },
     {

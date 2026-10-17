@@ -16,6 +16,7 @@ const (
 	CtxUserIDKey   = "user_id"
 	CtxUsernameKey = "username"
 	CtxRoleKey     = "role"
+	CtxAPIKeyIDKey = "api_key_id"
 )
 
 // JWTAuth 控制面管理后台鉴权中间件
@@ -111,6 +112,9 @@ func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 			response.DataPlaneError(c, response.Unauthorized)
 			return
 		}
+
+		c.Set(CtxUserIDKey, apiKey.UserID)
+		c.Set(CtxAPIKeyIDKey, apiKey.ID)
 
 		c.Next()
 	}
