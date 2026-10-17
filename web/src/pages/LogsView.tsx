@@ -62,15 +62,56 @@ const toOptionalNumber = (value: string): number | undefined => {
   return Number.isFinite(num) ? num : undefined
 }
 
-// datetime-local（YYYY-MM-DDTHH:mm）→ 后端可解析的 "YYYY-MM-DD HH:mm:ss"
-const toBackendTime = (value: string): string | undefined => {
-  const trimmed = value.trim()
-  if (!trimmed) return undefined
-  const normalized = trimmed.includes('T') ? trimmed.replace('T', ' ') : trimmed
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(normalized)) {
-    return `${normalized}:00`
+// 时间范围预设（不支持自定义时间）
+type TimeRange = 'today' | '1d' | '7d' | 'week' | '30d' | 'month'
+
+const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
+  { value: 'today', label: '当天' },
+  { value: '1d', label: '1天' },
+  { value: '7d', label: '7天' },
+  { value: 'week', label: '本周' },
+  { value: '30d', label: '30天' },
+  { value: 'month', label: '本月' },
+]
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const pad = (n: number): string => String(n).padStart(2, '0')
+
+// Date → 后端可解析的 "YYYY-MM-DD HH:mm:ss"
+const formatTimeParam = (d: Date): string =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+
+// 按预设计算查询区间：起始时间 → 当前时间
+const buildTimeRange = (range: TimeRange): { start_time: string; end_time: string } => {
+  const end = new Date()
+  const start = new Date(end)
+  start.setHours(0, 0, 0, 0)
+
+  switch (range) {
+    case 'today':
+      break
+    case '1d':
+      start.setTime(end.getTime() - DAY_MS)
+      break
+    case '7d':
+      start.setTime(end.getTime() - 7 * DAY_MS)
+      break
+    case 'week': {
+      // 周一作为一周起始（getDay：0=周日）
+      const day = start.getDay()
+      start.setDate(start.getDate() - (day === 0 ? 6 : day - 1))
+      break
+    }
+    case '30d':
+      start.setTime(end.getTime() - 30 * DAY_MS)
+      break
+    case 'month':
+      start.setDate(1)
+      break
   }
-  return normalized
+
+  return { start_time: formatTimeParam(start), end_time: formatTimeParam(end) }
 }
 
 const dash = (value: string | number | null | undefined): ReactNode =>
@@ -347,8 +388,7 @@ export default function LogsView() {
   const [apiKeyId, setApiKeyId] = useState('')
   const [requestId, setRequestId] = useState('')
   const [status, setStatus] = useState('all')
-  const [startTime, setStartTime] = useState('')
-  const [endTime, setEndTime] = useState('')
+  const [timeRange, setTimeRange] = useState<TimeRange>('today')
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detail, setDetail] = useState<LogDetail | null>(null)
@@ -357,9 +397,12 @@ export default function LogsView() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   useEffect(() => {
+    // 首次进入按默认时间范围（当天）查询
+    setFilter(buildTimeRange(timeRange))
     void fetchList().catch((e) => {
       toast.error((e as Error)?.message || '加载日志列表失败')
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchList])
 
   const buildFilters = (): LogListQuery => ({
@@ -370,8 +413,7 @@ export default function LogsView() {
     api_key_id: toOptionalNumber(apiKeyId),
     request_id: requestId.trim() || undefined,
     status: status === 'all' ? undefined : (status as LogListQuery['status']),
-    start_time: toBackendTime(startTime),
-    end_time: toBackendTime(endTime),
+    ...buildTimeRange(timeRange),
   })
 
   const handleSearch = async () => {
@@ -391,9 +433,9 @@ export default function LogsView() {
     setApiKeyId('')
     setRequestId('')
     setStatus('all')
-    setStartTime('')
-    setEndTime('')
+    setTimeRange('today')
     resetFilters()
+    setFilter(buildTimeRange('today'))
     try {
       await fetchList()
     } catch (e) {
@@ -535,22 +577,22 @@ export default function LogsView() {
               </Select>
             </Field>
 
-            <Field label="开始时间">
-              <Input
-                className="w-52"
-                type="datetime-local"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
-            </Field>
-
-            <Field label="结束时间">
-              <Input
-                className="w-52"
-                type="datetime-local"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-              />
+            <Field label="时间范围">
+              <Select
+                value={timeRange}
+                onValueChange={(v) => setTimeRange(v as TimeRange)}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="时间范围" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_RANGE_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
 
             <div className="flex items-center gap-2">
