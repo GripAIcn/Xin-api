@@ -186,9 +186,9 @@ function BalanceChange({ row }: { row: BillingLogItem }) {
   if (row.balance_before == null || row.balance_after == null) return <>-</>
   return (
     <span className="whitespace-nowrap">
-      {money(row.balance_before, row.currency)}
+      {money(row.balance_before, row.settle_currency || 'CNY')}
       <span className="mx-1.5 text-muted-foreground">→</span>
-      {money(row.balance_after, row.currency)}
+      {money(row.balance_after, row.settle_currency || 'CNY')}
     </span>
   )
 }
@@ -216,6 +216,22 @@ function BillingDetailContent({ row }: { row: BillingLogItem }) {
               <span className={amountToneClass(row.amount)}>
                 {formatAmount(row.amount, row.currency)}
               </span>
+            }
+          />
+          <InfoItem
+            label="结算金额"
+            value={
+              isConsumption
+                ? money(row.settle_cost, row.settle_currency || 'CNY')
+                : '-'
+            }
+          />
+          <InfoItem
+            label="结算汇率"
+            value={
+              isConsumption && row.exchange_rate != null
+                ? `1 ${row.currency} = ${row.exchange_rate} CNY`
+                : '-'
             }
           />
           <InfoItem label="余额变动" value={<BalanceChange row={row} />} />

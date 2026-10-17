@@ -10,7 +10,7 @@ type CreateModelPriceReq struct {
 	OutputPrice        model.Money `json:"output_price"`                                              // 输出单价
 	CachedInputPrice   model.Money `json:"cached_input_price"`                                        // 输入缓存命中单价
 	CacheCreationPrice model.Money `json:"cache_creation_price"`                                      // 输入缓存创建单价
-	Currency           string      `json:"currency" validate:"required,min=1,max=16"`                 // 币种（默认 USD）
+	Currency           string      `json:"currency" validate:"required,min=1,max=16"`                 // 币种，仅支持 USD/CNY（默认 USD）
 }
 
 // UpdateModelPriceReq 编辑价格方案请求入参（整体覆盖）
@@ -20,7 +20,7 @@ type UpdateModelPriceReq struct {
 	OutputPrice        model.Money `json:"output_price"`
 	CachedInputPrice   model.Money `json:"cached_input_price"`
 	CacheCreationPrice model.Money `json:"cache_creation_price"`
-	Currency           string      `json:"currency" validate:"required,min=1,max=16"`
+	Currency           string      `json:"currency" validate:"required,min=1,max=16"`                                                    // 币种，仅支持 USD/CNY
 	Status             string      `json:"status" binding:"omitempty,oneof=active disabled" validate:"omitempty,oneof=active disabled"` // 可选，非空时覆盖
 }
 

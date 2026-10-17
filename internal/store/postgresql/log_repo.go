@@ -69,15 +69,27 @@ func (r *logRepo) CreateWithBilling(ctx context.Context, log *model.RequestLog, 
 			return err
 		}
 
+		// 结算币种兜底为 CNY（防御性处理，避免历史调用方未赋值）
+		if billing.SettleCurrency == "" {
+			billing.SettleCurrency = model.CurrencyCNY
+		}
+
 		before := user.Balance
-		after := model.Money{Decimal: before.Decimal.Sub(billing.TotalCost.Decimal)}
 		billing.BalanceBefore = &before
+
+		// 结算失败（如汇率缺失）：只锁定并记录余额快照，不做任何扣减
+		if billing.Status == model.BillingStatusFailed {
+			billing.BalanceAfter = &before
+			return tx.Create(billing).Error
+		}
+
+		after := model.Money{Decimal: before.Decimal.Sub(billing.SettleCost.Decimal)}
 		billing.BalanceAfter = &after
 
-		// 条件更新防止扣成负数；余额不足（RowsAffected == 0）时安全兜底，不返回错误
+		// 按 CNY 结算金额条件更新防止扣成负数；余额不足（RowsAffected == 0）时安全兜底，不返回错误
 		res := tx.Model(&model.User{}).
-			Where("id = ? AND balance >= ?", billing.UserID, billing.TotalCost).
-			Update("balance", gorm.Expr("balance - ?", billing.TotalCost))
+			Where("id = ? AND balance >= ?", billing.UserID, billing.SettleCost).
+			Update("balance", gorm.Expr("balance - ?", billing.SettleCost))
 		if res.Error != nil {
 			return res.Error
 		}
@@ -497,6 +509,9 @@ func toBillingDetail(b *model.BillingRecord) *model.BillingDetail {
 		CachedInputCost:   b.CachedInputCost,
 		CacheCreationCost: b.CacheCreationCost,
 		TotalCost:         b.TotalCost,
+		SettleCurrency:    b.SettleCurrency,
+		SettleCost:        b.SettleCost,
+		ExchangeRate:      b.ExchangeRate,
 		BalanceBefore:     b.BalanceBefore,
 		BalanceAfter:      b.BalanceAfter,
 		Status:            b.Status,
@@ -515,6 +530,9 @@ const billingConsumptionSelect = `SELECT
 	u.username AS user_name,
 	b.model AS model,
 	b.currency AS currency,
+	b.settle_currency AS settle_currency,
+	b.settle_cost AS settle_cost,
+	b.exchange_rate AS exchange_rate,
 	(-1) * b.total_cost AS amount,
 	b.balance_before AS balance_before,
 	b.balance_after AS balance_after,
@@ -549,6 +567,9 @@ const billingEntrySelect = `SELECT
 	u.username AS user_name,
 	r.model AS model,
 	r.currency AS currency,
+	'CNY' AS settle_currency,
+	r.total_cost AS settle_cost,
+	1::numeric AS exchange_rate,
 	r.total_cost AS amount,
 	NULL::numeric AS balance_before,
 	NULL::numeric AS balance_after,

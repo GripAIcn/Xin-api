@@ -71,7 +71,7 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
     {
       label: '系统',
       items: [
-        { name: '账户设置', path: '/settings', icon: Settings },
+        { name: '账户与余额', path: '/settings', icon: Settings },
         ...(isAdmin
           ? [{ name: '用户管理', path: '/users', icon: Users }]
           : []),
@@ -215,7 +215,7 @@ function UserMenu({
         <DropdownMenuGroup>
           <DropdownMenuItem onClick={() => navigate('/settings')}>
             <UserCog />
-            账户设置
+            账户与余额
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

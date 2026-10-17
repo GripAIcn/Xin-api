@@ -27,17 +27,18 @@ import (
 
 // ChatHandler 数据面聊天补全处理器
 type ChatHandler struct {
-	channelRepo  postgresql.ChannelRepo
-	redis        *redis.Client
-	cacheExpire  time.Duration
-	router       routing.Router
-	breaker      service.ChannelBreaker
-	proxy        *service.StreamProxy
-	adapterGroup *adapter.Registry
-	inbound      inbound.Registry    // 入站协议编解码注册表
-	logRepo      postgresql.LogRepo  // 请求日志 / 计费落库
-	userRepo     postgresql.UserRepo // 读取用户余额
-	gatewayNode  string              // 网关实例标识（落库 gateway_node）
+	channelRepo      postgresql.ChannelRepo
+	redis            *redis.Client
+	cacheExpire      time.Duration
+	router           routing.Router
+	breaker          service.ChannelBreaker
+	proxy            *service.StreamProxy
+	adapterGroup     *adapter.Registry
+	inbound          inbound.Registry            // 入站协议编解码注册表
+	logRepo          postgresql.LogRepo          // 请求日志 / 计费落库
+	userRepo         postgresql.UserRepo         // 读取用户余额
+	exchangeRateRepo postgresql.ExchangeRateRepo // 结算汇率查询（USD→CNY）
+	gatewayNode      string                      // 网关实例标识（落库 gateway_node）
 
 	logRequestBody  bool // 是否落库请求原文
 	logResponseBody bool // 是否落库响应原文
@@ -55,23 +56,25 @@ func NewChatHandler(
 	inboundRegistry inbound.Registry,
 	logRepo postgresql.LogRepo,
 	userRepo postgresql.UserRepo,
+	exchangeRateRepo postgresql.ExchangeRateRepo,
 	gatewayNode string,
 	logRequestBody, logResponseBody bool,
 ) *ChatHandler {
 	return &ChatHandler{
-		channelRepo:     channelRepo,
-		redis:           rdb,
-		cacheExpire:     cacheExpire,
-		router:          router,
-		breaker:         breaker,
-		proxy:           streamProxy,
-		adapterGroup:    adapterGroup,
-		inbound:         inboundRegistry,
-		logRepo:         logRepo,
-		userRepo:        userRepo,
-		gatewayNode:     gatewayNode,
-		logRequestBody:  logRequestBody,
-		logResponseBody: logResponseBody,
+		channelRepo:      channelRepo,
+		redis:            rdb,
+		cacheExpire:      cacheExpire,
+		router:           router,
+		breaker:          breaker,
+		proxy:            streamProxy,
+		adapterGroup:     adapterGroup,
+		inbound:          inboundRegistry,
+		logRepo:          logRepo,
+		userRepo:         userRepo,
+		exchangeRateRepo: exchangeRateRepo,
+		gatewayNode:      gatewayNode,
+		logRequestBody:   logRequestBody,
+		logResponseBody:  logResponseBody,
 	}
 }
 
@@ -700,6 +703,27 @@ func (h *ChatHandler) settleSuccess(
 		totalCost = model.Money{Decimal: inputCost.Decimal.Add(outputCost.Decimal).Mul(ratio)}
 	}
 
+	// 结算币种固定为 CNY：CNY 定价直接结算，其他币种（USD）按配置汇率折算后扣减余额
+	settleCurrency := model.CurrencyCNY
+	settleCost := model.Money{Decimal: decimal.Zero}
+	var exchangeRate *model.Money
+	billingStatus := model.BillingStatusSettled
+
+	if strings.EqualFold(currency, model.CurrencyCNY) {
+		settleCost = totalCost
+	} else {
+		rateRecord, rateErr := h.exchangeRateRepo.Get(ctx, currency, model.CurrencyCNY)
+		if rateErr != nil || rateRecord == nil || !rateRecord.Rate.IsPositive() {
+			// 汇率缺失：仅标记结算失败，日志与计费流水仍照常写入，响应不受影响
+			logger.Error(ctx, "resolve exchange rate failed (from=%s to=%s): err=%v", currency, model.CurrencyCNY, rateErr)
+			billingStatus = model.BillingStatusFailed
+		} else {
+			rate := model.Money{Decimal: rateRecord.Rate.Decimal.Round(8)}
+			settleCost = model.Money{Decimal: totalCost.Decimal.Mul(rate.Decimal).Round(8)}
+			exchangeRate = &rate
+		}
+	}
+
 	log := &model.RequestLog{
 		RequestID:           requestID,
 		UserID:              i64Ptr(userID),
@@ -778,7 +802,10 @@ func (h *ChatHandler) settleSuccess(
 		CachedInputCost:     cachedInputCost,
 		CacheCreationCost:   cacheCreationCost,
 		TotalCost:           totalCost,
-		Status:              model.BillingStatusSettled,
+		SettleCurrency:      settleCurrency,
+		SettleCost:          settleCost,
+		ExchangeRate:        exchangeRate,
+		Status:              billingStatus,
 	}
 
 	// 同一事务写日志 + 扣减余额 + 落计费流水；失败仅记录，不影响已发出的响应

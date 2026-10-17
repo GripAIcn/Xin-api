@@ -26,7 +26,7 @@ type User struct {
 	Balance     Money      `gorm:"column:balance;type:numeric(20,8);not null;default:0;comment:余额" json:"balance"`
 	Quota       *Money     `gorm:"column:quota;type:numeric(20,8);comment:总额度上限，NULL=不限额" json:"quota,omitempty"`
 	UsedQuota   Money      `gorm:"column:used_quota;type:numeric(20,8);not null;default:0;comment:累计已用额度" json:"used_quota"`
-	Currency    string     `gorm:"column:currency;type:varchar(16);not null;default:USD;comment:余额币种" json:"currency"`
+	Currency    string     `gorm:"column:currency;type:varchar(16);not null;default:CNY;comment:余额币种（用户结算币种固定 CNY）" json:"currency"`
 	RPMLimit    *int       `gorm:"column:rpm_limit;comment:账户级每分钟请求数上限，NULL=不限" json:"rpm_limit,omitempty"`
 	TPMLimit    *int       `gorm:"column:tpm_limit;comment:账户级每分钟 tokens 上限，NULL=不限" json:"tpm_limit,omitempty"`
 	LastLoginAt *time.Time `gorm:"column:last_login_at;comment:最近登录时间" json:"last_login_at,omitempty"`

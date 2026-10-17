@@ -171,6 +171,8 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 function LogDetailContent({ detail }: { detail: LogDetail }) {
   const billing = detail.billing
   const currency = billing?.price.currency ?? detail.currency
+  // 余额以结算币种（CNY）记账，计价金额仍按模型定价币种展示
+  const settleCurrency = billing?.settle_currency || 'CNY'
   const hasError = Boolean(
     detail.error_stage ||
       detail.error_type ||
@@ -296,6 +298,18 @@ function LogDetailContent({ detail }: { detail: LogDetail }) {
                   label="总成本"
                   value={`${billing.total_cost} ${currency}`}
                 />
+                <InfoItem
+                  label="结算金额"
+                  value={`${billing.settle_cost} ${settleCurrency}`}
+                />
+                <InfoItem
+                  label="结算汇率"
+                  value={
+                    billing.exchange_rate != null
+                      ? `1 ${currency} = ${billing.exchange_rate} ${settleCurrency}`
+                      : '-'
+                  }
+                />
               </InfoGrid>
             </div>
 
@@ -305,11 +319,11 @@ function LogDetailContent({ detail }: { detail: LogDetail }) {
               </p>
               <p className="text-sm">
                 {billing.balance_before != null
-                  ? `${billing.balance_before} ${currency}`
+                  ? `${billing.balance_before} ${settleCurrency}`
                   : '-'}
                 <span className="mx-1.5 text-muted-foreground">→</span>
                 {billing.balance_after != null
-                  ? `${billing.balance_after} ${currency}`
+                  ? `${billing.balance_after} ${settleCurrency}`
                   : '-'}
               </p>
             </div>

@@ -26,7 +26,7 @@ func main() {
 	cfg := config.Load()
 
 	// 2. 初始化 PostgreSQL 核心驱动
-	db := postgresql.NewPostgres()
+	db := postgresql.NewPostgres(cfg.Billing.USDCNYRate)
 
 	// 3. 初始化 Redis 分布式协同层
 	rdb := storeRedis.NewRedisClient(cfg.Redis)

@@ -1,6 +1,7 @@
 package postgresql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -54,7 +56,7 @@ func parseDSN(dsn string) (dbName string, adminDSN string) {
 }
 
 // NewPostgres 初始化 PostgreSQL 连接，自动建库、建表、创建默认管理员账号
-func NewPostgres() *gorm.DB {
+func NewPostgres(usdCNYRate float64) *gorm.DB {
 	dsn := buildDSN()
 
 	dbName, adminDSN := parseDSN(dsn)
@@ -119,6 +121,7 @@ func NewPostgres() *gorm.DB {
 		&model.BillingRecord{},
 		&model.ChannelMetric{},
 		&model.AuditLog{},
+		&model.ExchangeRate{},
 	); err != nil {
 		panic(fmt.Sprintf("数据库自动迁移失败: %v", err))
 	}
@@ -137,11 +140,36 @@ func NewPostgres() *gorm.DB {
 			Password: string(hashed),
 			Role:     model.UserRoleAdmin,    // 显式写入，满足 CHECK (role IN (...))
 			Status:   model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
-			Currency: "USD",                  // 显式写入，与 price/billing 币种口径一致
+			Currency: "CNY",                  // 用户结算币种固定 CNY
 		}).Error; err != nil {
 			panic(fmt.Sprintf("创建默认管理员账号失败: %v", err))
 		}
 		log.Println("[DB] 默认管理员账号已创建: username=admin password=12345678")
+	}
+
+	// 第五步：初始化 USD→CNY 汇率种子（已存在则不覆盖管理员修改）
+	initialRate := decimal.NewFromFloat(usdCNYRate).Round(8)
+	if initialRate.LessThanOrEqual(decimal.Zero) {
+		initialRate = decimal.NewFromFloat(7.2)
+	}
+	if err := NewExchangeRateRepo(db).EnsureUSDCNYSeed(context.Background(), model.NewMoney(initialRate)); err != nil {
+		panic(fmt.Sprintf("初始化 USD→CNY 汇率失败: %v", err))
+	}
+
+	// 第六步：存量非 CNY 用户余额按初始汇率一次性迁移至 CNY（幂等，迁移后条件不再命中）
+	migrateResult := db.WithContext(context.Background()).Exec(`
+UPDATE users SET
+  balance = ROUND(balance * ?::numeric, 8),
+  quota = CASE WHEN quota IS NULL THEN NULL ELSE ROUND(quota * ?::numeric, 8) END,
+  used_quota = ROUND(used_quota * ?::numeric, 8),
+  currency = 'CNY',
+  updated_at = NOW()
+WHERE currency IS DISTINCT FROM 'CNY'`, initialRate.String(), initialRate.String(), initialRate.String())
+	if migrateResult.Error != nil {
+		panic(fmt.Sprintf("迁移存量用户余额至 CNY 失败: %v", migrateResult.Error))
+	}
+	if migrateResult.RowsAffected > 0 {
+		log.Printf("[DB] 已将 %d 个非 CNY 用户余额迁移为 CNY，汇率=%s", migrateResult.RowsAffected, initialRate.String())
 	}
 
 	return db

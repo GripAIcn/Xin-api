@@ -192,7 +192,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		Role:     model.UserRoleUser,     // 默认创建为普通用户
 		Status:   model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
 		Balance:  model.Money{},
-		Currency: "USD",
+		Currency: model.CurrencyCNY, // 余额统一使用人民币结算
 		Quota:    nil,
 	}
 
@@ -361,8 +361,8 @@ func (h *UserHandler) RechargeBalance(c *gin.Context) {
 		return
 	}
 
-	// 充值成功日志：金额写入 total_cost 便于审计，币种取被充值用户币种
-	h.writeRechargeLog(c.Request.Context(), requestID, int64(id), req.Amount, updated.Currency, clientIP, startedAt)
+	// 充值成功日志：金额写入 total_cost 便于审计，币种统一为人民币
+	h.writeRechargeLog(c.Request.Context(), requestID, int64(id), req.Amount, model.CurrencyCNY, clientIP, startedAt)
 
 	logger.Info(c.Request.Context(), "recharge balance success: user=%d amount=%s", uint(id), req.Amount.String())
 	response.AdminSuccess(c, toUserResponse(*updated))
@@ -384,7 +384,7 @@ func (h *UserHandler) writeLoginLog(ctx context.Context, requestID string, userI
 		LogType:     model.LogTypeLogin,
 		Status:      model.LogStatusSuccess,
 		UsageSource: model.UsageSourceUpstream, // 显式赋值，避免零值 "" 触发 NOT NULL 约束
-		Currency:    "USD",                     // 显式给出有效币种，避免落库空串
+		Currency:    model.CurrencyCNY,         // 余额统一使用人民币结算，显式给出有效币种，避免落库空串
 		StartedAt:   &startedAt,
 		CompletedAt: &now,
 	}
@@ -450,7 +450,7 @@ func (h *UserHandler) writeRechargeLog(ctx context.Context, requestID string, us
 		return
 	}
 	if currency == "" {
-		currency = "USD"
+		currency = model.CurrencyCNY
 	}
 
 	now := time.Now()

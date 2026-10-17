@@ -366,6 +366,9 @@ export interface BillingDetail {
   cached_input_cost: number
   cache_creation_cost: number
   total_cost: number
+  settle_currency: string
+  settle_cost: number
+  exchange_rate?: number
   balance_before?: number
   balance_after?: number
   status: string
@@ -435,6 +438,9 @@ export interface BillingLogItem {
   user_name?: string
   model: string
   currency: string
+  settle_currency: string
+  settle_cost: number
+  exchange_rate?: number
   // 带符号金额：消费为负，充值 / 退款为正
   amount: number
   balance_before?: number
@@ -587,6 +593,20 @@ export interface DashboardChannelRank {
 export interface DashboardErrorRank {
   error_type: string
   count: number
+}
+
+// === 汇率 ===
+
+export interface ExchangeRate {
+  from_currency: string
+  to_currency: string
+  rate: number
+  source: string
+  updated_at: string
+}
+
+export interface UpdateExchangeRateRequest {
+  rate: number
 }
 
 // GET /v1/dashboard/stats 返回体

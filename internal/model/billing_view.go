@@ -22,6 +22,9 @@ type BillingLogItem struct {
 	UserName            *string   `gorm:"column:user_name" json:"user_name,omitempty"`
 	Model               string    `gorm:"column:model" json:"model"`
 	Currency            string    `gorm:"column:currency" json:"currency"`
+	SettleCurrency      string    `gorm:"column:settle_currency" json:"settle_currency"`
+	SettleCost          Money     `gorm:"column:settle_cost" json:"settle_cost"`
+	ExchangeRate        *Money    `gorm:"column:exchange_rate" json:"exchange_rate,omitempty"`
 	Amount              Money     `gorm:"column:amount" json:"amount"`
 	BalanceBefore       *Money    `gorm:"column:balance_before" json:"balance_before,omitempty"`
 	BalanceAfter        *Money    `gorm:"column:balance_after" json:"balance_after,omitempty"`

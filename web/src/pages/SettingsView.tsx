@@ -1,7 +1,8 @@
+import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Contact, Lock } from 'lucide-react'
+import { Contact, Lock, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 
 import PageHeader from '@/components/PageHeader'
@@ -69,6 +70,12 @@ type ProfileForm = z.infer<typeof profileSchema>
 export default function SettingsView() {
   const updatePassword = useAuthStore((s) => s.updatePassword)
   const updateProfile = useAuthStore((s) => s.updateProfile)
+  const profile = useAuthStore((s) => s.profile)
+  const fetchProfile = useAuthStore((s) => s.fetchProfile)
+
+  useEffect(() => {
+    void fetchProfile()
+  }, [fetchProfile])
 
   const passwordForm = useForm<PasswordForm>({
     resolver: zodResolver(passwordSchema),
@@ -111,9 +118,54 @@ export default function SettingsView() {
     <div className="mx-auto w-full max-w-6xl">
       <PageHeader
         className="mb-6"
-        title="账户设置"
-        description="管理你的账户信息和登录密码"
+        title="账户与余额"
+        description="查看余额并管理账户信息与登录密码"
       />
+
+      {/* 余额概览（统一以 CNY 结算） */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Wallet className="size-[18px]" />
+            </span>
+            <div className="flex flex-col gap-1">
+              <CardTitle>余额概览</CardTitle>
+              <CardDescription>账户余额统一以 CNY 结算</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">可用余额</span>
+              <span className="text-xl font-semibold tabular-nums">
+                {profile
+                  ? `${(profile.balance ?? 0).toFixed(4)} CNY`
+                  : '--'}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">累计已用额度</span>
+              <span className="text-xl font-semibold tabular-nums">
+                {profile
+                  ? `${(profile.used_quota ?? 0).toFixed(4)} CNY`
+                  : '--'}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">额度上限</span>
+              <span className="text-xl font-semibold tabular-nums">
+                {profile
+                  ? profile.quota == null
+                    ? '不限'
+                    : `${profile.quota.toFixed(4)} CNY`
+                  : '--'}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="h-full">

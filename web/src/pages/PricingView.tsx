@@ -18,7 +18,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import {
   Table,
@@ -29,8 +30,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { deletePrice, updatePriceStatus } from '@/api/modules/prices'
+import { fetchUSDCNY, updateUSDCNY } from '@/api/modules/exchange-rates'
+import { formatDate } from '@/lib/format'
 import { usePriceStore } from '@/stores/prices'
-import type { ModelPriceWithCount } from '@/types/api'
+import type { ExchangeRate, ModelPriceWithCount } from '@/types/api'
 
 export default function PricingView() {
   const prices = usePriceStore((s) => s.prices)
@@ -48,6 +51,12 @@ export default function PricingView() {
     null,
   )
   const [viewPrice, setViewPrice] = useState<ModelPriceWithCount | null>(null)
+
+  // USD → CNY 结算汇率
+  const [rateInput, setRateInput] = useState('')
+  const [rateInfo, setRateInfo] = useState<ExchangeRate | null>(null)
+  const [rateLoading, setRateLoading] = useState(true)
+  const [rateSaving, setRateSaving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -72,6 +81,66 @@ export default function PricingView() {
       cancelled = true
     }
   }, [fetchAll])
+
+  // 汇率加载独立于价格方案列表，失败不阻塞列表
+  useEffect(() => {
+    let cancelled = false
+
+    const loadRate = async () => {
+      setRateLoading(true)
+      try {
+        const rate = await fetchUSDCNY()
+        if (!cancelled) {
+          setRateInfo(rate)
+          setRateInput(String(rate.rate))
+        }
+      } catch (e) {
+        if (!cancelled) {
+          toast.error(
+            e instanceof Error && e.message ? e.message : '加载结算汇率失败',
+          )
+        }
+      } finally {
+        if (!cancelled) setRateLoading(false)
+      }
+    }
+
+    void loadRate()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleSaveRate = async () => {
+    const trimmed = rateInput.trim()
+    const value = Number(trimmed)
+    // 必须为正数，且最多 8 位小数
+    if (
+      !/^\d+(\.\d{1,8})?$/.test(trimmed) ||
+      !Number.isFinite(value) ||
+      value <= 0
+    ) {
+      toast.error('汇率必须为正数，且最多保留 8 位小数')
+      return
+    }
+
+    setRateSaving(true)
+    try {
+      await updateUSDCNY({ rate: value })
+      toast.success('汇率已更新')
+      try {
+        const rate = await fetchUSDCNY()
+        setRateInfo(rate)
+        setRateInput(String(rate.rate))
+      } catch {
+        // 刷新失败时保留本次保存的输入值
+      }
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : '汇率更新失败')
+    } finally {
+      setRateSaving(false)
+    }
+  }
 
   const refresh = async () => {
     try {
@@ -144,6 +213,43 @@ export default function PricingView() {
           </Button>
         }
       />
+
+      {/* USD → CNY 结算汇率 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>USD → CNY 结算汇率</CardTitle>
+          <CardDescription>
+            用户余额统一以 CNY 结算，USD 定价的消费按此汇率换算扣减
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">
+                1 USD = ? CNY
+              </span>
+              <Input
+                className="w-48"
+                inputMode="decimal"
+                placeholder="例如：7.20000000"
+                value={rateInput}
+                disabled={rateLoading || rateSaving}
+                onChange={(e) => setRateInput(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={() => void handleSaveRate()}
+              disabled={rateLoading || rateSaving}
+            >
+              {rateSaving ? '保存中...' : '保存汇率'}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              来源：{rateInfo?.source || '--'} · 更新时间：
+              {rateInfo ? formatDate(rateInfo.updated_at) : '--'}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* 数据表格 */}
       <Card className="py-0">

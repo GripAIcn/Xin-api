@@ -39,6 +39,12 @@ type Config struct {
 	CircuitBreaker CircuitBreakerConfig
 	Proxy          ProxyConfig
 	Log            LogConfig
+	Billing        BillingConfig
+}
+
+// BillingConfig 计费配置
+type BillingConfig struct {
+	USDCNYRate float64 // USD→CNY 结算汇率初始值
 }
 
 // CacheConfig 缓存配置
@@ -110,6 +116,9 @@ func Load() *Config {
 			RequestBody:  getEnvToBool("LOG_REQUEST_BODY", false),
 			ResponseBody: getEnvToBool("LOG_RESPONSE_BODY", false),
 		},
+		Billing: BillingConfig{
+			USDCNYRate: getEnvToFloat("USD_CNY_RATE", 7.2),
+		},
 	}
 }
 
@@ -149,6 +158,21 @@ func getEnvToInt(key string, defaultValue int) int {
 		return defaultValue
 	}
 	return n
+}
+
+// getEnvToFloat 读取浮点型环境变量，非法或非正值回落默认值
+func getEnvToFloat(key string, defaultValue float64) float64 {
+	val := os.Getenv(key)
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return defaultValue
+	}
+	f, err := strconv.ParseFloat(val, 64)
+	if err != nil || f <= 0 {
+		log.Printf("[CONFIG] [WARN] parse env %s value '%s' to float failed: %v, using default: %v", key, val, err, defaultValue)
+		return defaultValue
+	}
+	return f
 }
 
 // getEnvToBool 读取布尔型环境变量

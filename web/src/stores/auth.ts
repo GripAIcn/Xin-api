@@ -1,12 +1,13 @@
 import { create } from 'zustand'
-import type { LoginResponse, UpdateProfileRequest } from '@/types/api'
+import type { LoginResponse, UpdateProfileRequest, User } from '@/types/api'
 import * as authApi from '@/api/modules/auth'
-import apiClient from '@/lib/api-client'
+import apiClient, { handleApiResponse } from '@/lib/api-client'
 
 interface AuthState {
   token: string | null
   username: string | null
   role: string | null
+  profile: User | null
   isAdmin: boolean
   isValidating: boolean
   isAuthenticated: boolean
@@ -18,6 +19,7 @@ interface AuthState {
   }) => Promise<void>
   updateProfile: (data: UpdateProfileRequest) => Promise<void>
   recoverFromStorage: () => void
+  fetchProfile: () => Promise<User | null>
   validateToken: () => Promise<boolean>
 }
 
@@ -31,6 +33,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   token: readStoredAuth('token'),
   username: readStoredAuth('username'),
   role: readStoredAuth('role'),
+  profile: null,
   isAdmin: readStoredAuth('role') === 'admin',
   isValidating: false,
   isAuthenticated: !!readStoredAuth('token'),
@@ -60,6 +63,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       token: null,
       username: null,
       role: null,
+      profile: null,
       isAdmin: false,
       isAuthenticated: false,
     })
@@ -91,6 +95,18 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     }
   },
 
+  // 拉取当前登录用户资料（同时用于 token 校验）；失败返回 null 而不抛出
+  fetchProfile: async () => {
+    try {
+      const res = await apiClient.get('/v1/users/profile')
+      const profile = handleApiResponse<User>(res)
+      set({ profile })
+      return profile
+    } catch {
+      return null
+    }
+  },
+
   // 验证 token 是否有效（调用需要认证的 API）
   validateToken: async () => {
     if (!get().token) {
@@ -99,10 +115,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
     set({ isValidating: true })
     try {
-      // 使用 GET /v1/users/profile 作为验证接口（所有登录角色均可访问）
-      await apiClient.get('/v1/users/profile')
-      return true
-    } catch {
+      const profile = await get().fetchProfile()
+      if (profile) {
+        return true
+      }
       // 验证失败（包括网络错误、401 等），清除 token 并跳转到登录页
       get().logout()
       return false

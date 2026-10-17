@@ -34,6 +34,9 @@ type BillingRecord struct {
 	CachedInputCost     Money     `gorm:"column:cached_input_cost;type:numeric(20,8);not null;comment:输入缓存命中成本" json:"cached_input_cost"`
 	CacheCreationCost   Money     `gorm:"column:cache_creation_cost;type:numeric(20,8);not null;comment:输入缓存创建成本" json:"cache_creation_cost"`
 	TotalCost           Money     `gorm:"column:total_cost;type:numeric(20,8);not null;comment:总成本" json:"total_cost"`
+	SettleCurrency      string    `gorm:"column:settle_currency;type:varchar(16);not null;default:CNY;comment:结算币种" json:"settle_currency"`
+	SettleCost          Money     `gorm:"column:settle_cost;type:numeric(20,8);not null;default:0;comment:结算金额(CNY)" json:"settle_cost"`
+	ExchangeRate        *Money    `gorm:"column:exchange_rate;type:numeric(20,8);comment:结算汇率快照（CNY 定价为空或 1，按约定：仅 USD 定价写入）" json:"exchange_rate,omitempty"`
 	BalanceBefore       *Money    `gorm:"column:balance_before;type:numeric(20,8);comment:结算前余额" json:"balance_before,omitempty"`
 	BalanceAfter        *Money    `gorm:"column:balance_after;type:numeric(20,8);comment:结算后余额" json:"balance_after,omitempty"`
 	Status              string    `gorm:"column:status;type:varchar(32);not null;default:settled;check:chk_billing_records_status,status = 'settled' OR status = 'failed' OR status = 'refunded';comment:状态 settled-已结算 failed-结算失败 refunded-已退款" json:"status"`

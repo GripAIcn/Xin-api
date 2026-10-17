@@ -31,6 +31,8 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	modelPriceRepo := postgresql.NewModelPriceRepo(db)
 	channelHandler := handler.NewChannelHandler(channelRepo, modelPriceRepo, rdb)
 	modelPriceHandler := handler.NewModelPriceHandler(modelPriceRepo)
+	exchangeRateRepo := postgresql.NewExchangeRateRepo(db)
+	exchangeRateHandler := handler.NewExchangeRateHandler(exchangeRateRepo)
 	channelMetricHandler := handler.NewChannelMetricHandler(postgresql.NewChannelMetricRepo(db), metricAggregator)
 	channelRouter := routing.NewWeightedRouter(service.NewWeightedRRBalancer(), breaker)
 	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout)
@@ -113,6 +115,10 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 				adminChannel.DELETE("/prices/:id", modelPriceHandler.DeletePrice)           // 删除价格方案
 				adminChannel.GET("/prices/:id/models", modelPriceHandler.ListPriceModels)   // 查看绑定该方案的模型
 
+				// 汇率配置管理
+				adminChannel.GET("/exchange-rates/usd-cny", exchangeRateHandler.GetUSDCNY)    // 获取 USD→CNY 汇率
+				adminChannel.PUT("/exchange-rates/usd-cny", exchangeRateHandler.UpdateUSDCNY) // 人工更新 USD→CNY 汇率
+
 				// 渠道批量测试
 				adminChannel.POST("/channels/test", channelHandler.TestAllChannels) // 测试所有渠道
 
@@ -142,6 +148,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			inboundRegistry,
 			logRepo,
 			userRepo,
+			exchangeRateRepo,
 			cfg.Server.GatewayNode,
 			cfg.Log.RequestBody,
 			cfg.Log.ResponseBody,

@@ -299,7 +299,7 @@ export default function UsersView() {
                         </DotBadge>
                       </TableCell>
                       <TableCell>
-                        {row.balance} {row.currency || 'USD'}
+                        {row.balance} {row.currency || 'CNY'}
                       </TableCell>
                       <TableCell>{formatDate(row.created_at)}</TableCell>
                       <TableCell>
@@ -500,7 +500,7 @@ export default function UsersView() {
             <DialogTitle>充值</DialogTitle>
             <DialogDescription>
               为用户「{rechargeTarget?.username}」增加余额（当前{' '}
-              {rechargeTarget?.balance} {rechargeTarget?.currency || 'USD'}）
+              {rechargeTarget?.balance} {rechargeTarget?.currency || 'CNY'}）
             </DialogDescription>
           </DialogHeader>
           <Form {...rechargeForm}>

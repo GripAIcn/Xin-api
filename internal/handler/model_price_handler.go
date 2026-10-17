@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
@@ -37,6 +38,15 @@ func (h *ModelPriceHandler) CreatePrice(c *gin.Context) {
 		response.AdminFail(c, response.InvalidParams)
 		return
 	}
+	// 币种仅支持 USD/CNY（大小写不敏感，统一存为大写）
+	currency := normalizeCurrency(req.Currency)
+	if currency == "" {
+		currency = model.CurrencyUSD
+	}
+	if currency != model.CurrencyUSD && currency != model.CurrencyCNY {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
 	ctx := c.Request.Context()
 
 	// 方案名判重
@@ -49,11 +59,6 @@ func (h *ModelPriceHandler) CreatePrice(c *gin.Context) {
 	if existing != nil {
 		response.AdminFail(c, response.Conflict)
 		return
-	}
-
-	currency := req.Currency
-	if currency == "" {
-		currency = "USD"
 	}
 
 	p := &model.ModelPrice{
@@ -123,6 +128,12 @@ func (h *ModelPriceHandler) UpdatePrice(c *gin.Context) {
 		response.AdminFail(c, response.InvalidParams)
 		return
 	}
+	// 币种仅支持 USD/CNY（大小写不敏感，统一存为大写）
+	currency := normalizeCurrency(req.Currency)
+	if currency != model.CurrencyUSD && currency != model.CurrencyCNY {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
 
 	ctx := c.Request.Context()
 	p, err := h.priceRepo.GetByID(ctx, id)
@@ -155,9 +166,7 @@ func (h *ModelPriceHandler) UpdatePrice(c *gin.Context) {
 	p.OutputPrice = req.OutputPrice
 	p.CachedInputPrice = req.CachedInputPrice
 	p.CacheCreationPrice = req.CacheCreationPrice
-	if req.Currency != "" {
-		p.Currency = req.Currency
-	}
+	p.Currency = currency
 	if req.Status != "" {
 		p.Status = req.Status
 	}
@@ -273,6 +282,11 @@ func (h *ModelPriceHandler) parsePathInt64(c *gin.Context, name string) (int64, 
 		return 0, false
 	}
 	return id, true
+}
+
+// normalizeCurrency 统一币种代码格式（去空格并转大写）
+func normalizeCurrency(code string) string {
+	return strings.ToUpper(strings.TrimSpace(code))
 }
 
 // pricesNonNegative 校验价格均非负（Money 为结构体，validator 的 gte=0 不适用）

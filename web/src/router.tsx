@@ -120,7 +120,7 @@ export const router = createBrowserRouter([
           {
             path: 'settings',
             element: (
-              <Page title="账户设置">
+              <Page title="账户与余额">
                 <SettingsView />
               </Page>
             ),

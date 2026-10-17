@@ -48,7 +48,7 @@ const priceFormSchema = z.object({
   output_price: priceField('请输入输出单价'),
   cached_input_price: priceField('请输入缓存命中单价'),
   cache_creation_price: priceField('请输入缓存创建单价'),
-  currency: z.string().min(1, '请输入币种'),
+  currency: z.enum(['USD', 'CNY'], { message: '请选择币种' }),
   status: z.enum(['active', 'disabled']),
 })
 
@@ -62,6 +62,12 @@ const EMPTY_FORM: PriceFormValues = {
   cache_creation_price: '0',
   currency: 'USD',
   status: 'active',
+}
+
+// 编辑态币种统一转大写，非法值兜底 USD
+const normalizeCurrency = (value: string): PriceFormValues['currency'] => {
+  const upper = value.toUpperCase()
+  return upper === 'CNY' ? 'CNY' : 'USD'
 }
 
 interface PriceFormSheetProps {
@@ -97,7 +103,7 @@ export default function PriceFormSheet({
         output_price: String(editing.output_price),
         cached_input_price: String(editing.cached_input_price),
         cache_creation_price: String(editing.cache_creation_price),
-        currency: editing.currency,
+        currency: normalizeCurrency(editing.currency),
         status: editing.status,
       })
     } else {
@@ -114,7 +120,7 @@ export default function PriceFormSheet({
         output_price: Number(values.output_price),
         cached_input_price: Number(values.cached_input_price),
         cache_creation_price: Number(values.cache_creation_price),
-        currency: values.currency.trim(),
+        currency: values.currency,
       }
       if (editing) {
         await updatePrice(editing.id, { ...base, status: values.status })
@@ -229,9 +235,17 @@ export default function PriceFormSheet({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>币种</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例如：USD / CNY" {...field} />
-                  </FormControl>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="请选择币种" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="USD">USD</SelectItem>
+                      <SelectItem value="CNY">CNY</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -262,7 +276,7 @@ export default function PriceFormSheet({
             )}
 
             <p className="text-xs text-muted-foreground">
-              单价单位为「币种 / 1M tokens」
+              单价单位为「币种 / 1M tokens」；USD 定价的消费会按管理端配置的汇率折算为 CNY 扣减余额。
             </p>
 
             <SheetFooter className="p-0 sm:flex-row sm:justify-end">

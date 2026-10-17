@@ -51,6 +51,9 @@ type BillingDetail struct {
 	CachedInputCost     Money         `json:"cached_input_cost"`
 	CacheCreationCost   Money         `json:"cache_creation_cost"`
 	TotalCost           Money         `json:"total_cost"`
+	SettleCurrency      string        `json:"settle_currency"`
+	SettleCost          Money         `json:"settle_cost"`
+	ExchangeRate        *Money        `json:"exchange_rate,omitempty"`
 	BalanceBefore       *Money        `json:"balance_before,omitempty"`
 	BalanceAfter        *Money        `json:"balance_after,omitempty"`
 	Status              string        `json:"status"`
