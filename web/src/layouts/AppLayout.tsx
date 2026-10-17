@@ -19,6 +19,7 @@ import {
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import ThemeToggle from '@/components/ThemeToggle'
+import BrandLogo from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -95,17 +96,14 @@ function Logo({ collapsed }: { collapsed: boolean }) {
   return (
     <div
       className={cn(
-        'flex h-16 shrink-0 items-center border-b border-sidebar-border px-4',
-        collapsed ? 'justify-center px-0' : 'gap-3',
+        'flex h-16 shrink-0 items-center overflow-hidden border-b border-sidebar-border',
+        collapsed ? 'justify-center px-0' : 'px-4',
       )}
     >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-lg font-bold text-sidebar-primary-foreground">
-        X
-      </div>
-      {!collapsed && (
-        <span className="text-lg font-semibold tracking-tight text-sidebar-foreground">
-          Xin-api
-        </span>
+      {collapsed ? (
+        <BrandLogo variant="mark" size="md" />
+      ) : (
+        <BrandLogo variant="lockup" size="md" />
       )}
     </div>
   )
@@ -140,7 +138,7 @@ function NavGroupList({
                   onClick={onNavigate}
                   className={({ isActive }) =>
                     cn(
-                      'relative flex items-center gap-3 rounded-md py-2 text-sm font-medium transition-colors',
+                      'relative flex items-center gap-3 rounded-lg py-2 text-sm font-medium transition-colors',
                       collapsed ? 'justify-center px-0' : 'px-3',
                       isActive
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:top-1/2 before:left-0 before:h-5 before:w-[3px] before:-translate-y-1/2 before:rounded-r-full before:bg-sidebar-primary'
@@ -172,7 +170,7 @@ function VersionFooter({ collapsed }: { collapsed: boolean }) {
         <span className="text-[10px]">{APP_VERSION}</span>
       ) : (
         <p>
-          Xin-api 控制台
+          Xin API 控制台
           <span className="ml-1.5">{APP_VERSION}</span>
         </p>
       )}
@@ -288,7 +286,7 @@ export default function AppLayout() {
           </Button>
           <h2 className="text-base font-semibold text-foreground">{title}</h2>
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
             <UserMenu username={username} onLogout={logout} />
           </div>
@@ -312,7 +310,7 @@ export default function AppLayout() {
         </Sheet>
 
         {/* 主内容区 */}
-        <main className="flex-1 overflow-y-auto bg-muted/40 p-5 lg:p-6">
+        <main className="flex-1 overflow-y-auto bg-muted/40 p-6">
           <Outlet />
         </main>
       </div>

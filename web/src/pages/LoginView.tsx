@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Eye, EyeOff, LoaderCircle, Lock, User } from 'lucide-react'
+import { Check, Eye, EyeOff, LoaderCircle, Lock, User } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import BrandLogo from '@/components/brand/BrandLogo'
 import {
   Form,
   FormControl,
@@ -62,43 +63,51 @@ export default function LoginView() {
 
   return (
     <div className="flex min-h-screen w-full">
-      {/* 左侧装饰区域 */}
-      <div className="relative hidden flex-col justify-center overflow-hidden bg-primary p-16 text-primary-foreground lg:flex lg:flex-1">
-        <div className="pointer-events-none absolute -top-1/2 -right-1/5 h-[200%] w-4/5 bg-[radial-gradient(ellipse,rgb(255_255_255/0.1)_0%,transparent_70%)]" />
+      {/* 左侧品牌面板 */}
+      <div className="relative hidden flex-col justify-center overflow-hidden border-r bg-marketing-panel p-16 text-foreground lg:flex lg:flex-1">
+        {/* 细网格纹理 */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,var(--color-border)_1px,transparent_1px),linear-gradient(to_bottom,var(--color-border)_1px,transparent_1px)] bg-[size:48px_48px] opacity-60 [mask-image:radial-gradient(ellipse_at_center,black_25%,transparent_75%)]"
+        />
+        {/* 右上角淡蓝光晕 */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-56 right-[-12%] size-[42rem] rounded-full bg-marketing-glow blur-3xl"
+        />
 
         <div className="relative z-10">
-          <div className="mb-10 flex items-center gap-4">
-            <div className="flex size-14 items-center justify-center rounded-xl bg-white/15 text-2xl font-bold text-white shadow-lg shadow-black/25">
-              X
-            </div>
-            <span className="text-2xl font-semibold tracking-wide">Xin-api</span>
+          <div className="mb-12 flex items-center">
+            <BrandLogo variant="lockup" size="2xl" />
           </div>
-          <h1 className="mb-5 text-4xl font-semibold leading-tight">
+          <h1 className="mb-5 max-w-[440px] text-4xl font-semibold leading-tight tracking-tight">
             API 网关管理控制台
           </h1>
-          <p className="mb-16 max-w-[400px] text-base leading-relaxed opacity-80">
+          <p className="mb-16 max-w-[400px] text-base leading-relaxed text-muted-foreground">
             统一管理上游渠道和 API Key，
             <br />
             轻松构建高性能的 AI 服务接入层
           </p>
-        </div>
 
-        <div className="relative z-10 flex flex-col gap-5">
-          {features.map((feature) => (
-            <div
-              key={feature}
-              className="flex items-center gap-4 text-[15px] opacity-90"
-            >
-              <div className="size-2 rounded-full bg-white/90 shadow-[0_0_12px_rgb(255_255_255/0.45)]" />
-              <span>{feature}</span>
-            </div>
-          ))}
+          <div className="flex flex-col gap-5">
+            {features.map((feature) => (
+              <div
+                key={feature}
+                className="flex items-center gap-3 text-sm text-muted-foreground"
+              >
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Check className="size-3.5" />
+                </span>
+                <span>{feature}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* 右侧登录表单 */}
-      <div className="flex w-full flex-1 items-center justify-center bg-background p-10 lg:w-[480px] lg:flex-none">
-        <div className="w-full max-w-[360px]">
+      <div className="flex w-full flex-1 items-center justify-center bg-background p-6 sm:p-10 lg:w-[480px] lg:flex-none">
+        <div className="w-full max-w-[400px] rounded-2xl border bg-card p-6 shadow-sm sm:p-8 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
           <div className="mb-10">
             <h2 className="mb-2 text-[28px] font-semibold text-foreground">
               欢迎登录
@@ -114,12 +123,12 @@ export default function LoginView() {
                 render={({ field }) => (
                   <FormItem>
                     <div className="relative">
-                      <User className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <User className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                       <FormControl>
                         <Input
                           placeholder="请输入用户名"
                           autoComplete="username"
-                          className="h-10 pl-10"
+                          className="h-11 pl-10"
                           {...field}
                         />
                       </FormControl>
@@ -135,13 +144,13 @@ export default function LoginView() {
                 render={({ field }) => (
                   <FormItem>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Lock className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                       <FormControl>
                         <Input
                           type={showPassword ? 'text' : 'password'}
                           placeholder="请输入密码"
                           autoComplete="current-password"
-                          className="h-10 px-10"
+                          className="h-11 px-10"
                           {...field}
                         />
                       </FormControl>
@@ -150,7 +159,7 @@ export default function LoginView() {
                         variant="ghost"
                         size="icon"
                         onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 size-auto -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                        className="absolute right-2 top-1/2 size-auto -translate-y-1/2 text-muted-foreground hover:bg-transparent hover:text-foreground"
                         aria-label={showPassword ? '隐藏密码' : '显示密码'}
                       >
                         {showPassword ? (
@@ -169,7 +178,7 @@ export default function LoginView() {
                 type="submit"
                 size="lg"
                 disabled={form.formState.isSubmitting}
-                className="mt-2 h-11 w-full text-base"
+                className="mt-2 h-11 w-full rounded-full text-base"
               >
                 {form.formState.isSubmitting && (
                   <LoaderCircle className="size-4 animate-spin" />
@@ -180,7 +189,7 @@ export default function LoginView() {
           </Form>
 
           <div className="mt-10 text-center text-xs text-muted-foreground/70">
-            <p>© 2026 Xin-api. All rights reserved.</p>
+            <p>© 2026 Xin API. All rights reserved.</p>
           </div>
         </div>
       </div>

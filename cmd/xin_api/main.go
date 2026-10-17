@@ -72,6 +72,8 @@ func main() {
 
 	// 7. 静态前端 SPA (生产模式)
 	r.StaticFile("/", "./web/dist/index.html")
+	// 预渲染的公开文档页
+	r.StaticFile("/docs", "./web/dist/docs/index.html")
 	r.Static("/assets", "./web/dist/assets")
 	r.NoRoute(func(c *gin.Context) {
 		c.File("./web/dist/app.html")

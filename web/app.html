@@ -8,7 +8,7 @@
       // 首帧前应用持久化主题，避免明暗闪烁（与 next-themes 存储键保持一致）
       ;(function () {
         try {
-          var t = localStorage.getItem('xin-api-theme') || 'dark'
+          var t = localStorage.getItem('xin-api-theme') || 'light'
           if (t === 'system') {
             t = window.matchMedia('(prefers-color-scheme: dark)').matches
               ? 'dark'
@@ -19,7 +19,7 @@
         } catch (e) {}
       })()
     </script>
-    <title>Xin-api 控制面板</title>
+    <title>Xin API 控制面板</title>
     <meta name="robots" content="noindex,nofollow">
   </head>
   <body>

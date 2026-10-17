@@ -177,7 +177,7 @@ export default function DashboardView() {
   const topErrors = stats?.top_errors ?? []
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6">
+    <div className="w-full space-y-6">
       {/* 欢迎区域 */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -185,7 +185,7 @@ export default function DashboardView() {
             欢迎回来，{username || '管理员'}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Xin-api 网关控制台 · 网关请求、用量与费用总览
+            Xin API 网关控制台 · 网关请求、用量与费用总览
           </p>
         </div>
         <Tabs

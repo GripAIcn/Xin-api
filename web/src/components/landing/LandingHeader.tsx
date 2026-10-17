@@ -1,7 +1,9 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, type MouseEvent } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 
+import ThemeToggle from '@/components/ThemeToggle'
+import BrandLogo from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -10,15 +12,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import { siteNavItems } from '@/components/landing/content'
 import { useLandingCta } from '@/components/landing/useLandingCta'
+import { cn } from '@/lib/utils'
 
 const GITHUB_URL = 'https://github.com/GripAIcn/Xin-api'
-
-const navItems = [
-  { label: '功能特性', href: '#features' },
-  { label: '工作原理', href: '#how-it-works' },
-  { label: '常见问题', href: '#faq' },
-]
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -35,61 +33,139 @@ function GithubIcon({ className }: { className?: string }) {
 
 export default function LandingHeader() {
   const cta = useLandingCta()
+  const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
+
+  const isHome = pathname === '/'
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  const handleHomeClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    setOpen(false)
+    if (!isHome) return
+    event.preventDefault()
+    const reduceMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches
+    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' })
+  }
+
+  const itemClassName = (active: boolean) =>
+    cn(
+      'relative flex h-16 items-center px-3 text-[15px] transition-colors hover:text-foreground',
+      active ? 'text-foreground' : 'text-muted-foreground',
+    )
+
+  const mobileItemClassName =
+    'flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
 
   return (
-    <header className="sticky top-0 z-50 bg-transparent">
-      <nav
-        aria-label="主导航"
-        className="mx-auto mt-3 flex h-14 w-full max-w-5xl items-center justify-between gap-4 rounded-full border bg-background/70 px-4 backdrop-blur-md sm:px-5"
-      >
-        <Link
-          to="/"
-          className="flex min-h-11 items-center gap-2 text-base font-semibold tracking-tight"
-        >
-          <span
-            aria-hidden="true"
-            className="flex size-8 items-center justify-center rounded-md border border-primary/20 bg-primary text-sm font-bold text-primary-foreground"
-          >
-            X
-          </span>
-          Xin API
+    <header
+      className={cn(
+        'sticky top-0 z-50 border-b bg-background/85 backdrop-blur transition-[border-color,box-shadow] duration-200',
+        scrolled ? 'border-border shadow-sm' : 'border-transparent',
+      )}
+    >
+      <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center gap-6 px-6 lg:px-10">
+        <Link to="/" className="flex shrink-0 items-center" onClick={handleHomeClick}>
+          <BrandLogo variant="lockup" size="md" />
         </Link>
 
-        <div className="hidden items-center gap-1 md:flex">
-          {navItems.map((item) => (
+        <nav
+          aria-label="主导航"
+          className="hidden flex-1 items-center justify-center lg:flex"
+        >
+          {siteNavItems.map((item) => {
+            const active =
+              item.href === '/'
+                ? isHome
+                : !item.href.startsWith('#') && pathname === item.href
+            const content = (
+              <>
+                {item.label}
+                {active && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-primary"
+                  />
+                )}
+              </>
+            )
+
+            if (item.href.startsWith('#')) {
+              return (
+                <a
+                  key={item.href}
+                  href={isHome ? item.href : `/${item.href}`}
+                  className={itemClassName(false)}
+                >
+                  {content}
+                </a>
+              )
+            }
+
+            if (item.href === '/') {
+              return (
+                <a
+                  key={item.href}
+                  href="/"
+                  aria-current={active ? 'page' : undefined}
+                  onClick={handleHomeClick}
+                  className={itemClassName(active)}
+                >
+                  {content}
+                </a>
+              )
+            }
+
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                aria-current={active ? 'page' : undefined}
+                className={itemClassName(active)}
+              >
+                {content}
+              </Link>
+            )
+          })}
+        </nav>
+
+        <div className="ml-auto hidden items-center gap-1 lg:flex">
+          <Button variant="ghost" size="icon" asChild>
             <a
-              key={item.href}
-              href={item.href}
-              className="rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub"
             >
-              {item.label}
+              <GithubIcon className="size-5" />
             </a>
-          ))}
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="GitHub"
-            className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <GithubIcon className="size-5" />
-          </a>
-          <Button size="sm" asChild className="ml-2 h-9">
+          </Button>
+          <ThemeToggle />
+          <Button size="sm" asChild className="ml-2 h-9 rounded-full px-5">
             <Link to={cta.to}>{cta.label}</Link>
           </Button>
         </div>
 
-        <div className="flex items-center gap-1 md:hidden">
-          <a
-            href={GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="GitHub"
-            className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          >
-            <GithubIcon className="size-5" />
-          </a>
+        <div className="ml-auto flex items-center gap-1 lg:hidden">
+          <Button variant="ghost" size="icon" asChild>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub"
+              className="size-11"
+            >
+              <GithubIcon className="size-5" />
+            </a>
+          </Button>
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button
@@ -101,25 +177,57 @@ export default function LandingHeader() {
                 <Menu className="size-5" aria-hidden="true" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-72">
+            <SheetContent side="right" className="w-80">
               <SheetHeader>
                 <SheetTitle>导航</SheetTitle>
               </SheetHeader>
               <div className="flex flex-col gap-1 px-4">
-                {navItems.map((item) => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className="flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    {item.label}
-                  </a>
-                ))}
+                {siteNavItems.map((item) => {
+                  if (item.href.startsWith('#')) {
+                    return (
+                      <a
+                        key={item.href}
+                        href={isHome ? item.href : `/${item.href}`}
+                        onClick={() => setOpen(false)}
+                        className={mobileItemClassName}
+                      >
+                        {item.label}
+                      </a>
+                    )
+                  }
+
+                  if (item.href === '/') {
+                    return (
+                      <a
+                        key={item.href}
+                        href="/"
+                        onClick={handleHomeClick}
+                        className={mobileItemClassName}
+                      >
+                        {item.label}
+                      </a>
+                    )
+                  }
+
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      onClick={() => setOpen(false)}
+                      className={mobileItemClassName}
+                    >
+                      {item.label}
+                    </Link>
+                  )
+                })}
               </div>
               <div className="mt-auto flex flex-col gap-3 px-4 pb-6">
+                <div className="flex items-center justify-between rounded-lg border px-3">
+                  <span className="text-sm text-muted-foreground">主题</span>
+                  <ThemeToggle />
+                </div>
                 <Button
-                  className="h-11 w-full"
+                  className="h-11 w-full rounded-full"
                   asChild
                   onClick={() => setOpen(false)}
                 >
@@ -129,7 +237,7 @@ export default function LandingHeader() {
             </SheetContent>
           </Sheet>
         </div>
-      </nav>
+      </div>
     </header>
   )
 }

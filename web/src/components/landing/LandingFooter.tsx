@@ -1,11 +1,48 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+
+import BrandLogo from '@/components/brand/BrandLogo'
 
 const GITHUB_URL = 'https://github.com/GripAIcn/Xin-api'
+const ISSUES_URL = 'https://github.com/GripAIcn/Xin-api/issues'
+const LICENSE_URL = 'https://github.com/GripAIcn/Xin-api/blob/main/LICENSE'
 
-const navItems = [
-  { label: '功能特性', href: '#features' },
-  { label: '工作原理', href: '#how-it-works' },
-  { label: '常见问题', href: '#faq' },
+interface FooterGroup {
+  title: string
+  items: { label: string; href: string; external?: boolean }[]
+}
+
+const footerGroups: FooterGroup[] = [
+  {
+    title: '产品',
+    items: [
+      { label: '功能介绍', href: '#features' },
+      { label: '工作原理', href: '#how-it-works' },
+      { label: '可观测', href: '#observability' },
+    ],
+  },
+  {
+    title: '能力',
+    items: [
+      { label: '统一接入', href: '#features' },
+      { label: '智能路由', href: '#features' },
+      { label: '高可用防护', href: '#features' },
+    ],
+  },
+  {
+    title: '资源',
+    items: [
+      { label: '使用文档', href: '/docs' },
+      { label: '常见问题', href: '#faq' },
+      { label: 'GitHub 仓库', href: GITHUB_URL, external: true },
+    ],
+  },
+  {
+    title: '联系我们',
+    items: [
+      { label: 'GitHub Issues', href: ISSUES_URL, external: true },
+      { label: '登录控制台', href: '/login' },
+    ],
+  },
 ]
 
 function GithubIcon({ className }: { className?: string }) {
@@ -21,70 +58,86 @@ function GithubIcon({ className }: { className?: string }) {
   )
 }
 
+const linkClassName =
+  'flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-foreground md:min-h-0'
+
 export default function LandingFooter() {
+  const { pathname } = useLocation()
+  const isHome = pathname === '/'
+
   return (
     <footer className="border-t">
-      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
-        <div className="grid gap-8 md:grid-cols-3">
-          <div>
-            <div className="flex items-center gap-2 text-base font-semibold tracking-tight">
-              <span
-                aria-hidden="true"
-                className="flex size-8 items-center justify-center rounded-md border border-primary/20 bg-primary text-sm font-bold text-primary-foreground"
-              >
-                X
-              </span>
-              Xin API
-            </div>
-            <p className="mt-3 text-sm text-muted-foreground">
-              高性能大模型 API 统一网关
+      <div className="mx-auto w-full max-w-[1440px] px-6 py-16 lg:px-10">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-6 lg:gap-8">
+          <div className="lg:col-span-2">
+            <BrandLogo variant="lockup" size="md" />
+            <p className="mt-4 max-w-xs text-sm leading-6 text-muted-foreground">
+              高性能大模型 API 统一网关，让多供应商接入、选路与计量回归简单。
             </p>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <GithubIcon className="size-4" />
+              GripAIcn/Xin-api
+            </a>
           </div>
 
-          <nav aria-label="页脚导航">
-            <h2 className="text-sm font-semibold">导航</h2>
-            <ul className="mt-3">
-              {navItems.map((item) => (
-                <li key={item.href}>
-                  <a
-                    href={item.href}
-                    className="flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-foreground md:min-h-0"
-                  >
-                    {item.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          <div>
-            <h2 className="text-sm font-semibold">资源</h2>
-            <ul className="mt-3">
-              <li>
-                <a
-                  href={GITHUB_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground md:min-h-0"
-                >
-                  <GithubIcon className="size-4" />
-                  GitHub
-                </a>
-              </li>
-              <li>
-                <Link
-                  to="/login"
-                  className="flex min-h-11 items-center text-sm text-muted-foreground transition-colors hover:text-foreground md:min-h-0"
-                >
-                  控制台
-                </Link>
-              </li>
-            </ul>
-          </div>
+          {footerGroups.map((group) => (
+            <nav
+              key={group.title}
+              id={group.title === '联系我们' ? 'contact' : undefined}
+              aria-label={`页脚 · ${group.title}`}
+              className="scroll-mt-24"
+            >
+              <h2 className="text-sm font-semibold">{group.title}</h2>
+              <ul className="mt-4 space-y-1">
+                {group.items.map((item) =>
+                  item.external ? (
+                    <li key={item.label}>
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={linkClassName}
+                      >
+                        {item.label}
+                      </a>
+                    </li>
+                  ) : item.href.startsWith('#') ? (
+                    <li key={item.label}>
+                      <a
+                        href={isHome ? item.href : `/${item.href}`}
+                        className={linkClassName}
+                      >
+                        {item.label}
+                      </a>
+                    </li>
+                  ) : (
+                    <li key={item.label}>
+                      <Link to={item.href} className={linkClassName}>
+                        {item.label}
+                      </Link>
+                    </li>
+                  ),
+                )}
+              </ul>
+            </nav>
+          ))}
         </div>
 
-        <div className="mt-8 border-t pt-6 text-xs text-muted-foreground">
-          © 2026 Xin API. All rights reserved.
+        <div className="mt-14 flex flex-col gap-2 border-t pt-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>© 2026 Xin API. All rights reserved.</p>
+          <a
+            href={LICENSE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            MIT License
+          </a>
         </div>
       </div>
     </footer>

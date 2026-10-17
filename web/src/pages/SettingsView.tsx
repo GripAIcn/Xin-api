@@ -115,7 +115,7 @@ export default function SettingsView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <PageHeader
         className="mb-6"
         title="账户与余额"

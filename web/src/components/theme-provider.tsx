@@ -13,7 +13,7 @@ export type Theme = ResolvedTheme | 'system'
 
 /** 与 index.html / app.html 中首帧内联脚本、以及 next-themes 旧存储键保持一致 */
 const STORAGE_KEY = 'xin-api-theme'
-const DEFAULT_THEME: Theme = 'dark'
+const DEFAULT_THEME: Theme = 'light'
 const MEDIA_QUERY = '(prefers-color-scheme: dark)'
 const THEME_NAMES = ['light', 'dark', 'system'] as const
 
@@ -45,7 +45,7 @@ function readStoredTheme(): Theme {
 }
 
 function readSystemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined') return 'dark'
+  if (typeof window === 'undefined') return 'light'
   return window.matchMedia(MEDIA_QUERY).matches ? 'dark' : 'light'
 }
 

@@ -513,7 +513,7 @@ export default function LogsView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5">
+    <div className="w-full space-y-5">
       <PageHeader
         className="mb-5"
         title="日志"
@@ -680,7 +680,7 @@ export default function LogsView() {
       </Card>
 
       {/* 数据表格 */}
-      <Card className="py-0">
+      <Card className="overflow-hidden py-0">
         <CardContent className="px-0">
           <Table>
             <TableHeader>

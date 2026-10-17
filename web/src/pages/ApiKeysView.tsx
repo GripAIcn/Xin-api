@@ -115,7 +115,7 @@ export default function ApiKeysView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="w-full">
       <PageHeader
         className="mb-5"
         title="API Key"
@@ -128,12 +128,12 @@ export default function ApiKeysView() {
         }
       />
 
-      <Card>
-        <CardContent>
+      <Card className="overflow-hidden py-0">
+        <CardContent className="px-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>名称</TableHead>
+                <TableHead className="min-w-[200px]">名称</TableHead>
                 <TableHead className="w-28">状态</TableHead>
                 <TableHead className="w-48">创建时间</TableHead>
                 <TableHead className="w-24 text-right">操作</TableHead>

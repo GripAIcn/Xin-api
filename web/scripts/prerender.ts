@@ -14,17 +14,20 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { createElement } from 'react'
+import { StrictMode, createElement } from 'react'
 import { renderToString } from 'react-dom/server'
-// react-router-dom v7 的 package.json exports 不再提供 ./server 子路径，
-// StaticRouter 由 react-router 主导出提供（react-router-dom 亦 re-export 之）
-import { StaticRouter } from 'react-router'
+import { RouterProvider, createMemoryRouter } from 'react-router-dom'
 // 与客户端 main.tsx 复用同一个 ThemeProvider；它只维护主题状态、不输出任何 DOM 节点，
 // 因此 SSR 树与客户端树天然一致（不再需要在树内渲染主题引导 <script>）
 import { ThemeProvider } from '../src/components/theme-provider'
 
-import { features, faqItems } from '../src/components/landing/content'
-import LandingView from '../src/pages/LandingView'
+import {
+  coreCapabilities,
+  faqItems,
+  moreCapabilities,
+} from '../src/components/landing/content'
+import App from '../src/App'
+import { publicRoutes } from '../src/routes/public'
 
 const SITE_URL = (process.env.SITE_URL || 'http://localhost:8080').replace(
   /\/+$/,
@@ -41,30 +44,84 @@ const DIST_DIR = process.env.PRERENDER_DIST_DIR
   ? resolve(SCRIPT_DIR, '..', process.env.PRERENDER_DIST_DIR)
   : resolve(SCRIPT_DIR, '..', 'dist')
 const INDEX_HTML_PATH = resolve(DIST_DIR, 'index.html')
+const DOCS_DIR = resolve(DIST_DIR, 'docs')
+const DOCS_HTML_PATH = resolve(DOCS_DIR, 'index.html')
 const ROBOTS_PATH = resolve(DIST_DIR, 'robots.txt')
 const SITEMAP_PATH = resolve(DIST_DIR, 'sitemap.xml')
+
+// 与 /docs 页面内容对应，供静态产物与客户端 useEffect 设置保持一致
+const DOCS_TITLE = '使用文档 - Xin API'
+const DOCS_DESCRIPTION =
+  'Xin API 使用文档：获取 API Key、发起第一个 OpenAI 兼容请求，并提供 cURL、Python、Node.js、Go、Java 五种语言的调用示例与常见错误排查。'
 
 const PLACEHOLDER = '__SITE_URL__'
 
 /**
- * 渲染首页为 HTML 字符串。
+ * 渲染公开路由为 HTML 字符串。
  * 使用 createElement 而非 JSX，以便本脚本以 .ts 扩展名被 tsx 直接执行。
- * 不渲染 <App/>：其自带 RouterProvider 与 Toaster，只需要纯静态首页；
- * 与 main.tsx 一样用 ThemeProvider 包裹以保持 SSR/客户端树形状一致
- * （该 Provider 不输出 DOM 节点，不会向静态 HTML 注入额外标记）。
+ * 与客户端 main.tsx 使用完全相同的组件树（StrictMode > ThemeProvider > App > RouterProvider），
+ * 仅把浏览器路由换成内存路由，保证 useId 与路由上下文在两端一致，避免水合不匹配。
  */
-function renderLanding(): string {
+function renderRoute(path: string): string {
+  const router = createMemoryRouter(publicRoutes, { initialEntries: [path] })
   return renderToString(
     createElement(
-      ThemeProvider,
+      StrictMode,
       null,
       createElement(
-        StaticRouter,
-        { location: '/' },
-        createElement(LandingView),
+        ThemeProvider,
+        null,
+        createElement(App, { router }),
       ),
     ),
   )
+}
+
+/** 渲染首页 */
+function renderLanding(): string {
+  return renderRoute('/')
+}
+
+/** 渲染 /docs */
+function renderDocs(): string {
+  return renderRoute('/docs')
+}
+
+/**
+ * 将首页模板中的 title / description / canonical / OG / Twitter 元信息
+ * 改写为 /docs 版本；路由与站点 URL 占位符仍留给后续统一替换。
+ */
+function applyDocsMeta(html: string): string {
+  return html
+    .replace(/<title>[^<]*<\/title>/, `<title>${DOCS_TITLE}</title>`)
+    .replace(
+      /(<meta name="description" content=")[^"]*(")/,
+      `$1${DOCS_DESCRIPTION}$2`,
+    )
+    .replace(
+      /(<meta property="og:title" content=")[^"]*(")/,
+      `$1${DOCS_TITLE}$2`,
+    )
+    .replace(
+      /(<meta property="og:description" content=")[^"]*(")/,
+      `$1${DOCS_DESCRIPTION}$2`,
+    )
+    .replace(
+      /(<meta property="og:url" content=")[^"]*(")/,
+      `$1${PLACEHOLDER}/docs$2`,
+    )
+    .replace(
+      /(<meta name="twitter:title" content=")[^"]*(")/,
+      `$1${DOCS_TITLE}$2`,
+    )
+    .replace(
+      /(<meta name="twitter:description" content=")[^"]*(")/,
+      `$1${DOCS_DESCRIPTION}$2`,
+    )
+    .replace(
+      /(<link rel="canonical" href=")[^"]*(")/,
+      `$1${PLACEHOLDER}/docs$2`,
+    )
 }
 
 /**
@@ -125,7 +182,9 @@ function buildJsonLdBlocks(): string {
     url: `${SITE_URL}/`,
     description: SITE_DESCRIPTION,
     inLanguage: 'zh-CN',
-    featureList: features.map((feature) => feature.title),
+    featureList: [...coreCapabilities, ...moreCapabilities].map(
+      (feature) => feature.title,
+    ),
   }
 
   const faqLd = {
@@ -190,6 +249,9 @@ function buildSitemapXml(): string {
     `  <url><loc>${escapeXml(
       SITE_URL,
     )}/</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>`,
+    `  <url><loc>${escapeXml(
+      SITE_URL,
+    )}/docs</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
     '</urlset>',
     '', // 末尾换行
   ].join('\n')
@@ -224,13 +286,26 @@ async function main(): Promise<void> {
   }
   html = html.replace('</head>', `${jsonLdBlocks}\n  </head>`)
 
+  // /docs 独立产物：复用同一模板，避免 SPA fallback 返回首页 HTML 触发水合不匹配
+  const docsAppHtml = renderDocs()
+  let docsHtml = injectRootHtml(applyDocsMeta(templateHtml), docsAppHtml)
+  docsHtml = docsHtml.split(PLACEHOLDER).join(SITE_URL)
+
+  if (docsHtml.includes(PLACEHOLDER)) {
+    console.error('预渲染失败：/docs 产物中仍存在 __SITE_URL__ 占位符')
+    process.exit(1)
+  }
+
+  mkdirSync(DOCS_DIR, { recursive: true })
+  await writeFile(DOCS_HTML_PATH, docsHtml, 'utf8')
   await writeFile(INDEX_HTML_PATH, html, 'utf8')
   await writeFile(ROBOTS_PATH, buildRobotsTxt(), 'utf8')
   await writeFile(SITEMAP_PATH, buildSitemapXml(), 'utf8')
 
   console.log(
-    `[prerender] 完成：注入 SSR 正文 ${appHtml.length} 字符、JSON-LD ${jsonLdBlocks.length} 字符；` +
-      `SITE_URL=${SITE_URL}；产物：${INDEX_HTML_PATH}、${ROBOTS_PATH}、${SITEMAP_PATH}`,
+    `[prerender] 完成：注入首页 SSR 正文 ${appHtml.length} 字符、/docs 正文 ${docsAppHtml.length} 字符、` +
+      `JSON-LD ${jsonLdBlocks.length} 字符；SITE_URL=${SITE_URL}；产物：${INDEX_HTML_PATH}、${DOCS_HTML_PATH}、` +
+      `${ROBOTS_PATH}、${SITEMAP_PATH}`,
   )
 }
 

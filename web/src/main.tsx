@@ -3,13 +3,14 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 
 import App from './App'
 import { ThemeProvider } from './components/theme-provider'
+import { router } from './router'
 import './assets/main.css'
 
 const container = document.getElementById('root')!
 const app = (
   <StrictMode>
     <ThemeProvider>
-      <App />
+      <App router={router} />
     </ThemeProvider>
   </StrictMode>
 )

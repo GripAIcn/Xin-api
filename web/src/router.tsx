@@ -1,12 +1,16 @@
-import { useEffect, type ReactNode } from 'react'
-import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom'
+import { LoaderCircle } from 'lucide-react'
+import {
+  Navigate,
+  Outlet,
+  createBrowserRouter,
+  type RouteObject,
+} from 'react-router-dom'
 
 import AppLayout from '@/layouts/AppLayout'
 import ApiKeysView from '@/pages/ApiKeysView'
 import BillingView from '@/pages/BillingView'
 import ChannelsView from '@/pages/ChannelsView'
 import DashboardView from '@/pages/DashboardView'
-import LandingView from '@/pages/LandingView'
 import LoginView from '@/pages/LoginView'
 import LogsView from '@/pages/LogsView'
 import ModelsView from '@/pages/ModelsView'
@@ -14,6 +18,7 @@ import MonitoringView from '@/pages/MonitoringView'
 import PricingView from '@/pages/PricingView'
 import SettingsView from '@/pages/SettingsView'
 import UsersView from '@/pages/UsersView'
+import { Page, publicRoutes } from '@/routes/public'
 import { useAuthStore } from '@/stores/auth'
 
 // 检查用户是否已登录（优先使用 store，后备使用 localStorage）
@@ -38,33 +43,28 @@ function GuestRoute() {
   return <Outlet />
 }
 
-// 管理员专属：非管理员则跳转仪表盘
+// 管理员专属：等待 token 校验完成后再判断角色，避免冷启动误判
 function AdminRoute() {
-  if (!useAuthStore.getState().isAdmin) {
+  const isAdmin = useAuthStore((s) => s.isAdmin)
+  const isValidating = useAuthStore((s) => s.isValidating)
+
+  if (isValidating) {
+    return (
+      <div className="flex h-64 items-center justify-center text-muted-foreground">
+        <LoaderCircle className="size-5 animate-spin" />
+        <span className="sr-only">加载中</span>
+      </div>
+    )
+  }
+
+  if (!isAdmin) {
     return <Navigate to="/dashboard" replace />
   }
   return <Outlet />
 }
 
-// 渲染时设置 document.title
-function Page({ title, children }: { title?: string; children: ReactNode }) {
-  useEffect(() => {
-    document.title = title
-      ? `${title} - Xin-api`
-      : 'Xin API - 大模型 API 统一管理、全链路可观测与智能分发网关'
-  }, [title])
-  return <>{children}</>
-}
-
-export const router = createBrowserRouter([
-  {
-    path: '/',
-    element: (
-      <Page title="">
-        <LandingView />
-      </Page>
-    ),
-  },
+export const routes: RouteObject[] = [
+  ...publicRoutes,
   {
     element: <GuestRoute />,
     children: [
@@ -174,6 +174,8 @@ export const router = createBrowserRouter([
       },
     ],
   },
-])
+]
+
+export const router = createBrowserRouter(routes)
 
 export default router

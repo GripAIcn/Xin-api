@@ -157,7 +157,7 @@ export default function MonitoringView() {
   )
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5">
+    <div className="w-full space-y-5">
       <PageHeader
         title="渠道监控"
         description="基于请求日志按分钟聚合的渠道 / 模型性能指标，启动时自动回填最近 7 天"
@@ -274,7 +274,7 @@ export default function MonitoringView() {
       </Card>
 
       {/* 明细表 */}
-      <Card className="py-0">
+      <Card className="overflow-hidden py-0">
         <CardContent className="px-0">
           <Table>
             <TableHeader>

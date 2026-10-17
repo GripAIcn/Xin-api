@@ -220,7 +220,7 @@ export default function UsersView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5">
+    <div className="w-full space-y-5">
       <PageHeader
         className="mb-5"
         title="用户管理"
@@ -234,7 +234,7 @@ export default function UsersView() {
       />
 
       {/* 数据表格 */}
-      <Card className="py-0">
+      <Card className="overflow-hidden py-0">
         <CardContent className="px-0">
           <Table>
             <TableHeader>

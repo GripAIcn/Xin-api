@@ -3,12 +3,20 @@
   <head>
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link
+      rel="preload"
+      href="/fonts/public-sans-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    >
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
       // 首帧前应用持久化主题，避免预渲染页面明暗闪烁（与 next-themes 存储键保持一致）
       ;(function () {
         try {
-          var t = localStorage.getItem('xin-api-theme') || 'dark'
+          var t = localStorage.getItem('xin-api-theme') || 'light'
           if (t === 'system') {
             t = window.matchMedia('(prefers-color-scheme: dark)').matches
               ? 'dark'

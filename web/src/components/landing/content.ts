@@ -1,12 +1,8 @@
 import {
-  Activity,
   BarChart3,
-  Calculator,
-  Gauge,
   KeyRound,
   Network,
   PlugZap,
-  Scale,
   ScanLine,
   ScrollText,
   ShieldCheck,
@@ -14,33 +10,60 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+/** 顶部导航与页脚共用的站点菜单 */
+export const siteNavItems = [
+  { label: '首页', href: '/' },
+  { label: '功能介绍', href: '#features' },
+  { label: '使用文档', href: '/docs' },
+  { label: '常见问题', href: '#faq' },
+  { label: '联系我们', href: '#contact' },
+] as const
+
 export interface FeatureItem {
   icon: LucideIcon
   title: string
   desc: string
 }
 
-export const features: FeatureItem[] = [
+export interface CapabilityItem extends FeatureItem {
+  index: string
+  keywords: string[]
+}
+
+/** 核心能力：四张编号大卡片 */
+export const coreCapabilities: CapabilityItem[] = [
   {
+    index: '01',
     icon: PlugZap,
-    title: '统一 API 接入',
-    desc: '标准化 OpenAI、Anthropic Claude、DeepSeek、Gemini 等主流大模型接口，兼容 /v1/chat/completions、/v1/responses 与 Gemini generateContent 三种入站协议。',
+    title: '统一接入',
+    desc: '标准化 OpenAI、Anthropic Claude、DeepSeek、Gemini 等主流模型接口，兼容 /v1/chat/completions、/v1/responses 与 Gemini generateContent 三种入站协议。',
+    keywords: ['OpenAI 兼容', 'Anthropic', 'Gemini'],
   },
   {
-    icon: Scale,
-    title: '智能负载均衡',
-    desc: '基于权重的负载均衡策略，自动将请求分发到最佳渠道，提升整体吞吐与稳定性。',
+    index: '02',
+    icon: Network,
+    title: '智能路由',
+    desc: '基于权重的负载均衡与可插拔路由架构，按渠道健康度、成功率、延迟 / TTFT / TPS、成本与 RPM / TPM 等多维指标加权选路。',
+    keywords: ['权重分发', '多维打分', '自动切换'],
   },
   {
+    index: '03',
     icon: ShieldCheck,
-    title: '分布式熔断保护',
-    desc: '基于 Redis 的分布式熔断器自动隔离故障渠道，防止故障蔓延与雪崩效应。',
+    title: '高可用防护',
+    desc: '基于 Redis 的分布式熔断自动隔离故障渠道，RPM / TPM 多维限流保护上游，配合单渠道与批量多模型健康检测快速止损。',
+    keywords: ['熔断隔离', 'RPM / TPM', '健康检测'],
   },
   {
-    icon: Gauge,
-    title: '多维度限流',
-    desc: '基于 Redis 的分布式限流，支持 RPM / TPM 多维度流量控制，保护后端模型服务。',
+    index: '04',
+    icon: ScanLine,
+    title: '全链路可观测',
+    desc: '每次请求携带 xin_req_* Request ID 并关联上游供应商 Request ID，Token、延迟、费用与审计日志全程可查、可对账。',
+    keywords: ['Request ID', 'Token 计量', '审计日志'],
   },
+]
+
+/** 更多能力：四张小卡片 */
+export const moreCapabilities: FeatureItem[] = [
   {
     icon: Users,
     title: '统一渠道管理',
@@ -48,73 +71,66 @@ export const features: FeatureItem[] = [
   },
   {
     icon: KeyRound,
-    title: 'API Key 与健康检测',
-    desc: '灵活的 API Key 分发与吊销；支持单渠道与批量多模型连通性一键测试。',
+    title: 'API Key 管理',
+    desc: '灵活的密钥分发与吊销，按需控制访问范围。',
   },
-  {
-    icon: Network,
-    title: '多维感知智能路由',
-    desc: '可插拔路由架构，按渠道健康度、成功率、延迟 / TTFT / TPS、成本与 RPM / TPM 等多维指标打分，加权智能选路。',
-  },
-  {
-    icon: ScanLine,
-    title: '全链路请求追溯',
-    desc: '每次请求携带 xin_req_* Request ID 并关联上游供应商 Request ID，客户端到供应商双向追溯，故障定位一查到底。',
-  },
-]
-
-export const flowSteps: string[] = [
-  '客户端请求',
-  '认证鉴权',
-  '请求上下文 · Request ID',
-  '路由选路',
-  '渠道',
-  '模型供应商',
-  '用量提取',
-  '计费与日志',
-  '控制台 Dashboard',
-]
-
-export const flowTraceNote =
-  '每一次请求都携带 xin_req_* Request ID，并关联上游供应商返回的 Request ID，从客户端到供应商全链路双向可追溯，故障定位一查到底。'
-
-export interface QuickStep {
-  title: string
-  desc: string
-}
-
-export const quickSteps: QuickStep[] = [
-  {
-    title: '添加渠道并测试',
-    desc: '配置模型渠道，一键测试单渠道或批量多模型连通性。',
-  },
-  {
-    title: '生成 API Key 接入',
-    desc: '生成 API Key，使用统一端点即刻接入应用。',
-  },
-]
-
-export const v2Features: FeatureItem[] = [
   {
     icon: ScrollText,
     title: '请求审计日志',
-    desc: '按 Request ID、模型、渠道、供应商、状态、类型与时间多维筛选；默认仅记录元数据，避免存储膨胀。',
-  },
-  {
-    icon: Activity,
-    title: 'Token 用量与性能',
-    desc: '区分输入、输出与总 Token，记录 TTFT、延迟与 TPS，为模型选型与路由决策提供性能依据。',
-  },
-  {
-    icon: Calculator,
-    title: '模型定价与计费',
-    desc: '输入 / 输出分别计价并保留价格快照，decimal 精度原子扣费；不预扣、不接支付，账单清晰可对账。',
+    desc: '按 Request ID、模型、渠道、状态与时间多维筛选，默认仅记录元数据。',
   },
   {
     icon: BarChart3,
-    title: '运营看板与渠道指标',
-    desc: '请求量、成功率、Token、费用与延迟趋势，以及模型 / 渠道调用排行，按渠道维度沉淀指标。',
+    title: '运营看板',
+    desc: '请求量、成功率、Token、费用与延迟趋势，以及模型与渠道调用排行。',
   },
+]
+
+export interface FlowStage {
+  title: string
+  desc: string
+  items: string[]
+}
+
+/** 工作原理：四个阶段 */
+export const flowStages: FlowStage[] = [
+  {
+    title: '接入鉴权',
+    desc: '校验密钥并建立请求上下文',
+    items: ['客户端请求', '认证鉴权', '请求上下文 · Request ID'],
+  },
+  {
+    title: '路由选路',
+    desc: '按多维指标加权决策',
+    items: ['模型映射', '健康度与延迟评分', '成本与限流评分'],
+  },
+  {
+    title: '渠道与供应商',
+    desc: '转发到最优上游',
+    items: ['渠道权重选择', 'OpenAI / Claude / Gemini / DeepSeek', '熔断与限流保护'],
+  },
+  {
+    title: '计量与观测',
+    desc: '用量落库并进入看板',
+    items: ['用量提取', '计费与日志', '控制台 Dashboard'],
+  },
+]
+
+export const flowTraceNote =
+  '每一次请求都携带 xin_req_* Request ID，并关联上游供应商返回的 Request ID，从客户端到供应商双向可追溯，故障定位一查到底。'
+
+export interface MetricItem {
+  label: string
+  desc: string
+}
+
+/** 可观测指标说明 */
+export const observabilityMetrics: MetricItem[] = [
+  { label: '请求量', desc: '按模型、渠道与状态维度统计调用次数。' },
+  { label: '成功率', desc: '区分网关与上游失败，快速定位异常渠道。' },
+  { label: 'Token 用量', desc: '输入 / 输出分别计量，支持成本核算。' },
+  { label: '费用', desc: '按价格快照原子扣费，账单清晰可对账。' },
+  { label: '延迟', desc: '记录 TTFT、总延迟与 TPS，指导选路与选型。' },
 ]
 
 export interface FaqItem {

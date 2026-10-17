@@ -29,14 +29,17 @@ function readStoredAuth(key: string): string | null {
   return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null
 }
 
+const storedToken = readStoredAuth('token')
+
 export const useAuthStore = create<AuthState>()((set, get) => ({
-  token: readStoredAuth('token'),
+  token: storedToken,
   username: readStoredAuth('username'),
   role: readStoredAuth('role'),
   profile: null,
   isAdmin: readStoredAuth('role') === 'admin',
-  isValidating: false,
-  isAuthenticated: !!readStoredAuth('token'),
+  // 冷启动带 token 时先标记为校验中，路由需等待校验完成再判断角色
+  isValidating: !!storedToken,
+  isAuthenticated: !!storedToken,
 
   login: async (usernameVal, password) => {
     const res: LoginResponse = await authApi.login({
@@ -117,6 +120,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       const profile = await get().fetchProfile()
       if (profile) {
+        // 以服务端返回的角色为准，避免本地缓存的角色过期
+        const role = profile.role
+        localStorage.setItem('role', role)
+        set({ role, isAdmin: role === 'admin' })
         return true
       }
       // 验证失败（包括网络错误、401 等），清除 token 并跳转到登录页

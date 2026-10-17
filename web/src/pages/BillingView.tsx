@@ -408,7 +408,7 @@ export default function BillingView() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5">
+    <div className="w-full space-y-5">
       <PageHeader
         className="mb-5"
         title="账单日志"
@@ -499,7 +499,7 @@ export default function BillingView() {
       </Card>
 
       {/* 数据表格 */}
-      <Card className="py-0">
+      <Card className="overflow-hidden py-0">
         <CardContent className="px-0">
           <Table>
             <TableHeader>

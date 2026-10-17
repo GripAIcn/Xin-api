@@ -289,3 +289,11 @@ This project is licensed under the [MIT License](LICENSE).
 <p align="center">
   <strong>⭐ If you find this project helpful, please give it a Star!</strong>
 </p>
+
+## Note
+
+This project is released under the MIT license. **In addition**, attribution and a link to this project must be retained at the bottom of the page. If you do not wish to include attribution, prior authorization must be obtained.
+
+The same applies to derivative projects based on this project.
+
+According to the MIT license, users bear the risk and responsibility of using this project, which is unrelated to the developers of this open-source project.

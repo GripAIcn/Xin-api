@@ -6,6 +6,7 @@ import LandingHeader from '@/components/landing/LandingHeader'
 import LandingHero from '@/components/landing/LandingHero'
 import ObservabilitySection from '@/components/landing/ObservabilitySection'
 import RequestFlow from '@/components/landing/RequestFlow'
+import StatsStrip from '@/components/landing/StatsStrip'
 
 export default function LandingView() {
   return (
@@ -13,6 +14,7 @@ export default function LandingView() {
       <LandingHeader />
       <main className="min-h-screen bg-background text-foreground">
         <LandingHero />
+        <StatsStrip />
         <FeatureGrid />
         <RequestFlow />
         <ObservabilitySection />
