@@ -1,0 +1,71 @@
+# 上游应用服务器
+# PROXY_PORT 由容器环境变量注入（官方 nginx 镜像的 envsubst 模板机制）
+upstream app_server {
+    server app:${PROXY_PORT};
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name localhost;
+    charset utf-8;
+
+    # 客户端请求体最大大小
+    client_max_body_size 50m;
+    client_body_buffer_size 128k;
+
+    # 代理超时设置
+    proxy_connect_timeout 120s;
+    proxy_send_timeout 120s;
+    proxy_read_timeout 120s;
+
+    # 公共代理头
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+
+    # OpenAI 兼容接口（含 SSE 流式响应）
+    location /v1/ {
+        proxy_pass http://app_server/v1/;
+
+        # SSE 流式响应必须关闭缓冲，否则 token 会被攒批下发
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        chunked_transfer_encoding on;
+    }
+
+    # Gemini 兼容接口（同样包含流式响应）
+    location /v1beta/ {
+        proxy_pass http://app_server/v1beta/;
+
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_request_buffering off;
+        proxy_read_timeout 600s;
+        chunked_transfer_encoding on;
+    }
+
+    # 容器健康检查端点，不经过后端
+    location = /nginx-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # 前端静态文件和 SPA 路由由后端服务提供
+    location / {
+        proxy_pass http://app_server;
+        proxy_read_timeout 120s;
+    }
+
+    # 错误页面
+    error_page 500 502 503 504 /50x.html;
+    location = /50x.html {
+        root /usr/share/nginx/html;
+    }
+}

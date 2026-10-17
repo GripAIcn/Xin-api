@@ -1,0 +1,53 @@
+# 版本控制与 IDE
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# 环境变量与密钥
+.env
+.env.*
+!.env.example
+
+# 前端依赖与构建产物（镜像内会重新安装与构建）
+web/node_modules
+web/dist
+web/.vite
+web/.cache
+
+# 本地构建产物与二进制
+xin-api
+xin-api.exe
+*.exe
+*.dll
+*.so
+*.dylib
+tmp/
+dist/
+
+# 本地数据与备份
+backup/
+screenshot/
+logs/
+*.log
+*.tar.gz
+*.sql
+*.dump
+
+# 部署编排文件无需进入应用构建上下文
+build/
+docker-compose*.yml
+
+# 文档与测试
+*.md
+LICENSE
+*_test.go
+*.test
+
+# 系统垃圾文件
+.DS_Store
+Thumbs.db

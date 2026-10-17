@@ -1,9 +1,22 @@
-FROM nginx:alpine
+FROM nginx:1.27-alpine
 
-# 复制 Nginx 配置
+LABEL org.opencontainers.image.title="xin-api-nginx" \
+      org.opencontainers.image.description="Nginx reverse proxy for xin-api" \
+      org.opencontainers.image.licenses="MIT"
+
+# 后端内部端口，需与 app 服务的 PROXY_PORT 保持一致
+ENV PROXY_PORT=8080 \
+    TZ=Asia/Shanghai
+
+# 主配置 + 站点模板（启动时由官方镜像的 envsubst 渲染为 conf.d/default.conf）
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 
-EXPOSE 80 443
+EXPOSE 80
+
+STOPSIGNAL SIGQUIT
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q --spider http://127.0.0.1/nginx-health || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
