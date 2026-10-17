@@ -2,8 +2,8 @@ import { useEffect, type ReactNode } from 'react'
 import {
   Activity,
   CheckCircle2,
-  DollarSign,
   Hash,
+  JapaneseYen,
   Timer,
   type LucideIcon,
 } from 'lucide-react'
@@ -129,7 +129,7 @@ export default function DashboardView() {
       title: '费用',
       value: overview ? formatMoney(overview.total_cost, currency) : '-',
       description: '所选范围累计计费',
-      icon: DollarSign,
+      icon: JapaneseYen,
       iconClass: 'bg-warning/10 text-warning',
     },
     {
