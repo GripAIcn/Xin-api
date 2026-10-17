@@ -14,6 +14,8 @@ type UserRepo interface {
 	Create(ctx context.Context, user *model.User) error
 	// UpdatePassword 修改密码（通过 user_id）
 	UpdatePassword(ctx context.Context, userID uint, newPasswordHash string) error
+	// SetMustChangePassword 设置/清除「登录后必须修改密码」标记
+	SetMustChangePassword(ctx context.Context, userID uint, must bool) error
 	// GetIdByUsername 根据用户名查询用户（用于登录验证）
 	GetIdByUsername(ctx context.Context, username string) (*model.User, error)
 	// GetByID 根据主键查询用户详情
@@ -49,6 +51,11 @@ func (r *userRepo) UpdatePassword(ctx context.Context, userID uint, newPasswordH
 		return err
 	}
 	return nil
+}
+
+func (r *userRepo) SetMustChangePassword(ctx context.Context, userID uint, must bool) error {
+	_, err := gorm.G[model.User](r.db).Where("id = ?", userID).Update(ctx, "must_change_password", must)
+	return err
 }
 
 func (r *userRepo) GetIdByUsername(ctx context.Context, username string) (*model.User, error) {

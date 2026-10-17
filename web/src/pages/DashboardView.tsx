@@ -70,6 +70,7 @@ interface OverviewCard {
 
 export default function DashboardView() {
   const username = useAuthStore((s) => s.username)
+  const isAdmin = useAuthStore((s) => s.isAdmin)
   const range = useDashboardStore((s) => s.range)
   const stats = useDashboardStore((s) => s.stats)
   const loading = useDashboardStore((s) => s.loading)
@@ -275,7 +276,11 @@ export default function DashboardView() {
       </div>
 
       {/* 排行 */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div
+        className={
+          isAdmin ? 'grid gap-4 lg:grid-cols-3' : 'grid gap-4 lg:grid-cols-2'
+        }
+      >
         {/* 模型调用排行 */}
         <RankCard
           title="模型调用排行"
@@ -292,24 +297,26 @@ export default function DashboardView() {
           ))}
         </RankCard>
 
-        {/* 渠道调用排行 */}
-        <RankCard
-          title="渠道调用排行"
-          description="按请求数 Top 5"
-          loading={loading}
-          empty={topChannels.length === 0}
-        >
-          {topChannels.map((row, index) => (
-            <RankRow
-              key={row.channel_id}
-              index={index}
-              name={row.channel_name ?? `#${row.channel_id}`}
-            >
-              {numberText(row.request_count)} 次 · {percent(row.success_rate)}{' '}
-              · {formatTime(row.avg_latency_ms)}
-            </RankRow>
-          ))}
-        </RankCard>
+        {/* 渠道调用排行（渠道属于上游资源，仅管理员可见） */}
+        {isAdmin && (
+          <RankCard
+            title="渠道调用排行"
+            description="按请求数 Top 5"
+            loading={loading}
+            empty={topChannels.length === 0}
+          >
+            {topChannels.map((row, index) => (
+              <RankRow
+                key={row.channel_id}
+                index={index}
+                name={row.channel_name ?? `#${row.channel_id}`}
+              >
+                {numberText(row.request_count)} 次 · {percent(row.success_rate)}{' '}
+                · {formatTime(row.avg_latency_ms)}
+              </RankRow>
+            ))}
+          </RankCard>
+        )}
 
         {/* 错误排行 */}
         <RankCard

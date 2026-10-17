@@ -17,6 +17,7 @@ export interface LoginResponse {
   token: string
   username: string
   role: string
+  must_change_password: boolean
 }
 
 export interface UpdatePasswordRequest {
@@ -33,6 +34,7 @@ export interface User {
   phone?: string
   role: string
   status: string
+  must_change_password: boolean
   balance: number
   currency: string
   quota?: number

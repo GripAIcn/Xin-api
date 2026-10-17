@@ -168,7 +168,13 @@ function InfoItem({ label, value }: { label: string; value: ReactNode }) {
 }
 
 /** 日志详情内容（含计价表明细） */
-function LogDetailContent({ detail }: { detail: LogDetail }) {
+function LogDetailContent({
+  detail,
+  isAdmin,
+}: {
+  detail: LogDetail
+  isAdmin: boolean
+}) {
   const billing = detail.billing
   const currency = billing?.price.currency ?? detail.currency
   // 余额以结算币种（CNY）记账，计价金额仍按模型定价币种展示
@@ -195,7 +201,7 @@ function LogDetailContent({ detail }: { detail: LogDetail }) {
           <InfoItem label="上游模型" value={dash(detail.upstream_model)} />
           <InfoItem label="供应商" value={dash(detail.provider)} />
           <InfoItem label="协议" value={dash(detail.protocol)} />
-          <InfoItem label="渠道" value={channelText(detail)} />
+          {isAdmin && <InfoItem label="渠道" value={channelText(detail)} />}
           <InfoItem label="用户" value={userText(detail)} />
           <InfoItem label="API Key ID" value={dash(detail.api_key_id)} />
           <InfoItem label="客户端 IP" value={dash(detail.client_ip)} />
@@ -336,17 +342,23 @@ function LogDetailContent({ detail }: { detail: LogDetail }) {
       <Section title="运行信息">
         <InfoGrid>
           <InfoItem label="用量来源" value={dash(detail.usage_source)} />
-          <InfoItem label="路由策略" value={dash(detail.route_strategy)} />
-          <InfoItem label="路由权重" value={dash(detail.route_weight)} />
+          {isAdmin && (
+            <>
+              <InfoItem label="路由策略" value={dash(detail.route_strategy)} />
+              <InfoItem label="路由权重" value={dash(detail.route_weight)} />
+            </>
+          )}
           <InfoItem label="重试次数" value={dash(detail.retry_count)} />
-          <InfoItem
-            label="重试渠道"
-            value={
-              detail.retry_channels?.length
-                ? detail.retry_channels.join(', ')
-                : '-'
-            }
-          />
+          {isAdmin && (
+            <InfoItem
+              label="重试渠道"
+              value={
+                detail.retry_channels?.length
+                  ? detail.retry_channels.join(', ')
+                  : '-'
+              }
+            />
+          )}
           <InfoItem label="是否流式" value={detail.is_stream ? '是' : '否'} />
           <InfoItem label="是否取消" value={detail.is_cancelled ? '是' : '否'} />
           <InfoItem label="取消方" value={dash(detail.cancelled_by)} />
@@ -549,15 +561,17 @@ export default function LogsView() {
               />
             </Field>
 
-            <Field label="渠道 ID">
-              <Input
-                className="w-28"
-                inputMode="numeric"
-                placeholder="渠道 ID"
-                value={channelId}
-                onChange={(e) => setChannelId(e.target.value)}
-              />
-            </Field>
+            {isAdmin && (
+              <Field label="渠道 ID">
+                <Input
+                  className="w-28"
+                  inputMode="numeric"
+                  placeholder="渠道 ID"
+                  value={channelId}
+                  onChange={(e) => setChannelId(e.target.value)}
+                />
+              </Field>
+            )}
 
             {isAdmin && (
               <Field label="用户 ID">
@@ -690,7 +704,9 @@ export default function LogsView() {
                 <TableHead className="min-w-[200px]">请求 ID</TableHead>
                 <TableHead className="min-w-[160px]">上游请求 ID</TableHead>
                 <TableHead className="min-w-[140px]">模型</TableHead>
-                <TableHead className="min-w-[120px]">渠道</TableHead>
+                {isAdmin && (
+                  <TableHead className="min-w-[120px]">渠道</TableHead>
+                )}
                 <TableHead className="w-[80px]">状态</TableHead>
                 <TableHead className="min-w-[160px]">Tokens（入/出/总）</TableHead>
                 <TableHead className="w-[90px]">耗时</TableHead>
@@ -702,7 +718,7 @@ export default function LogsView() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={11}
+                    colSpan={isAdmin ? 11 : 10}
                     className="h-32 text-center text-muted-foreground"
                   >
                     <span className="inline-flex items-center gap-2">
@@ -714,7 +730,7 @@ export default function LogsView() {
               ) : list.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={11}
+                    colSpan={isAdmin ? 11 : 10}
                     className="h-32 text-center text-muted-foreground"
                   >
                     暂无日志
@@ -746,7 +762,7 @@ export default function LogsView() {
                       )}
                     </TableCell>
                     <TableCell>{row.model}</TableCell>
-                    <TableCell>{channelText(row)}</TableCell>
+                    {isAdmin && <TableCell>{channelText(row)}</TableCell>}
                     <TableCell>
                       <DotBadge
                         tone={row.status === 'success' ? 'success' : 'danger'}
@@ -844,7 +860,7 @@ export default function LogsView() {
               </span>
             </div>
           ) : detail ? (
-            <LogDetailContent detail={detail} />
+            <LogDetailContent detail={detail} isAdmin={isAdmin} />
           ) : (
             <p className="py-6 text-center text-sm text-muted-foreground">
               暂无详情

@@ -14,9 +14,10 @@ type UserLoginReq struct {
 
 // UserLoginResponse 登录响应结构
 type UserLoginResponse struct {
-	Token    string `json:"token"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
+	Token              string `json:"token"`
+	Username           string `json:"username"`
+	Role               string `json:"role"`
+	MustChangePassword bool   `json:"must_change_password"`
 }
 
 // UpdatePasswordReq 修改密码请求
@@ -58,17 +59,19 @@ type RechargeBalanceReq struct {
 
 // UserResponse 用户安全字段（不含密码）
 type UserResponse struct {
-	ID          uint         `json:"id"`
-	Username    string       `json:"username"`
-	Email       *string      `json:"email,omitempty"`
-	Phone       *string      `json:"phone,omitempty"`
-	Role        string       `json:"role"`
-	Status      string       `json:"status"`
-	Balance     model.Money  `json:"balance"`
-	Currency    string       `json:"currency"`
-	Quota       *model.Money `json:"quota,omitempty"`
-	UsedQuota   model.Money  `json:"used_quota"`
-	LastLoginAt *time.Time   `json:"last_login_at,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	ID       uint    `json:"id"`
+	Username string  `json:"username"`
+	Email    *string `json:"email,omitempty"`
+	Phone    *string `json:"phone,omitempty"`
+	Role     string  `json:"role"`
+	Status   string  `json:"status"`
+	// MustChangePassword 提示前端强制进入改密流程
+	MustChangePassword bool         `json:"must_change_password"`
+	Balance            model.Money  `json:"balance"`
+	Currency           string       `json:"currency"`
+	Quota              *model.Money `json:"quota,omitempty"`
+	UsedQuota          model.Money  `json:"used_quota"`
+	LastLoginAt        *time.Time   `json:"last_login_at,omitempty"`
+	CreatedAt          time.Time    `json:"created_at"`
+	UpdatedAt          time.Time    `json:"updated_at"`
 }

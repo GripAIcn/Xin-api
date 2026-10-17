@@ -400,6 +400,13 @@ func (h *ChatHandler) handle(c *gin.Context, protocol string, opts inbound.Norma
 		h.abortLocalError(c, codec, response.Unauthorized)
 		return
 	}
+	// 用户被禁用后，其名下 API Key 立即失效（不能仅依赖 Key 自身状态）
+	if user.Status != model.UserStatusActive {
+		h.writeErrorLog(ctx, requestID, modelName, codec.Name(), userID, apiKeyID, clientIP, isStream, startedAt,
+			model.LogTypeError, model.ErrorStageLocal, "user_disabled", "user disabled", nil, nil, nil, rawBody)
+		h.abortLocalError(c, codec, response.Unauthorized)
+		return
+	}
 	if !user.Balance.IsPositive() {
 		h.writeErrorLog(ctx, requestID, modelName, codec.Name(), userID, apiKeyID, clientIP, isStream, startedAt,
 			model.LogTypeError, model.ErrorStageLocal, "insufficient_balance", "insufficient balance", nil, nil, nil, rawBody)

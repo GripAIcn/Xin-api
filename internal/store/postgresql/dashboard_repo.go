@@ -151,20 +151,22 @@ func (r *dashboardRepo) Stats(ctx context.Context, q form.DashboardQuery, scopeU
 	}
 
 	// 4. 渠道调用排行（JOIN channels 取渠道名）
-	channelWhere, channelArgs := dashboardWhere("l", start, end, scopeUserID)
-	channelSQL := `SELECT l.channel_id AS channel_id, ch.name AS channel_name,
+	// 渠道属于上游资源，仅管理员可见；按用户统计时不返回渠道排行
+	if scopeUserID == nil {
+		channelSQL := `SELECT l.channel_id AS channel_id, ch.name AS channel_name,
 		COUNT(*)::bigint AS request_count,
 		COALESCE(COUNT(*) FILTER (WHERE l.status = 'success')::numeric / NULLIF(COUNT(*), 0), 0)::float8 AS success_rate,
 		COALESCE(AVG(l.latency_ms), 0)::float8 AS avg_latency_ms
 	FROM request_logs l
 	LEFT JOIN channels ch ON ch.id = l.channel_id
-	WHERE l.channel_id IS NOT NULL AND ` + channelWhere + `
+	WHERE l.channel_id IS NOT NULL AND ` + where + `
 	GROUP BY l.channel_id, ch.name ORDER BY request_count DESC LIMIT 5`
-	if err := r.db.WithContext(ctx).Raw(channelSQL, channelArgs...).Scan(&stats.TopChannels).Error; err != nil {
-		return nil, err
-	}
-	if stats.TopChannels == nil {
-		stats.TopChannels = []model.DashboardChannelRank{}
+		if err := r.db.WithContext(ctx).Raw(channelSQL, args...).Scan(&stats.TopChannels).Error; err != nil {
+			return nil, err
+		}
+		if stats.TopChannels == nil {
+			stats.TopChannels = []model.DashboardChannelRank{}
+		}
 	}
 
 	// 5. 错误排行（仅错误日志，按 error_type 归类）

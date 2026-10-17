@@ -26,15 +26,12 @@ func main() {
 	cfg := config.Load()
 
 	// 2. 初始化 PostgreSQL 核心驱动
-	db := postgresql.NewPostgres(cfg.Billing.USDCNYRate)
+	db := postgresql.NewPostgres(cfg.Billing.USDCNYRate, cfg.Admin.InitPassword)
 
 	// 3. 初始化 Redis 分布式协同层
 	rdb := storeRedis.NewRedisClient(cfg.Redis)
 
-	// 4. 构造分布式限流器（数据面使用，暂不挂载路由）
-	_ = middleware.NewDistributedLimiter(rdb)
-
-	// 5. 数据面组件初始化
+	// 4. 数据面组件初始化
 	channelRepo := postgresql.NewChannelRepo(db)
 
 	breaker := service.NewCircuitBreaker(rdb, channelRepo, cfg.CircuitBreaker)

@@ -2,7 +2,9 @@ package postgresql
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -56,7 +58,8 @@ func parseDSN(dsn string) (dbName string, adminDSN string) {
 }
 
 // NewPostgres 初始化 PostgreSQL 连接，自动建库、建表、创建默认管理员账号
-func NewPostgres(usdCNYRate float64) *gorm.DB {
+// adminInitPassword 为空时随机生成一次性口令，避免使用硬编码默认密码
+func NewPostgres(usdCNYRate float64, adminInitPassword string) *gorm.DB {
 	dsn := buildDSN()
 
 	dbName, adminDSN := parseDSN(dsn)
@@ -148,20 +151,26 @@ func NewPostgres(usdCNYRate float64) *gorm.DB {
 	var adminCount int64
 	db.Model(&model.User{}).Where("username = ?", "admin").Count(&adminCount)
 	if adminCount == 0 {
-		hashed, err := bcrypt.GenerateFromPassword([]byte("12345678"), bcrypt.DefaultCost)
+		adminPassword := adminInitPassword
+		if adminPassword == "" {
+			adminPassword = generateRandomPassword()
+			log.Printf("[DB] 未设置 ADMIN_INIT_PASSWORD，已生成随机管理员口令（仅本次显示，请登录后立即修改）: %s", adminPassword)
+		}
+		hashed, err := bcrypt.GenerateFromPassword([]byte(adminPassword), bcrypt.DefaultCost)
 		if err != nil {
 			panic(fmt.Sprintf("加密默认管理员密码失败: %v", err))
 		}
 		if err := db.Create(&model.User{
-			Username: "admin",
-			Password: string(hashed),
-			Role:     model.UserRoleAdmin,    // 显式写入，满足 CHECK (role IN (...))
-			Status:   model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
-			Currency: "CNY",                  // 用户结算币种固定 CNY
+			Username:           "admin",
+			Password:           string(hashed),
+			Role:               model.UserRoleAdmin,    // 显式写入，满足 CHECK (role IN (...))
+			Status:             model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
+			Currency:           "CNY",                  // 用户结算币种固定 CNY
+			MustChangePassword: true,                   // 初始口令仅用于首次登录，登录后必须改密
 		}).Error; err != nil {
 			panic(fmt.Sprintf("创建默认管理员账号失败: %v", err))
 		}
-		log.Println("[DB] 默认管理员账号已创建: username=admin password=12345678")
+		log.Println("[DB] 默认管理员账号已创建: username=admin")
 	}
 
 	// 第五步：初始化 USD→CNY 汇率种子（已存在则不覆盖管理员修改）
@@ -190,4 +199,13 @@ WHERE currency IS DISTINCT FROM 'CNY'`, initialRate.String(), initialRate.String
 	}
 
 	return db
+}
+
+// generateRandomPassword 生成 32 位十六进制随机口令，用于首次初始化管理员账号
+func generateRandomPassword() string {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		panic(fmt.Sprintf("生成随机管理员密码失败: %v", err))
+	}
+	return hex.EncodeToString(buf)
 }

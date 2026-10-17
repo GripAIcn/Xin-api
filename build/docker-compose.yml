@@ -89,8 +89,10 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
       REDIS_DB: ${REDIS_DB:-0}
       REDIS_POOL_SIZE: ${REDIS_POOL_SIZE:-20}
-      JWT_SECRET: ${JWT_SECRET:-xin-api-default-secret-key-2026}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 必须设置，可用 openssl rand -base64 48 生成}
       JWT_EXPIRE: ${JWT_EXPIRE:-24h}
+      # 首次初始化 admin 账号的口令；为空时由服务随机生成并打印到启动日志
+      ADMIN_INIT_PASSWORD: ${ADMIN_INIT_PASSWORD:-}
       CB_FAILURE_THRESHOLD: ${CB_FAILURE_THRESHOLD:-5}
       CB_RECOVERY_INTERVAL: ${CB_RECOVERY_INTERVAL:-60s}
       CACHE_CHANNEL_EXPIRE: ${CACHE_CHANNEL_EXPIRE:-300s}

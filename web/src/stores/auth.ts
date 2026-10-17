@@ -9,6 +9,8 @@ interface AuthState {
   role: string | null
   profile: User | null
   isAdmin: boolean
+  // 首次登录或被管理员重置密码后为 true，需先完成改密
+  mustChangePassword: boolean
   isValidating: boolean
   isAuthenticated: boolean
   login: (username: string, password: string) => Promise<void>
@@ -37,6 +39,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   role: readStoredAuth('role'),
   profile: null,
   isAdmin: readStoredAuth('role') === 'admin',
+  mustChangePassword: false,
   // 冷启动带 token 时先标记为校验中，路由需等待校验完成再判断角色
   isValidating: !!storedToken,
   isAuthenticated: !!storedToken,
@@ -54,6 +57,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       username: res.username,
       role: res.role,
       isAdmin: res.role === 'admin',
+      mustChangePassword: res.must_change_password,
       isAuthenticated: true,
     })
   },
@@ -68,6 +72,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       role: null,
       profile: null,
       isAdmin: false,
+      mustChangePassword: false,
       isAuthenticated: false,
     })
     if (window.location.pathname !== '/login') {
@@ -77,6 +82,8 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
 
   updatePassword: async (data) => {
     await authApi.updatePassword(data)
+    // 改密成功后刷新资料，及时解除强制改密状态
+    await get().fetchProfile()
   },
 
   updateProfile: async (data) => {
@@ -103,7 +110,10 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       const res = await apiClient.get('/v1/users/profile')
       const profile = handleApiResponse<User>(res)
-      set({ profile })
+      set({
+        profile,
+        mustChangePassword: profile.must_change_password,
+      })
       return profile
     } catch {
       return null

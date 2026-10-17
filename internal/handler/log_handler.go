@@ -65,7 +65,17 @@ func (h *LogHandler) List(c *gin.Context) {
 		response.AdminFail(c, response.InternalError)
 		return
 	}
+	// 普通用户不可见上游渠道信息
+	for i := range data.List {
+		sanitizeLogItem(&data.List[i])
+	}
 	response.AdminSuccess(c, data)
+}
+
+// sanitizeLogItem 清空列表项中的上游渠道信息（仅用于非管理员视图）
+func sanitizeLogItem(item *model.LogListItem) {
+	item.ChannelID = nil
+	item.ChannelName = nil
 }
 
 // ListBillings 分页查询账单流水（消费 / 充值 / 退款合并）。
@@ -139,9 +149,19 @@ func (h *LogHandler) Get(c *gin.Context) {
 			response.AdminFail(c, response.Unauthorized)
 			return
 		}
-		if detail.UserID != nil && *detail.UserID != uid {
-			response.AdminFail(c, response.Forbidden)
+		// 无归属日志（如用户不存在的登录失败）一律不向普通用户开放；
+		// 统一返回 NotFound，避免通过 403/404 差异探测日志是否存在
+		if detail.UserID == nil || *detail.UserID != uid {
+			response.AdminFail(c, response.NotFound)
 			return
+		}
+		// 普通用户不可见上游渠道与路由细节
+		sanitizeLogItem(&detail.LogListItem)
+		detail.RetryChannels = []int64{}
+		detail.RouteStrategy = nil
+		detail.RouteWeight = nil
+		if detail.Billing != nil {
+			detail.Billing.ChannelID = nil
 		}
 	}
 

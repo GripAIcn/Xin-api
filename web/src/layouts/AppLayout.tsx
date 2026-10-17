@@ -7,6 +7,7 @@ import {
   CircleDollarSign,
   KeyRound,
   LayoutDashboard,
+  Lock,
   LogOut,
   Menu,
   ReceiptText,
@@ -16,11 +17,22 @@ import {
   Users,
   Waypoints,
 } from 'lucide-react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { toast } from 'sonner'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import ThemeToggle from '@/components/ThemeToggle'
 import BrandLogo from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +42,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form'
+import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -229,9 +250,161 @@ function UserMenu({
   )
 }
 
+const forcePasswordSchema = z
+  .object({
+    old_password: z
+      .string()
+      .min(1, '请输入当前密码')
+      .min(8, '密码长度需在 8-20 个字符之间')
+      .max(20, '密码长度需在 8-20 个字符之间'),
+    new_password: z
+      .string()
+      .min(1, '请输入新密码')
+      .min(8, '密码长度需在 8-20 个字符之间')
+      .max(20, '密码长度需在 8-20 个字符之间'),
+    confirm_password: z.string().min(1, '请确认新密码'),
+  })
+  .refine((data) => data.confirm_password === data.new_password, {
+    message: '两次输入的密码不一致',
+    path: ['confirm_password'],
+  })
+  .refine((data) => data.new_password !== data.old_password, {
+    message: '新密码不能与当前密码相同',
+    path: ['new_password'],
+  })
+
+type ForcePasswordForm = z.infer<typeof forcePasswordSchema>
+
+// ForcePasswordChange 首次登录/密码被重置后的强制改密界面，不提供跳过入口
+function ForcePasswordChange({
+  username,
+  onLogout,
+}: {
+  username: string | null
+  onLogout: () => void
+}) {
+  const updatePassword = useAuthStore((s) => s.updatePassword)
+  const form = useForm<ForcePasswordForm>({
+    resolver: zodResolver(forcePasswordSchema),
+    defaultValues: { old_password: '', new_password: '', confirm_password: '' },
+  })
+
+  const onSubmit = async (values: ForcePasswordForm) => {
+    try {
+      await updatePassword({
+        old_password: values.old_password,
+        new_password: values.new_password,
+      })
+      toast.success('密码修改成功')
+      form.reset()
+    } catch (e) {
+      toast.error((e as Error)?.message || '修改失败')
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <div className="mb-2 flex justify-center">
+            <BrandLogo variant="lockup" size="md" />
+          </div>
+          <div className="flex items-center justify-center gap-2">
+            <Lock className="size-4 text-primary" />
+            <CardTitle>请先修改密码</CardTitle>
+          </div>
+          <CardDescription className="text-center">
+            {username ? `${username}，` : ''}
+            首次登录或密码被重置后，需要设置新密码才能继续使用控制台。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-4"
+            >
+              <FormField
+                control={form.control}
+                name="old_password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>当前密码</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="输入当前密码"
+                        disabled={form.formState.isSubmitting}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="new_password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>新密码</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="输入新密码（8-20 位）"
+                        disabled={form.formState.isSubmitting}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="confirm_password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>确认新密码</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="再次输入新密码"
+                        disabled={form.formState.isSubmitting}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={form.formState.isSubmitting}
+              >
+                {form.formState.isSubmitting ? '保存中...' : '修改密码并继续'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={onLogout}
+              >
+                退出登录
+              </Button>
+            </form>
+          </Form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function AppLayout() {
   const username = useAuthStore((s) => s.username)
   const isAdmin = useAuthStore((s) => s.isAdmin)
+  const mustChangePassword = useAuthStore((s) => s.mustChangePassword)
   const logout = useAuthStore((s) => s.logout)
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -245,6 +418,11 @@ export default function AppLayout() {
   }, [])
 
   const title = pageTitle(location.pathname)
+
+  // 强制改密：拦截整个控制台，仅保留改密与退出登录
+  if (mustChangePassword) {
+    return <ForcePasswordChange username={username} onLogout={logout} />
+  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden">

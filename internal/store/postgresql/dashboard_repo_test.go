@@ -186,9 +186,7 @@ func TestDashboardRepoStatsScopeUser(t *testing.T) {
 	mock.ExpectQuery("models").WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), userID).WillReturnRows(sqlmock.NewRows([]string{
 		"model", "request_count", "total_tokens", "total_cost",
 	}))
-	mock.ExpectQuery("channels").WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), userID).WillReturnRows(sqlmock.NewRows([]string{
-		"channel_id", "channel_name", "request_count", "success_rate", "avg_latency_ms",
-	}))
+	// 非管理员不查询渠道排行（渠道属于上游资源，不对普通用户暴露）
 	mock.ExpectQuery("errors").WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), userID).WillReturnRows(sqlmock.NewRows([]string{
 		"error_type", "count",
 	}))
@@ -204,4 +202,7 @@ func TestDashboardRepoStatsScopeUser(t *testing.T) {
 		t.Fatalf("币种 = %s, 期望 CNY", stats.Overview.Currency)
 	}
 	requireMoney(t, stats.Overview.TotalCost, "7.2")
+	if len(stats.TopChannels) != 0 {
+		t.Fatalf("渠道排行 = %+v, 期望普通用户为空", stats.TopChannels)
+	}
 }

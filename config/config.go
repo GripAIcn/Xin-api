@@ -40,6 +40,12 @@ type Config struct {
 	Proxy          ProxyConfig
 	Log            LogConfig
 	Billing        BillingConfig
+	Admin          AdminConfig
+}
+
+// AdminConfig 初始管理员配置
+type AdminConfig struct {
+	InitPassword string // 首次初始化 admin 账号时使用的口令，为空则随机生成
 }
 
 // BillingConfig 计费配置
@@ -87,7 +93,7 @@ func Load() *Config {
 	// 2. 统一组装并返回强类型配置实例
 	return &Config{
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", "xin-api-default-secret-key-2026"), // 给予安全兜底密钥
+			Secret: mustGetEnv("JWT_SECRET"), // 不再提供默认密钥，未配置则拒绝启动
 			Expire: getEnvToTimeDuration("JWT_EXPIRE", 24*time.Hour),
 		},
 		Server: ServerConfig{
@@ -119,7 +125,22 @@ func Load() *Config {
 		Billing: BillingConfig{
 			USDCNYRate: getEnvToFloat("USD_CNY_RATE", 7.2),
 		},
+		Admin: AdminConfig{
+			InitPassword: getEnv("ADMIN_INIT_PASSWORD", ""),
+		},
 	}
+}
+
+// mustGetEnv 读取必填环境变量，缺失时直接终止启动，避免使用可预测的默认密钥
+func mustGetEnv(key string) string {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		log.Fatalf("[CONFIG] [FATAL] required env %s is not set", key)
+	}
+	if len(val) < 32 {
+		log.Printf("[CONFIG] [WARN] %s is shorter than 32 characters, please use a strong random secret", key)
+	}
+	return val
 }
 
 // getEnvToTimeDuration 读取时间相关的环境变量并解析

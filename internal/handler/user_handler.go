@@ -41,19 +41,20 @@ func NewUserHandler(repo postgresql.UserRepo, jwtCfg config.JWTConfig, logRepo p
 // toUserResponse 将 model.User 映射为不含密码的安全响应结构
 func toUserResponse(u model.User) form.UserResponse {
 	return form.UserResponse{
-		ID:          u.ID,
-		Username:    u.Username,
-		Email:       u.Email,
-		Phone:       u.Phone,
-		Role:        u.Role,
-		Status:      u.Status,
-		Balance:     u.Balance,
-		Currency:    u.Currency,
-		Quota:       u.Quota,
-		UsedQuota:   u.UsedQuota,
-		LastLoginAt: u.LastLoginAt,
-		CreatedAt:   u.CreatedAt,
-		UpdatedAt:   u.UpdatedAt,
+		ID:                 u.ID,
+		Username:           u.Username,
+		Email:              u.Email,
+		Phone:              u.Phone,
+		Role:               u.Role,
+		Status:             u.Status,
+		MustChangePassword: u.MustChangePassword,
+		Balance:            u.Balance,
+		Currency:           u.Currency,
+		Quota:              u.Quota,
+		UsedQuota:          u.UsedQuota,
+		LastLoginAt:        u.LastLoginAt,
+		CreatedAt:          u.CreatedAt,
+		UpdatedAt:          u.UpdatedAt,
 	}
 }
 
@@ -132,9 +133,10 @@ func (h *UserHandler) Login(c *gin.Context) {
 	h.writeLoginAudit(c.Request.Context(), &uid, user.Username, clientIP, userAgent, "", true)
 
 	response.AdminSuccess(c, form.UserLoginResponse{
-		Token:    token,
-		Username: user.Username,
-		Role:     user.Role,
+		Token:              token,
+		Username:           user.Username,
+		Role:               user.Role,
+		MustChangePassword: user.MustChangePassword,
 	})
 }
 
@@ -185,15 +187,16 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 
 	newUser := &model.User{
-		Username: req.Username,
-		Password: string(hashedPassword),
-		Email:    req.Email,
-		Phone:    req.Phone,
-		Role:     model.UserRoleUser,     // 默认创建为普通用户
-		Status:   model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
-		Balance:  model.Money{},
-		Currency: model.CurrencyCNY, // 余额统一使用人民币结算
-		Quota:    nil,
+		Username:           req.Username,
+		Password:           string(hashedPassword),
+		Email:              req.Email,
+		Phone:              req.Phone,
+		Role:               model.UserRoleUser,     // 默认创建为普通用户
+		Status:             model.UserStatusActive, // 显式写入，满足 CHECK (status IN (...))
+		MustChangePassword: true,                   // 初始口令仅用于首次登录，登录后必须改密
+		Balance:            model.Money{},
+		Currency:           model.CurrencyCNY, // 余额统一使用人民币结算
+		Quota:              nil,
 	}
 
 	if err := h.userRepo.Create(c.Request.Context(), newUser); err != nil {
@@ -300,6 +303,13 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 
 	if err := h.userRepo.UpdatePassword(c.Request.Context(), uint(id), string(newHashedPassword)); err != nil {
 		logger.Error(c.Request.Context(), "reset password failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	// 重置后的临时口令仅用于登录，用户首次登录必须自行改密
+	if err := h.userRepo.SetMustChangePassword(c.Request.Context(), uint(id), true); err != nil {
+		logger.Error(c.Request.Context(), "set must_change_password failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return
 	}
@@ -593,6 +603,12 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 
+	// 强制改密场景下不允许沿用原密码，确保临时口令确实被替换
+	if user.MustChangePassword && req.OldPassword == req.NewPassword {
+		response.AdminFail(c, response.InvalidParams)
+		return
+	}
+
 	// 加密新密码
 	newHashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
 	if err != nil {
@@ -604,6 +620,13 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	uID := uint(currentUserID.(float64)) // JWT 解析数字通常为 float64
 	if err := h.userRepo.UpdatePassword(c.Request.Context(), uID, string(newHashedPassword)); err != nil {
 		logger.Error(c.Request.Context(), "update password failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return
+	}
+
+	// 用户已自行改密，解除强制改密标记
+	if err := h.userRepo.SetMustChangePassword(c.Request.Context(), uID, false); err != nil {
+		logger.Error(c.Request.Context(), "clear must_change_password failed: %v", err)
 		response.AdminFail(c, response.InternalError)
 		return
 	}

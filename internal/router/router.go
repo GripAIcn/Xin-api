@@ -43,16 +43,18 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		// ==========================================
 		// 开放路由组 (Public Group)：不需要携带 Token
 		// ==========================================
+		// 登录接口按客户端 IP 限流：桶容量 10，每秒补充 1 个令牌
+		loginLimiter := middleware.NewDistributedLimiter(rdb)
 		public := v1.Group("/auth")
 		{
-			public.POST("/login", userHandler.Login) // 用户登录获取 Token
+			public.POST("/login", loginLimiter.LoginRateLimit(10, 1, 1), userHandler.Login) // 用户登录获取 Token（按 IP 限流）
 		}
 
 		// ==========================================
 		// 权限受控路由组 (Protected Group)：必须通过 JWT 拦截器
 		// ==========================================
 		protectedUser := v1.Group("/users")
-		protectedUser.Use(middleware.JWTAuth(cfg.JWT.Secret), middleware.AuditLog(logRepo)) // ⚡️ 注入鉴权 + 控制面审计中间件
+		protectedUser.Use(middleware.JWTAuth(cfg.JWT.Secret, userRepo), middleware.AuditLog(logRepo), middleware.RequirePasswordChanged()) // ⚡️ 注入鉴权 + 控制面审计 + 强制改密中间件
 		{
 			// —— 自助接口（所有登录用户）——
 			protectedUser.GET("/profile", userHandler.GetProfile)      // 获取当前登录用户资料（亦用于前端 token 校验）
@@ -71,7 +73,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		}
 
 		protected := v1.Group("")
-		protected.Use(middleware.JWTAuth(cfg.JWT.Secret), middleware.AuditLog(logRepo))
+		protected.Use(middleware.JWTAuth(cfg.JWT.Secret, userRepo), middleware.AuditLog(logRepo), middleware.RequirePasswordChanged())
 		{
 			// 请求日志查询：所有登录用户可访问，仓储层按当前用户隔离，管理员可查全部
 			protected.GET("/logs", logHandler.List)                 // 日志列表（分页 + 多维过滤）

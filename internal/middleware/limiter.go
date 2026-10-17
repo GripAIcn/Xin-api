@@ -54,19 +54,47 @@ func NewDistributedLimiter(rdb *redis.Client) *DistributedLimiter {
 // maxTokens：桶容量；refillRate：每秒补充令牌数；reqTokens：每次请求消耗令牌数。
 func (dl *DistributedLimiter) LimitMiddleware(maxTokens, refillRate, reqTokens int) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		redisKey := "XinAPI:limiter:global"
-		now := time.Now().Unix()
-		args := []any{maxTokens, refillRate, reqTokens, now}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-		defer cancel()
-
-		res, err := dl.rdb.Eval(ctx, tokenBucketScript, []string{redisKey}, args...).Result()
-		if err != nil || res.(int64) == 0 {
+		ok, err := dl.allow(c.Request.Context(), "XinAPI:limiter:global", maxTokens, refillRate, reqTokens)
+		if err != nil || !ok {
 			response.DataPlaneError(c, response.RateLimited)
 			return
 		}
 
 		c.Next()
 	}
+}
+
+// LoginRateLimit 登录接口限流：按客户端 IP 维护独立令牌桶，防止暴力破解与撞库。
+// 超限时使用控制面响应契约返回业务码并中断请求。
+func (dl *DistributedLimiter) LoginRateLimit(maxTokens, refillRate, reqTokens int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := "XinAPI:limiter:login:" + c.ClientIP()
+		ok, err := dl.allow(c.Request.Context(), key, maxTokens, refillRate, reqTokens)
+		if err != nil || !ok {
+			response.AdminFail(c, response.RateLimited)
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// allow 执行一次令牌桶扣减；返回 false 表示令牌不足
+func (dl *DistributedLimiter) allow(ctx context.Context, key string, maxTokens, refillRate, reqTokens int) (bool, error) {
+	now := time.Now().Unix()
+	args := []any{maxTokens, refillRate, reqTokens, now}
+
+	evalCtx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+
+	res, err := dl.rdb.Eval(evalCtx, tokenBucketScript, []string{key}, args...).Result()
+	if err != nil {
+		return false, err
+	}
+	allowed, ok := res.(int64)
+	if !ok {
+		return false, nil
+	}
+	return allowed == 1, nil
 }
