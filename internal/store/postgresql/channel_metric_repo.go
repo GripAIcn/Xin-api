@@ -37,7 +37,7 @@ const aggregateRangeSQL = `INSERT INTO channel_metrics (
 	channel_id, model, window_start, window_size,
 	request_count, success_count, error_count, timeout_count,
 	total_input_tokens, total_output_tokens,
-	sum_latency_ms, sum_ttft_ms, ttft_count, sum_generation_ms,
+	sum_latency_ms, sum_ttft_ms, ttft_count, sum_generation_ms, generation_token_count,
 	total_cost, currency, updated_at
 )
 SELECT
@@ -56,7 +56,11 @@ SELECT
 	COUNT(*) FILTER (WHERE l.status = 'success' AND l.ttft_ms IS NOT NULL),
 	COALESCE(SUM(
 		COALESCE(l.generation_ms, GREATEST(COALESCE(l.latency_ms, 0) - COALESCE(l.ttft_ms, 0), 0))
-	) FILTER (WHERE l.status = 'success'), 0),
+	) FILTER (WHERE l.status = 'success' AND l.ttft_ms IS NOT NULL AND COALESCE(l.output_tokens, 0) > 1), 0),
+	-- TPOT 分母：仅流式成功且 N>1 的样本，每个样本按 N-1 个 token 间隔累计
+	COALESCE(SUM(
+		GREATEST(COALESCE(l.output_tokens, 0) - 1, 0)
+	) FILTER (WHERE l.status = 'success' AND l.ttft_ms IS NOT NULL AND COALESCE(l.output_tokens, 0) > 1), 0),
 	COALESCE(SUM(l.total_cost), 0),
 	COALESCE(MAX(l.currency), 'USD'),
 	NOW()
@@ -93,6 +97,7 @@ ON CONFLICT (channel_id, model, window_start) DO UPDATE SET
 	sum_ttft_ms = EXCLUDED.sum_ttft_ms,
 	ttft_count = EXCLUDED.ttft_count,
 	sum_generation_ms = EXCLUDED.sum_generation_ms,
+	generation_token_count = EXCLUDED.generation_token_count,
 	total_cost = EXCLUDED.total_cost,
 	currency = EXCLUDED.currency,
 	updated_at = NOW()`
@@ -158,7 +163,7 @@ func (r *channelMetricRepo) Summarize(ctx context.Context, q form.ChannelMetricQ
 		COALESCE(SUM(cm.success_count)::numeric / NULLIF(SUM(cm.request_count), 0), 0) AS success_rate,
 		COALESCE(SUM(cm.sum_latency_ms)::numeric / NULLIF(SUM(cm.success_count), 0), 0) AS avg_latency_ms,
 		COALESCE(SUM(cm.sum_ttft_ms)::numeric / NULLIF(SUM(cm.ttft_count), 0), 0) AS avg_ttft_ms,
-		COALESCE(SUM(cm.sum_generation_ms)::numeric / NULLIF(SUM(cm.total_output_tokens), 0), 0) AS tpot,
+		COALESCE(SUM(cm.sum_generation_ms)::numeric / NULLIF(SUM(cm.generation_token_count), 0), 0) AS tpot,
 		COALESCE(SUM(cm.request_count)::numeric * 60 / NULLIF(SUM(cm.window_size), 0), 0) AS rpm,
 		COALESCE(SUM(cm.total_tokens)::numeric * 60 / NULLIF(SUM(cm.window_size), 0), 0) AS tpm,
 		COALESCE(SUM(cm.total_input_tokens), 0)::bigint AS total_input_tokens,
@@ -207,7 +212,7 @@ func (r *channelMetricRepo) Trend(ctx context.Context, q form.ChannelMetricTrend
 		COALESCE(SUM(cm.success_count)::numeric / NULLIF(SUM(cm.request_count), 0), 0) AS success_rate,
 		COALESCE(SUM(cm.sum_ttft_ms)::numeric / NULLIF(SUM(cm.ttft_count), 0), 0) AS avg_ttft_ms,
 		COALESCE(SUM(cm.sum_latency_ms)::numeric / NULLIF(SUM(cm.success_count), 0), 0) AS avg_latency_ms,
-		COALESCE(SUM(cm.sum_generation_ms)::numeric / NULLIF(SUM(cm.total_output_tokens), 0), 0) AS tpot
+		COALESCE(SUM(cm.sum_generation_ms)::numeric / NULLIF(SUM(cm.generation_token_count), 0), 0) AS tpot
 	FROM channel_metrics cm
 	WHERE ` + strings.Join(conds, " AND ") + `
 	GROUP BY ` + bucketExpr + `

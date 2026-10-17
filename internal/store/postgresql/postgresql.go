@@ -107,6 +107,23 @@ func NewPostgres(usdCNYRate float64) *gorm.DB {
 	}
 	log.Println("连接 PostgreSQL 成功")
 
+	// AutoMigrate 不会修改生成列表达式：旧表缺少 generation_token_count 时，
+	// 先删除旧口径的 tpot 生成列，再交由 AutoMigrate 按新表达式重建。
+	var hasGenerationTokenCol bool
+	if err := db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = 'channel_metrics'
+		  AND column_name = 'generation_token_count'
+	)`).Scan(&hasGenerationTokenCol).Error; err != nil {
+		panic(fmt.Sprintf("检查 channel_metrics 表结构失败: %v", err))
+	}
+	if !hasGenerationTokenCol {
+		if err := db.Exec(`ALTER TABLE IF EXISTS channel_metrics DROP COLUMN IF EXISTS tpot`).Error; err != nil {
+			panic(fmt.Sprintf("重建 channel_metrics.tpot 生成列失败: %v", err))
+		}
+	}
+
 	// 第三步：自动迁移（建表）
 	// 顺序按外键依赖排列：先父表后子表
 	if err := db.AutoMigrate(
