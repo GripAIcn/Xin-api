@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"Xin-api/internal/store/postgresql"
@@ -43,10 +42,7 @@ func (f *ChannelModelFetcher) FetchUpstreamModels(ctx context.Context, channelID
 		return nil, ErrChannelNotFound
 	}
 
-	url := strings.TrimRight(channel.BaseURL, "/")
-	if !strings.HasSuffix(url, "/v1/models") {
-		url = url + "/v1/models"
-	}
+	url := joinUpstreamURL(channel.BaseURL, "/v1/models")
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

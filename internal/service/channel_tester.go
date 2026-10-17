@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -210,14 +209,7 @@ func (t *ChannelTester) testSingleModel(ctx context.Context, baseURL, apiKey str
 	}
 
 	// 构建请求 URL
-	url := baseURL
-	if !strings.HasSuffix(url, "/v1/chat/completions") {
-		if strings.HasSuffix(url, "/") {
-			url = url + "v1/chat/completions"
-		} else {
-			url = url + "/v1/chat/completions"
-		}
-	}
+	url := joinUpstreamURL(baseURL, "/v1/chat/completions")
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {

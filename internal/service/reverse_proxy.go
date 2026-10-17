@@ -69,7 +69,7 @@ func (p *StreamProxy) Forward(
 	captureResponseBody bool,
 ) (*ForwardResult, error) {
 	start := time.Now()
-	upstreamURL := strings.TrimRight(channel.BaseURL, "/") + upReq.Endpoint
+	upstreamURL := joinUpstreamURL(channel.BaseURL, upReq.Endpoint)
 
 	req, err := http.NewRequestWithContext(c.Request.Context(), upReq.Method, upstreamURL, bytes.NewReader(upReq.Body))
 	if err != nil {
@@ -323,6 +323,31 @@ func (r *ForwardResult) mergeMeta(meta *openaiMeta, overrideID bool) {
 	if len(meta.Choices) > 0 && meta.Choices[0].FinishReason != nil && *meta.Choices[0].FinishReason != "" {
 		r.FinishReason = *meta.Choices[0].FinishReason
 	}
+}
+
+// joinUpstreamURL 拼接渠道 BaseURL 与上游端点路径
+// 兼容 BaseURL 已带 /v1（如 https://relay.example.com/v1）或已含完整端点路径的写法，避免重复追加
+func joinUpstreamURL(baseURL, endpoint string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	ep := "/" + strings.TrimLeft(strings.TrimSpace(endpoint), "/")
+	if ep == "/" {
+		ep = ""
+	}
+	if base == "" {
+		return ep
+	}
+	if ep == "" {
+		return base
+	}
+	// BaseURL 已包含完整端点，直接返回
+	if strings.HasSuffix(base, ep) {
+		return base
+	}
+	// BaseURL 已以 /v1 结尾，且端点以 /v1/ 开头时去掉端点的版本前缀
+	if strings.HasSuffix(base, "/v1") && strings.HasPrefix(ep, "/v1/") {
+		return base + strings.TrimPrefix(ep, "/v1")
+	}
+	return base + ep
 }
 
 // UpstreamError 上游返回错误
