@@ -5,11 +5,6 @@ const stats = [
     detail: 'OpenAI · Anthropic · Gemini',
   },
   {
-    value: '4 家',
-    label: '上游供应商',
-    detail: 'OpenAI · Claude · Gemini · DeepSeek',
-  },
-  {
     value: '4 维',
     label: '智能路由',
     detail: '健康度 · 延迟 · 成本 · 限流',
@@ -21,12 +16,12 @@ const stats = [
   },
 ]
 
-/** 紧贴 Hero 下沿的能力指标条，一行 4 项，移动端 2×2 */
+/** 紧贴 Hero 下沿的能力指标条，桌面端一行 3 项，移动端 2 列 */
 export default function StatsStrip() {
   return (
     <section className="border-y bg-background">
       <div className="mx-auto w-full max-w-[1440px] px-6 lg:px-10">
-        <dl className="grid grid-cols-2 gap-px bg-border lg:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-px bg-border lg:grid-cols-3">
           {stats.map((stat) => (
             <div
               key={stat.label}
