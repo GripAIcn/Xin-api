@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"Xin-api/pkg/jsonx"
 	"Xin-api/pkg/response"
 )
 
@@ -70,15 +71,45 @@ func (r Registry) New(name string) Codec {
 
 // chatUsage OpenAI Chat usage 字段
 type chatUsage struct {
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
-	TotalTokens      int64 `json:"total_tokens"`
+	PromptTokens            int64 `json:"prompt_tokens"`
+	CompletionTokens        int64 `json:"completion_tokens"`
+	TotalTokens             int64 `json:"total_tokens"`
+	PromptTokensDetails     *chatPromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *chatCompletionTokensDetails `json:"completion_tokens_details,omitempty"`
+}
+
+// chatPromptTokensDetails prompt_tokens 明细（缓存命中）
+type chatPromptTokensDetails struct {
+	CachedTokens int64 `json:"cached_tokens"`
+}
+
+// chatCompletionTokensDetails completion_tokens 明细（推理 token）
+type chatCompletionTokensDetails struct {
+	ReasoningTokens int64 `json:"reasoning_tokens"`
+}
+
+// chatFunctionCall 工具调用中的函数描述
+type chatFunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+// chatToolCall OpenAI Chat 工具调用
+type chatToolCall struct {
+	Index    int              `json:"index,omitempty"`
+	ID       string           `json:"id,omitempty"`
+	Type     string           `json:"type,omitempty"`
+	Function chatFunctionCall `json:"function"`
 }
 
 // chatMessage 同时用于 message 与 delta（字段一致）
 type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role             string         `json:"role"`
+	Content          string         `json:"content"`
+	Refusal          string         `json:"refusal,omitempty"`
+	ReasoningContent string         `json:"reasoning_content,omitempty"`
+	ToolCalls        []chatToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string         `json:"tool_call_id,omitempty"`
 }
 
 // chatCompletion OpenAI Chat 非流式响应
@@ -143,7 +174,7 @@ func sseEvent(event string, data []byte) []byte {
 // openAILocalError 以 OpenAI 标准错误体编码网关本地错误
 func openAILocalError(bizCode int) (int, []byte) {
 	status, body := response.BuildOpenAIError(bizCode)
-	data, err := json.Marshal(body)
+	data, err := jsonx.Marshal(body)
 	if err != nil {
 		return status, []byte(`{"error":{"message":"gateway error","type":"api_error","code":"gateway_internal_error"}}`)
 	}

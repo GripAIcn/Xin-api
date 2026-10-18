@@ -130,7 +130,8 @@ func (r *WeightedRouter) Route(ctx context.Context, req RouteRequest) (*RouteRes
 }
 
 // supportsProtocol 判断渠道是否支持指定协议；protocol 为空或渠道未登记协议视为「全协议支持」
-// Anthropic Messages 入站归一化为 OpenAI Chat，故声明 chat 的渠道同样支持 messages
+// responses / gemini / messages 入站都会归一化为 OpenAI Chat 上游请求，
+// 因此声明 chat 的渠道同样支持这些协议
 func supportsProtocol(ch model.Channel, protocol string) bool {
 	if protocol == "" || len(ch.Protocol) == 0 {
 		return true
@@ -140,7 +141,7 @@ func supportsProtocol(ch model.Channel, protocol string) bool {
 			return true
 		}
 	}
-	if protocol == "messages" {
+	if protocol == "responses" || protocol == "messages" || protocol == "gemini" {
 		for _, p := range ch.Protocol {
 			if p == "chat" {
 				return true
