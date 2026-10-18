@@ -132,18 +132,10 @@ func (r *channelRepo) ListActiveByModel(ctx context.Context, modelName string) (
 		return nil, err
 	}
 
-	if len(channels) > 0 {
-		return channels, nil
-	}
-
-	// 容错策略 - 返回所有可用渠道（让上层按权重选择）
-	// 场景：用户请求 "deepseek-v4-flash" 但渠道尚未登记对应模型
-	// 避免直接报错，提高网关可用性
-	err = r.db.WithContext(ctx).
-		Where("status = ?", model.ChannelStatusActive).
-		Order("priority DESC, weight DESC").
-		Find(&channels).Error
-	return channels, err
+	// 未登记模型不再回退到全部活跃渠道：兜底透传会让未登记的模型名也能
+	// 调用成功，但计价侧按模型名匹配不到价格方案，导致零成本调用。
+	// 统一返回空列表，由上层按 model_not_found 拒绝。
+	return channels, nil
 }
 
 func (r *channelRepo) ListModelsByChannel(ctx context.Context, channelID int64) ([]model.Model, error) {

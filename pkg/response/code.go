@@ -17,6 +17,7 @@ const (
 	PasswordChangeRequired = 40302
 	URLNotFound            = 40401
 	NotFound               = 40402 // 业务资源不存在（如指定的日志、价格方案等记录缺失）
+	ModelNotFound          = 40403 // 数据面请求的模型未登记或没有可用渠道
 	Conflict               = 40901 // 业务资源冲突（如用户名、方案名重复）
 
 	RateLimited        = 42901
@@ -34,6 +35,7 @@ var msgMap = map[int]string{
 	PasswordChangeRequired: "首次登录或密码被重置后，必须先修改密码",
 	URLNotFound:            "请求的路由路径不存在",
 	NotFound:               "请求的资源不存在或已被删除",
+	ModelNotFound:          "请求的模型未在本网关登记，或当前没有可用渠道",
 	Conflict:               "请求的资源已存在或当前状态冲突",
 	RateLimited:            "已触发全局限流保护，当前令牌桶枯竭",
 	ServiceUnavailable:     "当前没有可用的上游渠道，请检查渠道配置或等待熔断恢复",
@@ -59,6 +61,7 @@ var httpStatusMap = map[int]int{
 	PasswordChangeRequired: http.StatusForbidden,
 	URLNotFound:            http.StatusNotFound,
 	NotFound:               http.StatusNotFound,
+	ModelNotFound:          http.StatusNotFound,
 	Conflict:               http.StatusConflict,
 	RateLimited:            http.StatusTooManyRequests,
 	ServiceUnavailable:     http.StatusServiceUnavailable,

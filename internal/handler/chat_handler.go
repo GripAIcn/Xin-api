@@ -128,6 +128,8 @@ func localErrorStatus(errType string) int {
 		return 400
 	case "insufficient_balance":
 		return 403
+	case "model_not_found":
+		return 404
 	case "no_channel", "no_adapter":
 		return 503
 	case "forward_failed":
@@ -258,9 +260,12 @@ func (h *ChatHandler) getChannelsWithCache(ctx context.Context, modelName string
 		return nil, err
 	}
 
-	// 3. 写入缓存（不阻塞主流程）
-	if data, marshalErr := json.Marshal(channels); marshalErr == nil {
-		h.redis.Set(ctx, cacheKey, data, h.cacheExpire)
+	// 3. 写入缓存（仅缓存命中结果：未登记模型不缓存负结果，
+	// 避免新增模型或渠道恢复后仍被空结果挡住直到 TTL 到期）
+	if len(channels) > 0 {
+		if data, marshalErr := json.Marshal(channels); marshalErr == nil {
+			h.redis.Set(ctx, cacheKey, data, h.cacheExpire)
+		}
 	}
 
 	return channels, nil
@@ -430,8 +435,8 @@ func (h *ChatHandler) handle(c *gin.Context, protocol string, opts inbound.Norma
 	}
 	if len(channels) == 0 {
 		h.writeErrorLog(ctx, requestID, modelName, codec.Name(), userID, apiKeyID, clientIP, isStream, startedAt,
-			model.LogTypeError, model.ErrorStageLocal, "no_channel", "no active channel for model", nil, nil, nil, rawBody)
-		h.abortLocalError(c, codec, response.ServiceUnavailable)
+			model.LogTypeError, model.ErrorStageLocal, "model_not_found", "model not registered or no active channel", nil, nil, nil, rawBody)
+		h.abortLocalError(c, codec, response.ModelNotFound)
 		return
 	}
 

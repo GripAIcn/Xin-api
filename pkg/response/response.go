@@ -111,6 +111,8 @@ func openAIErrorMeta(bizCode int) (errType, errCode string) {
 		return "permission_error", "permission_denied"
 	case URLNotFound, NotFound:
 		return "invalid_request_error", "not_found"
+	case ModelNotFound:
+		return "invalid_request_error", "model_not_found"
 	case Conflict:
 		return "invalid_request_error", "resource_conflict"
 	case InvalidParams:
