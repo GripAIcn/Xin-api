@@ -88,7 +88,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 	if user == nil {
-		logger.Warn(c.Request.Context(), "user not found: %s", req.Username)
+		logger.CtxWarnf(c.Request.Context(), "user not found: %s", req.Username)
 		// 用户不存在：无法关联用户，记一条失败登录日志
 		h.writeLoginLog(c.Request.Context(), requestID, nil, clientIP, startedAt, false, "user not found")
 		h.writeLoginAudit(c.Request.Context(), nil, req.Username, clientIP, userAgent, "user not found", false)
@@ -98,7 +98,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	// 2.1 禁用用户不可登录
 	if user.Status == model.UserStatusDisabled {
-		logger.Warn(c.Request.Context(), "disabled user login attempt: %s (id=%d)", user.Username, user.ID)
+		logger.CtxWarnf(c.Request.Context(), "disabled user login attempt: %s (id=%d)", user.Username, user.ID)
 		uid := int64(user.ID)
 		h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, false, "user disabled")
 		h.writeLoginAudit(c.Request.Context(), &uid, user.Username, clientIP, userAgent, "user disabled", false)
@@ -108,7 +108,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	// 3. 验证密码（bcrypt 比较）
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		logger.Warn(c.Request.Context(), "password mismatch for user: %s", req.Username)
+		logger.CtxWarnf(c.Request.Context(), "password mismatch for user: %s", req.Username)
 		uid := int64(user.ID)
 		h.writeLoginLog(c.Request.Context(), requestID, &uid, clientIP, startedAt, false, "invalid password")
 		h.writeLoginAudit(c.Request.Context(), &uid, user.Username, clientIP, userAgent, "invalid password", false)
@@ -125,7 +125,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 	}
 
 	// 5. 返回成功响应
-	logger.Info(c.Request.Context(), "user login success: %s (id=%d)", user.Username, user.ID)
+	logger.CtxInfof(c.Request.Context(), "user login success: %s (id=%d)", user.Username, user.ID)
 
 	// 登录成功日志（写库失败不阻断主流程）
 	uid := int64(user.ID)
