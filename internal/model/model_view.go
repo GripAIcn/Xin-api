@@ -15,7 +15,7 @@ type ModelChannelEntry struct {
 	Status          string      `gorm:"column:status" json:"status"`
 	ContextLength   *int        `gorm:"column:context_length" json:"context_length,omitempty"`
 	MaxOutputTokens *int        `gorm:"column:max_output_tokens" json:"max_output_tokens,omitempty"`
-	Capabilities    StringArray `gorm:"column:capabilities" json:"capabilities"`
+	Capabilities    StringArray `gorm:"column:capabilities;type:text[]" json:"capabilities"`
 	ModelPriceID    *int64      `gorm:"column:model_price_id" json:"model_price_id,omitempty"`
 	PriceName       *string     `gorm:"column:price_name" json:"price_name,omitempty"`
 }
@@ -29,7 +29,7 @@ type ChannelModelView struct {
 	UpstreamModel   string      `gorm:"column:upstream_model" json:"upstream_model"`
 	ContextLength   *int        `gorm:"column:context_length" json:"context_length,omitempty"`
 	MaxOutputTokens *int        `gorm:"column:max_output_tokens" json:"max_output_tokens,omitempty"`
-	Capabilities    StringArray `gorm:"column:capabilities" json:"capabilities"`
+	Capabilities    StringArray `gorm:"column:capabilities;type:text[]" json:"capabilities"`
 	Status          string      `gorm:"column:status" json:"status"`
 	ModelPriceID    *int64      `gorm:"column:model_price_id" json:"model_price_id,omitempty"`
 	PriceName       *string     `gorm:"column:price_name" json:"price_name,omitempty"`
