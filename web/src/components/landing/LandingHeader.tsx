@@ -82,10 +82,7 @@ export default function LandingHeader() {
           className="hidden flex-1 items-center justify-center lg:flex"
         >
           {siteNavItems.map((item) => {
-            const active =
-              item.href === '/'
-                ? isHome
-                : !item.href.startsWith('#') && pathname === item.href
+            const active = pathname === item.href
             const content = (
               <>
                 {item.label}
@@ -97,18 +94,6 @@ export default function LandingHeader() {
                 )}
               </>
             )
-
-            if (item.href.startsWith('#')) {
-              return (
-                <a
-                  key={item.href}
-                  href={isHome ? item.href : `/${item.href}`}
-                  className={itemClassName(false)}
-                >
-                  {content}
-                </a>
-              )
-            }
 
             if (item.href === '/') {
               return (
@@ -183,19 +168,6 @@ export default function LandingHeader() {
               </SheetHeader>
               <div className="flex flex-col gap-1 px-4">
                 {siteNavItems.map((item) => {
-                  if (item.href.startsWith('#')) {
-                    return (
-                      <a
-                        key={item.href}
-                        href={isHome ? item.href : `/${item.href}`}
-                        onClick={() => setOpen(false)}
-                        className={mobileItemClassName}
-                      >
-                        {item.label}
-                      </a>
-                    )
-                  }
-
                   if (item.href === '/') {
                     return (
                       <a

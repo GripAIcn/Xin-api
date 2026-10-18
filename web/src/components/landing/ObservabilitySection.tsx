@@ -76,7 +76,6 @@ export default function ObservabilitySection() {
                 aria-label="请求量趋势折线示意图（示例数据）"
                 className="h-40 w-full text-primary"
               >
-                <title>请求量趋势示意（示例数据）</title>
                 <defs>
                   <linearGradient
                     id="observability-area"

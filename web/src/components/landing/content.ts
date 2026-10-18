@@ -1,6 +1,10 @@
 import {
   BarChart3,
+  BookOpen,
   KeyRound,
+  LayoutDashboard,
+  LifeBuoy,
+  Mail,
   Network,
   PlugZap,
   ScanLine,
@@ -10,13 +14,13 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-/** 顶部导航与页脚共用的站点菜单 */
+/** 顶部导航与页脚共用的站点菜单：均指向可被搜索引擎收录的独立页面 */
 export const siteNavItems = [
   { label: '首页', href: '/' },
-  { label: '功能介绍', href: '#features' },
+  { label: '功能介绍', href: '/features' },
   { label: '使用文档', href: '/docs' },
-  { label: '常见问题', href: '#faq' },
-  { label: '联系我们', href: '#contact' },
+  { label: '常见问题', href: '/faq' },
+  { label: '联系我们', href: '/contact' },
 ] as const
 
 export interface FeatureItem {
@@ -154,5 +158,47 @@ export const faqItems: FaqItem[] = [
   {
     q: '是否支持用量统计与计费？',
     a: '支持。Xin API 提供请求审计日志、输入 / 输出 Token 分别计量与价格快照，按用量原子扣费，账单清晰可对账；多维感知智能路由基于这些运行数据持续优化选路决策。',
+  },
+]
+
+export interface ContactChannel {
+  icon: LucideIcon
+  title: string
+  desc: string
+  action: { label: string; href: string; external?: boolean }
+}
+
+/** 对外邮箱：技术支持、商务合作与其它事宜的统一入口 */
+export const CONTACT_EMAIL = '3107698270@qq.com'
+
+/** 联系我们页的沟通渠道：只列可验证的入口 */
+export const contactChannels: ContactChannel[] = [
+  {
+    icon: Mail,
+    title: '邮件联系',
+    desc: '商务合作、渠道接入或不便公开讨论的问题，直接发邮件给我们。',
+    action: { label: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` },
+  },
+  {
+    icon: LifeBuoy,
+    title: '技术支持',
+    desc: '使用中遇到问题、疑似缺陷或需要排查协助，在 GitHub Issues 提交即可。',
+    action: {
+      label: '提交 Issue',
+      href: 'https://github.com/GripAIcn/Xin-api/issues',
+      external: true,
+    },
+  },
+  {
+    icon: BookOpen,
+    title: '使用文档',
+    desc: '从获取 API Key 到发起第一个请求的完整指引，含五种语言示例。',
+    action: { label: '查看文档', href: '/docs' },
+  },
+  {
+    icon: LayoutDashboard,
+    title: '控制台',
+    desc: '登录后配置渠道与密钥、查看用量与账单，日常问题多数可自助解决。',
+    action: { label: '登录控制台', href: '/login' },
   },
 ]

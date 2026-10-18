@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 
 import BrandLogo from '@/components/brand/BrandLogo'
+import { CONTACT_EMAIL } from '@/components/landing/content'
 
 const GITHUB_URL = 'https://github.com/GripAIcn/Xin-api'
 const ISSUES_URL = 'https://github.com/GripAIcn/Xin-api/issues'
@@ -15,7 +16,7 @@ const footerGroups: FooterGroup[] = [
   {
     title: '产品',
     items: [
-      { label: '功能介绍', href: '#features' },
+      { label: '功能介绍', href: '/features' },
       { label: '工作原理', href: '#how-it-works' },
       { label: '可观测', href: '#observability' },
     ],
@@ -23,22 +24,24 @@ const footerGroups: FooterGroup[] = [
   {
     title: '能力',
     items: [
-      { label: '统一接入', href: '#features' },
-      { label: '智能路由', href: '#features' },
-      { label: '高可用防护', href: '#features' },
+      { label: '统一接入', href: '/features' },
+      { label: '智能路由', href: '/features' },
+      { label: '高可用防护', href: '/features' },
     ],
   },
   {
     title: '资源',
     items: [
       { label: '使用文档', href: '/docs' },
-      { label: '常见问题', href: '#faq' },
+      { label: '常见问题', href: '/faq' },
       { label: 'GitHub 仓库', href: GITHUB_URL, external: true },
     ],
   },
   {
     title: '联系我们',
     items: [
+      { label: '联系方式', href: '/contact' },
+      { label: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}`, external: true },
       { label: 'GitHub Issues', href: ISSUES_URL, external: true },
       { label: '登录控制台', href: '/login' },
     ],

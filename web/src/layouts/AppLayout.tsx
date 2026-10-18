@@ -86,7 +86,7 @@ function buildNavGroups(isAdmin: boolean): NavGroup[] {
             ]
           : []),
         { name: 'API Key', path: '/apikeys', icon: KeyRound },
-        { name: '请求日志', path: '/logs', icon: ScrollText },
+        { name: '使用日志', path: '/logs', icon: ScrollText },
         { name: '账单日志', path: '/billing', icon: ReceiptText },
       ],
     },
