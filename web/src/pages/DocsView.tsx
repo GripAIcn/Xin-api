@@ -16,7 +16,7 @@ const CODE_SAMPLES: CodeSample[] = [
   {
     value: 'curl',
     label: 'cURL',
-    code: `curl https://<your-domain>/v1/chat/completions \\
+    code: `curl https://api.gripai.cn/v1/chat/completions \\
   -H "Authorization: Bearer sk-..." \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -29,7 +29,7 @@ const CODE_SAMPLES: CodeSample[] = [
     label: 'Python',
     code: `from openai import OpenAI
 
-client = OpenAI(api_key="sk-...", base_url="https://<your-domain>/v1")
+client = OpenAI(api_key="sk-...", base_url="https://api.gripai.cn/v1")
 
 resp = client.chat.completions.create(
     model="gpt-4o",
@@ -42,7 +42,7 @@ print(resp.choices[0].message.content)`,
     label: 'Node.js',
     code: `import OpenAI from 'openai'
 
-const client = new OpenAI({ apiKey: 'sk-...', baseURL: 'https://<your-domain>/v1' })
+const client = new OpenAI({ apiKey: 'sk-...', baseURL: 'https://api.gripai.cn/v1' })
 
 const resp = await client.chat.completions.create({
   model: 'gpt-4o',
@@ -71,7 +71,7 @@ func main() {
         },
     })
 
-    req, _ := http.NewRequest("POST", "https://<your-domain>/v1/chat/completions", bytes.NewReader(body))
+    req, _ := http.NewRequest("POST", "https://api.gripai.cn/v1/chat/completions", bytes.NewReader(body))
     req.Header.Set("Authorization", "Bearer sk-...")
     req.Header.Set("Content-Type", "application/json")
 
@@ -103,7 +103,7 @@ public class Main {
             """;
 
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("https://<your-domain>/v1/chat/completions"))
+            .uri(URI.create("https://api.gripai.cn/v1/chat/completions"))
             .header("Authorization", "Bearer sk-...")
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -150,7 +150,7 @@ const ERROR_ITEMS = [
     code: '404',
     title: 'Base URL 少了 /v1',
     detail:
-      '请求地址应为 https://<your-domain>/v1/chat/completions，注意保留路径中的 /v1。',
+      '请求地址应为 https://api.gripai.cn/v1/chat/completions，注意保留路径中的 /v1。',
   },
   {
     code: '429',
@@ -262,11 +262,10 @@ export default function DocsView() {
                   <div className="rounded-2xl border bg-marketing-panel px-4 py-3">
                     <p className="text-xs font-medium">Base URL</p>
                     <code className="mt-1 block font-mono text-sm text-foreground">
-                      https://&lt;your-domain&gt;/v1
+                      https://api.gripai.cn/v1
                     </code>
                     <p className="mt-1 text-xs">
-                      将 &lt;your-domain&gt;
-                      替换为你的部署域名，路径中的 /v1 不能省略。
+                      所有接口都挂在该域名下，路径中的 /v1 不能省略。
                     </p>
                   </div>
                 </DocSection>

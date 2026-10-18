@@ -15,7 +15,7 @@ export default function CodePreview() {
           POST
         </span>
         <span className="truncate font-mono text-xs text-muted-foreground">
-          api.your-domain.com/v1/chat/completions
+          api.gripai.cn/v1/chat/completions
         </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs font-medium text-success">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
@@ -49,7 +49,7 @@ export default function CodePreview() {
               <span className="text-muted-foreground">$ </span>
               <span className="text-foreground">curl</span>{' '}
               <span className="text-foreground">
-                https://api.your-domain.com/v1/chat/completions
+                https://api.gripai.cn/v1/chat/completions
               </span>{' '}
               <span className="text-muted-foreground">\</span>
               {'\n  '}
