@@ -87,6 +87,16 @@ func TestExtractDataPlaneKeyPriority(t *testing.T) {
 	if got := extractDataPlaneKey(c); got != "" {
 		t.Fatalf("无任何凭证时期望返回空串，实际 %q", got)
 	}
+
+	// 5. scheme 大小写不敏感，且容忍首尾空白/换行
+	c = newTestContext("/v1/messages", map[string]string{"Authorization": "bearer  sk-test  "})
+	if got := extractDataPlaneKey(c); got != "sk-test" {
+		t.Fatalf("应容忍 scheme 大小写与首尾空白，期望 sk-test，实际 %q", got)
+	}
+	c = newTestContext("/v1/messages", map[string]string{"x-api-key": " sk-test\n"})
+	if got := extractDataPlaneKey(c); got != "sk-test" {
+		t.Fatalf("应裁剪 x-api-key 首尾空白，期望 sk-test，实际 %q", got)
+	}
 }
 
 // TestApiKeyAuthMessagesAnthropicError 验证 /v1/messages 入站的 Anthropic 错误体与鉴权成功路径
@@ -97,7 +107,7 @@ func TestApiKeyAuthMessagesAnthropicError(t *testing.T) {
 	var gotUserID int64
 
 	router := gin.New()
-	router.Use(ApiKeyAuth(&stubApiKeyRepo{}))
+	router.Use(ApiKeyAuth(&stubApiKeyRepo{}, nil))
 	router.POST("/v1/messages", func(c *gin.Context) {
 		// ApiKeyAuth 注入的是 int64，故直接断言为 int64（c.GetInt 仅识别 int）
 		if v, ok := c.Get(CtxUserIDKey); ok {
@@ -140,7 +150,7 @@ func TestApiKeyAuthChatKeepsOpenAIError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	router.Use(ApiKeyAuth(&stubApiKeyRepo{}))
+	router.Use(ApiKeyAuth(&stubApiKeyRepo{}, nil))
 	router.POST("/v1/chat/completions", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})

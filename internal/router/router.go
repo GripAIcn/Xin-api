@@ -156,7 +156,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			cfg.Log.ResponseBody,
 		)
 		dataPlane := v1.Group("")
-		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))
+		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo, logRepo))
 		{
 			dataPlane.POST("/chat/completions", chatHandler.HandleDataPlane) // OpenAI Chat 兼容
 			dataPlane.POST("/responses", chatHandler.HandleResponses)        // OpenAI Responses API
@@ -165,7 +165,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 
 		// Gemini 原生路径不在 /v1 前缀下，单独挂载（:model 捕获整段，如 gemini-2.0-flash:generateContent）
 		geminiPlane := r.Group("/v1beta")
-		geminiPlane.Use(middleware.ApiKeyAuth(apiKeyRepo))
+		geminiPlane.Use(middleware.ApiKeyAuth(apiKeyRepo, logRepo))
 		{
 			geminiPlane.POST("/models/:model", chatHandler.HandleGemini)
 		}

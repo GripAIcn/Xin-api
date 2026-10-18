@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bytedance/gopkg/util/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 
+	"Xin-api/internal/inbound"
 	"Xin-api/internal/model"
 	"Xin-api/internal/requestctx"
 	"Xin-api/pkg/response"
@@ -160,16 +162,21 @@ func RequirePasswordChanged() gin.HandlerFunc {
 // Authorization: Bearer → x-api-key 头（Anthropic SDK / Claude Code 默认鉴权头）
 // → x-goog-api-key 头（Gemini 官方 SDK）→ ?key= 查询参数（Gemini 兼容）
 func extractDataPlaneKey(c *gin.Context) string {
-	if auth := c.GetHeader("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimPrefix(auth, "Bearer ")
+	// 鉴权 scheme 大小写不敏感，且需容忍复制粘贴带入的首尾空白/换行
+	if auth := strings.TrimSpace(c.GetHeader("Authorization")); auth != "" {
+		if parts := strings.SplitN(auth, " ", 2); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			if key := strings.TrimSpace(parts[1]); key != "" {
+				return key
+			}
+		}
 	}
-	if key := c.GetHeader("x-api-key"); key != "" {
+	if key := strings.TrimSpace(c.GetHeader("x-api-key")); key != "" {
 		return key
 	}
-	if key := c.GetHeader("x-goog-api-key"); key != "" {
+	if key := strings.TrimSpace(c.GetHeader("x-goog-api-key")); key != "" {
 		return key
 	}
-	return c.Query("key")
+	return strings.TrimSpace(c.Query("key"))
 }
 
 // dataPlaneAuthError 数据面鉴权失败响应：
@@ -185,28 +192,39 @@ func dataPlaneAuthError(c *gin.Context) {
 }
 
 // ApiKeyAuth 数据面 API Key 认证中间件
-// 支持 Authorization: Bearer / x-api-key / x-goog-api-key / ?key= 四种取值方式，校验其有效性
-func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
+// 支持 Authorization: Bearer / x-api-key / x-goog-api-key / ?key= 四种取值方式，校验其有效性。
+// 鉴权失败会写应用日志并落一条 error 请求日志，避免 401 请求在管理后台完全不可见。
+func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo, logRepo postgresql.LogRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := extractDataPlaneKey(c)
 		if key == "" {
+			recordAuthFailure(c, logRepo, nil, "", "auth_missing_key", "请求未携带 API Key")
 			dataPlaneAuthError(c)
 			return
 		}
 
 		// 落库只存哈希：对来访明文 Key 求摘要后比对
-		apiKey, err := apiKeyRepo.GetByKeyHash(c.Request.Context(), model.HashApiKey(key))
-		if err != nil || apiKey == nil {
+		keyHash := model.HashApiKey(key)
+		apiKey, err := apiKeyRepo.GetByKeyHash(c.Request.Context(), keyHash)
+		if err != nil {
+			recordAuthFailure(c, logRepo, nil, keyHash, "auth_lookup_error", "API Key 校验失败，请稍后重试")
+			dataPlaneAuthError(c)
+			return
+		}
+		if apiKey == nil {
+			recordAuthFailure(c, logRepo, nil, keyHash, "auth_invalid_key", "API Key 不存在或已删除")
 			dataPlaneAuthError(c)
 			return
 		}
 
 		// 仅启用且未过期的 Key 可通过鉴权
 		if apiKey.Status != model.ApiKeyStatusActive {
+			recordAuthFailure(c, logRepo, apiKey, keyHash, "auth_key_disabled", "API Key 已被禁用")
 			dataPlaneAuthError(c)
 			return
 		}
 		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.Before(time.Now()) {
+			recordAuthFailure(c, logRepo, apiKey, keyHash, "auth_key_expired", "API Key 已过期")
 			dataPlaneAuthError(c)
 			return
 		}
@@ -222,4 +240,94 @@ func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+// recordAuthFailure 记录一次数据面鉴权失败：
+//   - 应用日志记录 Key 摘要指纹，便于与 api_keys.key_hash 对账（不落明文）；
+//   - 落一条 error 请求日志，管理员/所属用户可在「使用日志」中看到被拒绝的请求。
+func recordAuthFailure(c *gin.Context, logRepo postgresql.LogRepo, apiKey *model.ApiKey, keyHash, errType, errMsg string) {
+	ctx := c.Request.Context()
+	rc := requestctx.Get(c)
+	requestID := ""
+	startedAt := time.Now()
+	if rc != nil {
+		requestID = rc.RequestID
+		startedAt = rc.StartTime
+	}
+	if requestID == "" {
+		requestID = requestctx.NewRequestID()
+	}
+
+	path := ""
+	if c.Request != nil && c.Request.URL != nil {
+		path = c.Request.URL.Path
+	}
+	clientIP := c.ClientIP()
+
+	logger.CtxWarnf(ctx, "data-plane auth failed: type=%s path=%s ip=%s key_hash_prefix=%s msg=%s",
+		errType, path, clientIP, shortKeyHash(keyHash), errMsg)
+
+	if logRepo == nil {
+		return
+	}
+
+	now := time.Now()
+	statusCode := response.MapToHTTPStatus(response.Unauthorized)
+	stage := model.ErrorStageLocal
+	message := errMsg
+	protocol := dataPlaneProtocol(path)
+
+	log := &model.RequestLog{
+		RequestID:    requestID,
+		LogType:      model.LogTypeError,
+		Status:       model.LogStatusError,
+		StatusCode:   &statusCode,
+		UsageSource:  model.UsageSourceUpstream,
+		Currency:     model.CurrencyUSD,
+		ErrorStage:   &stage,
+		ErrorType:    &errType,
+		ErrorCode:    &errType,
+		ErrorMessage: &message,
+		StartedAt:    &startedAt,
+		CompletedAt:  &now,
+	}
+	if protocol != "" {
+		log.Protocol = &protocol
+	}
+	if clientIP != "" {
+		log.ClientIP = &clientIP
+	}
+	// 已识别到 Key 时把归属写入日志，普通用户也能在「使用日志」中看到自己的失败请求
+	if apiKey != nil {
+		userID, apiKeyID := apiKey.UserID, apiKey.ID
+		log.UserID = &userID
+		log.APIKeyID = &apiKeyID
+	}
+
+	if err := logRepo.Create(ctx, log); err != nil {
+		logger.CtxErrorf(ctx, "write auth failure log failed: %v", err)
+	}
+}
+
+// dataPlaneProtocol 按数据面路径推断入站协议，用于日志分类
+func dataPlaneProtocol(path string) string {
+	switch {
+	case strings.HasSuffix(path, "/chat/completions"):
+		return inbound.ProtocolChat
+	case strings.HasSuffix(path, "/responses"):
+		return inbound.ProtocolResponses
+	case strings.HasSuffix(path, "/messages"):
+		return inbound.ProtocolMessages
+	case strings.Contains(path, "/models/"):
+		return inbound.ProtocolGemini
+	}
+	return ""
+}
+
+// shortKeyHash 截取哈希前缀用于日志对账，避免暴露明文 Key
+func shortKeyHash(keyHash string) string {
+	if len(keyHash) > 12 {
+		return keyHash[:12]
+	}
+	return keyHash
 }
