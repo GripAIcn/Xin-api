@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"Xin-api/pkg/jsonx"
 )
 
 type geminiAdapter struct{}
@@ -108,7 +110,7 @@ func (a *geminiAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiKey 
 		out["generationConfig"] = genConfig
 	}
 
-	newBody, err := json.Marshal(out)
+	newBody, err := jsonx.Marshal(out)
 	if err != nil {
 		return nil, fmt.Errorf("gemini: marshal upstream body failed: %w", err)
 	}
@@ -158,7 +160,7 @@ func (a *geminiAdapter) ConvertResponse(body []byte, externalModel string) ([]by
 		},
 	}
 
-	return json.Marshal(out)
+	return jsonx.Marshal(out)
 }
 
 // ConvertStreamChunk 将 Gemini alt=sse 的单个事件块转换为 OpenAI SSE 事件块
@@ -197,7 +199,7 @@ func (a *geminiAdapter) ConvertStreamChunk(chunk []byte, externalModel string) (
 		},
 	}
 
-	data, err := json.Marshal(out)
+	data, err := jsonx.Marshal(out)
 	if err != nil {
 		return nil, nil
 	}

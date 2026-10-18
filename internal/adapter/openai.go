@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"Xin-api/pkg/jsonx"
 )
 
 type openaiAdapter struct{}
@@ -37,13 +39,13 @@ func (a *openaiAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiKey 
 		return nil, fmt.Errorf("openai: parse request body failed: %w", err)
 	}
 	if upstreamModel != "" {
-		m, err := json.Marshal(upstreamModel)
+		m, err := jsonx.Marshal(upstreamModel)
 		if err != nil {
 			return nil, err
 		}
 		raw["model"] = m
 	}
-	newBody, err := json.Marshal(raw)
+	newBody, err := jsonx.Marshal(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -95,12 +97,12 @@ func rewriteJSONModel(body []byte, externalModel string) ([]byte, error) {
 	if _, ok := raw["model"]; !ok {
 		return body, nil
 	}
-	m, err := json.Marshal(externalModel)
+	m, err := jsonx.Marshal(externalModel)
 	if err != nil {
 		return body, nil
 	}
 	raw["model"] = m
-	out, err := json.Marshal(raw)
+	out, err := jsonx.Marshal(raw)
 	if err != nil {
 		return body, nil
 	}

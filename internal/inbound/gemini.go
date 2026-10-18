@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"Xin-api/pkg/jsonx"
 	"Xin-api/pkg/response"
 )
 
@@ -63,7 +64,7 @@ func (c *geminiCodec) NormalizeRequest(body []byte, opts NormalizeOptions) ([]by
 	if req.GenerationConfig.TopP != nil {
 		out["top_p"] = *req.GenerationConfig.TopP
 	}
-	return json.Marshal(out)
+	return jsonx.Marshal(out)
 }
 
 // EncodeResponse OpenAI Chat 非流式响应 → Gemini generateContent 响应
@@ -92,7 +93,7 @@ func (c *geminiCodec) EncodeResponse(openAIResponse []byte) ([]byte, error) {
 	if cc.Model != "" {
 		out["modelVersion"] = cc.Model
 	}
-	return json.Marshal(out)
+	return jsonx.Marshal(out)
 }
 
 // EncodeStreamChunk OpenAI SSE chunk → Gemini alt=sse 事件块
@@ -126,7 +127,7 @@ func (c *geminiCodec) EncodeStreamChunk(chunk []byte) ([]byte, error) {
 	if len(out) == 0 {
 		return nil, nil
 	}
-	data, err := json.Marshal(out)
+	data, err := jsonx.Marshal(out)
 	if err != nil {
 		return nil, nil
 	}
@@ -187,7 +188,7 @@ func geminiErrorBody(status int, message string) []byte {
 			"status":  geminiErrorStatus(status),
 		},
 	}
-	data, err := json.Marshal(body)
+	data, err := jsonx.Marshal(body)
 	if err != nil {
 		return []byte(`{"error":{"code":500,"message":"gateway error","status":"INTERNAL"}}`)
 	}

@@ -1,10 +1,11 @@
 package response
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"Xin-api/pkg/jsonx"
 )
 
 // ==========================================
@@ -157,7 +158,7 @@ func AnthropicErrorBody(status int, message string) []byte {
 		"type":  "error",
 		"error": map[string]any{"type": AnthropicErrorType(status), "message": message},
 	}
-	data, err := json.Marshal(body)
+	data, err := jsonx.Marshal(body)
 	if err != nil {
 		return []byte(`{"type":"error","error":{"type":"api_error","message":"gateway error"}}`)
 	}

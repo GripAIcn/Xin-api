@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"Xin-api/pkg/jsonx"
 )
 
 // anthropicAdapter Anthropic(Claude) 协议适配器：把入站 OpenAI Chat 请求
@@ -104,7 +106,7 @@ func (a *anthropicAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiK
 		out["top_p"] = *in.TopP
 	}
 
-	newBody, err := json.Marshal(out)
+	newBody, err := jsonx.Marshal(out)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +177,7 @@ func (a *anthropicAdapter) ConvertResponse(body []byte, externalModel string) ([
 		},
 	}
 
-	newBody, err := json.Marshal(out)
+	newBody, err := jsonx.Marshal(out)
 	if err != nil {
 		return body, nil
 	}
@@ -226,7 +228,7 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 				},
 			},
 		}
-		payload, err := json.Marshal(out)
+		payload, err := jsonx.Marshal(out)
 		if err != nil {
 			return nil
 		}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"Xin-api/pkg/jsonx"
 	"Xin-api/pkg/response"
 )
 
@@ -89,7 +90,7 @@ func (c *messagesCodec) NormalizeRequest(body []byte, _ NormalizeOptions) ([]byt
 		// 注入 include_usage，保证上游流式响应携带 usage（否则计费回落为估算）
 		out["stream_options"] = map[string]any{"include_usage": true}
 	}
-	return json.Marshal(out)
+	return jsonx.Marshal(out)
 }
 
 // anthropicTextContent 解析 Anthropic 内容：字符串或 [{type,text}] 块数组，仅拼接 text 块
@@ -141,7 +142,7 @@ func (c *messagesCodec) EncodeResponse(openAIResponse []byte) ([]byte, error) {
 		"stop_sequence": nil,
 		"usage":         anthropicUsage(cc.Usage),
 	}
-	return json.Marshal(out)
+	return jsonx.Marshal(out)
 }
 
 // EncodeStreamChunk OpenAI SSE chunk → Anthropic SSE 事件流
@@ -214,7 +215,7 @@ func (c *messagesCodec) UpstreamError(upstreamStatus int, upstreamBody []byte) (
 
 // messageStart 事件负载
 func (c *messagesCodec) messageStart() []byte {
-	b, _ := json.Marshal(map[string]any{
+	b, _ := jsonx.Marshal(map[string]any{
 		"type": "message_start",
 		"message": map[string]any{
 			"id":            c.id,
@@ -232,7 +233,7 @@ func (c *messagesCodec) messageStart() []byte {
 
 // contentBlockStart 事件负载
 func (c *messagesCodec) contentBlockStart() []byte {
-	b, _ := json.Marshal(map[string]any{
+	b, _ := jsonx.Marshal(map[string]any{
 		"type":          "content_block_start",
 		"index":         0,
 		"content_block": map[string]any{"type": "text", "text": ""},
@@ -242,7 +243,7 @@ func (c *messagesCodec) contentBlockStart() []byte {
 
 // contentBlockDelta 事件负载
 func (c *messagesCodec) contentBlockDelta(text string) []byte {
-	b, _ := json.Marshal(map[string]any{
+	b, _ := jsonx.Marshal(map[string]any{
 		"type":  "content_block_delta",
 		"index": 0,
 		"delta": map[string]any{"type": "text_delta", "text": text},
@@ -252,7 +253,7 @@ func (c *messagesCodec) contentBlockDelta(text string) []byte {
 
 // contentBlockStop 事件负载
 func (c *messagesCodec) contentBlockStop() []byte {
-	b, _ := json.Marshal(map[string]any{
+	b, _ := jsonx.Marshal(map[string]any{
 		"type":  "content_block_stop",
 		"index": 0,
 	})
@@ -265,7 +266,7 @@ func (c *messagesCodec) messageDelta() []byte {
 	if stopReason == "" {
 		stopReason = "end_turn"
 	}
-	b, _ := json.Marshal(map[string]any{
+	b, _ := jsonx.Marshal(map[string]any{
 		"type":  "message_delta",
 		"delta": map[string]any{"stop_reason": stopReason, "stop_sequence": nil},
 		"usage": anthropicUsage(c.usage),
