@@ -64,6 +64,15 @@ const modelFormSchema = z.object({
   status: z.enum(['active', 'disabled']),
   // 价格方案 id 字符串（'0' 表示不绑定）
   model_price_id: z.string(),
+  // 计费倍率字符串，空串表示未填写
+  ratio: z.string().refine((value) => {
+    const s = value.trim()
+    if (s === '') return true
+    const n = Number(s)
+    return (
+      Number.isFinite(n) && n > 0 && n <= 100 && /^\d+(\.\d{1,4})?$/.test(s)
+    )
+  }, '倍率需在 (0,100] 之间，最多 4 位小数'),
 })
 
 type ModelFormValues = z.infer<typeof modelFormSchema>
@@ -76,6 +85,7 @@ const EMPTY_FORM: ModelFormValues = {
   capabilities: '',
   status: 'active',
   model_price_id: '0',
+  ratio: '1',
 }
 
 // 将逗号分隔文本拆成去空数组（用于 capabilities）
@@ -102,6 +112,7 @@ const buildPayload = (values: ModelFormValues, isEdit: boolean) => {
     capabilities: string[]
     status: 'active' | 'disabled'
     model_price_id?: number
+    ratio?: number
   } = {
     name: values.name.trim(),
     upstream_model: values.upstream_model.trim(),
@@ -114,6 +125,13 @@ const buildPayload = (values: ModelFormValues, isEdit: boolean) => {
     payload.model_price_id = priceId ?? 0
   } else if (priceId != null && priceId > 0) {
     payload.model_price_id = priceId
+  }
+  // 倍率：显式填写则提交；选择价格方案但未填时默认为 1
+  const ratio = toOptionalNumber(values.ratio)
+  if (ratio != null) {
+    payload.ratio = ratio
+  } else if (priceId != null && priceId > 0) {
+    payload.ratio = 1
   }
   return payload
 }
@@ -214,6 +232,7 @@ export default function ChannelModelsDialog({
       status: row.status,
       model_price_id:
         row.model_price_id == null ? '0' : String(row.model_price_id),
+      ratio: row.ratio == null ? '1' : String(row.ratio),
     })
     setFormOpen(true)
   }
@@ -344,6 +363,7 @@ export default function ChannelModelsDialog({
                   <TableHead className="min-w-[120px]">上游模型名</TableHead>
                   <TableHead className="w-[110px]">状态</TableHead>
                   <TableHead className="min-w-[120px]">价格方案</TableHead>
+                  <TableHead className="w-[90px]">倍率</TableHead>
                   <TableHead className="min-w-[120px]">能力</TableHead>
                   <TableHead className="w-[90px]">操作</TableHead>
                 </TableRow>
@@ -352,7 +372,7 @@ export default function ChannelModelsDialog({
                 {models.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="h-24 text-center text-muted-foreground"
                     >
                       {loading ? '加载中...' : '暂无模型'}
@@ -392,6 +412,7 @@ export default function ChannelModelsDialog({
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
+                        <TableCell>{row.ratio ?? 1}</TableCell>
                         <TableCell>
                           {(row.capabilities ?? []).length === 0 ? (
                             <span className="text-muted-foreground">-</span>
@@ -612,6 +633,30 @@ export default function ChannelModelsDialog({
                         暂无可用价格方案，可先到「定价管理」创建
                       </p>
                     )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="ratio"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>计费倍率</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="0.0001"
+                        max="100"
+                        step="0.0001"
+                        placeholder="1"
+                        {...field}
+                      />
+                    </FormControl>
+                    <p className="text-xs text-muted-foreground">
+                      不填默认为 1（官方价），0.8 = 八折
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

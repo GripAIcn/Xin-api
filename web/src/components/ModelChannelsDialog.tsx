@@ -123,6 +123,7 @@ export default function ModelChannelsDialog({
                   <TableHead className="w-[90px]">上下文</TableHead>
                   <TableHead className="min-w-[120px]">能力</TableHead>
                   <TableHead className="min-w-[120px]">价格方案</TableHead>
+                  <TableHead className="w-[90px]">倍率</TableHead>
                   <TableHead className="w-[90px]">操作</TableHead>
                 </TableRow>
               </TableHeader>
@@ -130,7 +131,7 @@ export default function ModelChannelsDialog({
                 {entries.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="h-24 text-center text-muted-foreground"
                     >
                       暂无渠道
@@ -198,6 +199,7 @@ export default function ModelChannelsDialog({
                           )}
                         </TableCell>
                         <TableCell>{renderPrice(entry)}</TableCell>
+                        <TableCell>{entry.ratio ?? 1}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <Button

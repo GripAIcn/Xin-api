@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"math"
 	"strconv"
 
 	"github.com/bytedance/gopkg/util/logger"
@@ -16,6 +17,14 @@ import (
 	"Xin-api/internal/store/postgresql"
 	"Xin-api/pkg/response"
 )
+
+// defaultModelRatio 渠道模型默认计费倍率（官方价）
+const defaultModelRatio = 1.0
+
+// roundRatio 将倍率四舍五入到 4 位小数，与 models.ratio numeric(12,4) 对齐
+func roundRatio(v float64) float64 {
+	return math.Round(v*10000) / 10000
+}
 
 type ChannelHandler struct {
 	channelRepo         postgresql.ChannelRepo
@@ -285,6 +294,12 @@ func (h *ChannelHandler) CreateChannelModel(c *gin.Context) {
 		}
 	}
 
+	// 未填倍率时默认 1（含已选择计价表的情况）
+	ratio := defaultModelRatio
+	if req.Ratio != nil {
+		ratio = roundRatio(*req.Ratio)
+	}
+
 	m := &model.Model{
 		ChannelID:       channelID,
 		Name:            req.Name,
@@ -293,6 +308,7 @@ func (h *ChannelHandler) CreateChannelModel(c *gin.Context) {
 		MaxOutputTokens: req.MaxOutputTokens,
 		Capabilities:    model.StringArray(req.Capabilities),
 		Status:          status,
+		Ratio:           ratio,
 	}
 
 	if err := h.channelRepo.CreateModelWithBinding(ctx, m, req.ModelPriceID); err != nil {
@@ -397,6 +413,14 @@ func (h *ChannelHandler) UpdateChannelModel(c *gin.Context) {
 	m.Capabilities = model.StringArray(req.Capabilities)
 	if req.Status != "" {
 		m.Status = req.Status
+	}
+
+	// 倍率：显式提交则覆盖；选择了计价表但未提交时默认 1；否则保持原值
+	switch {
+	case req.Ratio != nil:
+		m.Ratio = roundRatio(*req.Ratio)
+	case req.ModelPriceID != nil && *req.ModelPriceID > 0:
+		m.Ratio = defaultModelRatio
 	}
 
 	if err := h.channelRepo.UpdateModelWithBinding(ctx, m, req.ModelPriceID); err != nil {

@@ -80,6 +80,7 @@ export default function PriceModelsDialog({
                 <TableHead className="min-w-[140px]">对外模型名</TableHead>
                 <TableHead className="min-w-[140px]">渠道</TableHead>
                 <TableHead className="min-w-[140px]">上游模型</TableHead>
+                <TableHead className="w-[90px]">倍率</TableHead>
                 <TableHead className="w-[110px]">模型状态</TableHead>
                 <TableHead className="w-[100px]">渠道状态</TableHead>
               </TableRow>
@@ -88,7 +89,7 @@ export default function PriceModelsDialog({
               {entries.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="h-24 text-center text-muted-foreground"
                   >
                     {loading ? '加载中...' : '暂无绑定模型'}
@@ -117,6 +118,7 @@ export default function PriceModelsDialog({
                           {entry.upstream_model}
                         </span>
                       </TableCell>
+                      <TableCell>{entry.ratio ?? 1}</TableCell>
                       <TableCell>
                         <DotBadge tone={active ? 'success' : 'muted'}>
                           {active ? '启用' : '禁用'}

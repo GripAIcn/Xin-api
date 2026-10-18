@@ -50,6 +50,18 @@ const modelFormSchema = z.object({
   status: z.enum(['active', 'disabled']),
   // 价格方案 id 字符串（'0' 表示不绑定）
   model_price_id: z.string(),
+  // 计费倍率字符串（空串表示未设置）
+  ratio: z.string().refine((value) => {
+    const s = value.trim()
+    if (s === '') return true
+    const n = Number(s)
+    return (
+      Number.isFinite(n) &&
+      n > 0 &&
+      n <= 100 &&
+      /^\d+(\.\d{1,4})?$/.test(s)
+    )
+  }, '倍率需在 (0,100] 之间，最多 4 位小数'),
 })
 
 type ModelFormValues = z.infer<typeof modelFormSchema>
@@ -62,6 +74,7 @@ const EMPTY_FORM: ModelFormValues = {
   capabilities: '',
   status: 'active',
   model_price_id: '0',
+  ratio: '1',
 }
 
 // 将逗号分隔文本拆成去空数组（用于 capabilities）
@@ -88,6 +101,7 @@ const buildPayload = (values: ModelFormValues, isEdit: boolean) => {
     capabilities: string[]
     status: 'active' | 'disabled'
     model_price_id?: number
+    ratio?: number
   } = {
     name: values.name.trim(),
     upstream_model: values.upstream_model.trim(),
@@ -100,6 +114,14 @@ const buildPayload = (values: ModelFormValues, isEdit: boolean) => {
     payload.model_price_id = priceId ?? 0
   } else if (priceId != null && priceId > 0) {
     payload.model_price_id = priceId
+  }
+
+  // 倍率：显式填写则提交；选择计价表但未填时默认为 1
+  const ratio = toOptionalNumber(values.ratio)
+  if (ratio != null) {
+    payload.ratio = ratio
+  } else if (priceId != null && priceId > 0) {
+    payload.ratio = 1
   }
   return payload
 }
@@ -154,6 +176,7 @@ export default function ModelFormSheet({
         status: entry.status,
         model_price_id:
           entry.model_price_id == null ? '0' : String(entry.model_price_id),
+        ratio: entry.ratio == null ? '1' : String(entry.ratio),
       })
     } else {
       form.reset(EMPTY_FORM)
@@ -524,6 +547,30 @@ export default function ModelFormSheet({
                       暂无可用价格方案，可先到「定价管理」创建
                     </p>
                   )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="ratio"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>计费倍率</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min="0.0001"
+                      max="100"
+                      step="0.0001"
+                      placeholder="1"
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-xs text-muted-foreground">
+                    不填默认为 1（官方价），0.8 = 八折
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

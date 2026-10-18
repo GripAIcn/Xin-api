@@ -44,6 +44,7 @@ type ChannelModelBase struct {
 	MaxOutputTokens *int     `json:"max_output_tokens" validate:"omitempty,min=1"`                        // 单次最大输出 tokens
 	Capabilities    []string `json:"capabilities"`                                                        // 能力标签 vision/tools/json/reasoning/audio
 	ModelPriceID    *int64   `json:"model_price_id" validate:"omitempty,gte=0"`                           // 绑定的价格方案 model_prices.id（缺省=不改绑定 / 0=解绑 / >0=绑定）
+	Ratio           *float64 `json:"ratio" validate:"omitempty,gt=0,lte=100"`                             // 计费倍率：1=官方价，0.8=八折；缺省且选择了计价表时默认 1
 }
 
 // CreateChannelModelReq 为渠道新增模型请求入参

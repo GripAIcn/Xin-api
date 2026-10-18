@@ -201,6 +201,7 @@ func (r *channelRepo) ListModelsByChannelAll(ctx context.Context, channelID int6
 			MaxOutputTokens: m.MaxOutputTokens,
 			Capabilities:    m.Capabilities,
 			Status:          m.Status,
+			Ratio:           m.Ratio,
 			ModelPriceID:    bindByModelID[m.ID],
 			PriceName:       nameByModelID[m.ID],
 			CreatedAt:       m.CreatedAt,
@@ -339,7 +340,7 @@ func (r *channelRepo) ListModelChannelRows(ctx context.Context) ([]model.ModelCh
 			"channels.name AS channel_name, channels.provider AS channel_provider, channels.status AS channel_status, " +
 			"models.upstream_model AS upstream_model, models.status AS status, " +
 			"models.context_length AS context_length, models.max_output_tokens AS max_output_tokens, " +
-			"models.capabilities AS capabilities, " +
+			"models.capabilities AS capabilities, models.ratio AS ratio, " +
 			"bindings.model_price_id AS model_price_id, prices.name AS price_name").
 		Joins("JOIN channels ON channels.id = models.channel_id AND channels.deleted_at IS NULL").
 		Joins("LEFT JOIN model_price_bindings bindings ON bindings.model_id = models.id AND bindings.deleted_at IS NULL").

@@ -23,6 +23,8 @@ type Model struct {
 	MaxOutputTokens *int        `gorm:"column:max_output_tokens;comment:单次最大输出 tokens" json:"max_output_tokens,omitempty"`
 	Capabilities    StringArray `gorm:"column:capabilities;type:text[];default:'{}';index:idx_models_capabilities,type:gin;comment:能力标签 vision/tools/json/reasoning/audio" json:"capabilities"`
 	Status          string      `gorm:"column:status;type:varchar(32);not null;default:active;check:chk_models_status,status = 'active' OR status = 'disabled';comment:状态 active-启用 disabled-下架" json:"status"`
+	// 计费倍率：1=官方价，0.8=八折；仅作用于该渠道的该模型
+	Ratio float64 `gorm:"column:ratio;type:numeric(12,4);not null;default:1;check:chk_models_ratio,ratio > 0;comment:计费倍率 1=官方价 0.8=八折" json:"ratio"`
 	// 预留价格字段：为后续「模型价格表」功能占位，本期可空、可维护、不参与计费
 	InputPrice         *float64       `gorm:"column:input_price;comment:预留-输入单价（待接入计费）" json:"input_price,omitempty"`
 	OutputPrice        *float64       `gorm:"column:output_price;comment:预留-输出单价（待接入计费）" json:"output_price,omitempty"`

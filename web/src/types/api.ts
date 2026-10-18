@@ -151,6 +151,8 @@ export interface ChannelModel {
   max_output_tokens?: number
   capabilities: string[]
   status: ChannelModelStatus
+  // 计费倍率：1=官方价，0.8=八折
+  ratio: number
   // 绑定的价格方案 id / 方案名（未绑定时缺省）
   model_price_id?: number
   price_name?: string | null
@@ -167,6 +169,8 @@ export interface CreateChannelModelRequest {
   status?: ChannelModelStatus
   // 绑定的价格方案 id（缺省=不改变绑定 / 0=解绑 / >0=绑定）
   model_price_id?: number
+  // 计费倍率：1=官方价，0.8=八折；选择计价表但未填时默认 1
+  ratio?: number
 }
 
 export interface UpdateChannelModelRequest {
@@ -178,6 +182,8 @@ export interface UpdateChannelModelRequest {
   status?: ChannelModelStatus
   // 绑定的价格方案 id（缺省=不改变绑定 / 0=解绑 / >0=绑定）
   model_price_id?: number
+  // 计费倍率：1=官方价，0.8=八折；选择计价表但未填时默认 1
+  ratio?: number
 }
 
 export interface UpdateChannelModelStatusRequest {
@@ -198,6 +204,8 @@ export interface ModelChannelEntry {
   context_length?: number
   max_output_tokens?: number
   capabilities: string[]
+  // 计费倍率：1=官方价，0.8=八折
+  ratio: number
   // 绑定的价格方案 id / 方案名（未绑定时缺省）
   model_price_id?: number | null
   price_name?: string | null
@@ -268,6 +276,7 @@ export interface PriceBoundModelEntry {
   upstream_model: string
   model_status: string
   channel_status: string
+  ratio: number
 }
 
 // === API Key ===

@@ -435,11 +435,47 @@ func (r *logRepo) ResolvePrice(ctx context.Context, channelID int64, externalMod
 	}
 
 	price, err := r.findPrice(ctx, name, &channelID)
-	if err != nil || price != nil {
-		return price, err
+	if err != nil {
+		return nil, err
+	}
+	if price == nil {
+		// 价格允许跨渠道回退，但倍率仍取当前渠道，避免串用其他渠道的折扣
+		price, err = r.findPrice(ctx, name, nil)
+		if err != nil || price == nil {
+			return price, err
+		}
 	}
 
-	return r.findPrice(ctx, name, nil)
+	ratio, err := r.resolveChannelRatio(ctx, channelID, name)
+	if err != nil {
+		return nil, err
+	}
+	price.Ratio = ratio
+	return price, nil
+}
+
+// resolveChannelRatio 查询当前渠道下该模型的计费倍率。
+// 先按对外模型名匹配，再按上游模型名匹配；未配置或数据异常时按官方价 1 处理。
+func (r *logRepo) resolveChannelRatio(ctx context.Context, channelID int64, name string) (float64, error) {
+	for _, column := range []string{"name", "upstream_model"} {
+		var m model.Model
+		err := r.db.WithContext(ctx).
+			Select("ratio").
+			Where("channel_id = ? AND LOWER("+column+") = LOWER(?)", channelID, name).
+			Order("id DESC").
+			Take(&m).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			continue
+		}
+		if err != nil {
+			return 0, err
+		}
+		if m.Ratio > 0 {
+			return m.Ratio, nil
+		}
+		return 1.0, nil
+	}
+	return 1.0, nil
 }
 
 // findPrice 查询模型名对应的价格方案；channelID 非空时仅限该渠道。
@@ -478,7 +514,7 @@ func (r *logRepo) findPriceBy(ctx context.Context, column, name string, channelI
 		OutputPrice:        price.OutputPrice,
 		CachedInputPrice:   price.CachedInputPrice,
 		CacheCreationPrice: price.CacheCreationPrice,
-		// 本项目 model_prices 无倍率字段，billing_records.ratio 默认 1 即按成本价
+		// 倍率由 ResolvePrice 按当前渠道模型行覆盖；此处兜底为官方价
 		Ratio:    1.0,
 		Currency: price.Currency,
 	}, nil

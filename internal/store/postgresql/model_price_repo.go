@@ -119,7 +119,8 @@ func (r *modelPriceRepo) ListBoundModels(ctx context.Context, priceID int64) ([]
 		Model(&model.ModelPriceBinding{}).
 		Select("model_price_bindings.id AS binding_id, models.id AS model_id, models.channel_id AS channel_id, " +
 			"channels.name AS channel_name, channels.provider AS channel_provider, models.name AS model_name, " +
-			"models.upstream_model AS upstream_model, models.status AS model_status, channels.status AS channel_status").
+			"models.upstream_model AS upstream_model, models.status AS model_status, channels.status AS channel_status, " +
+			"models.ratio AS ratio").
 		Joins("JOIN models ON models.id = model_price_bindings.model_id AND models.deleted_at IS NULL").
 		Joins("JOIN channels ON channels.id = models.channel_id AND channels.deleted_at IS NULL").
 		Where("model_price_bindings.model_price_id = ?", priceID).
