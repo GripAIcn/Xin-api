@@ -201,9 +201,10 @@ WHERE currency IS DISTINCT FROM 'CNY'`, initialRate.String(), initialRate.String
 	return db
 }
 
-// generateRandomPassword 生成 32 位十六进制随机口令，用于首次初始化管理员账号
+// generateRandomPassword 生成 20 位十六进制随机口令，用于首次初始化管理员账号
 func generateRandomPassword() string {
-	buf := make([]byte, 16)
+	// 10 字节 → 20 位十六进制，正好满足登录接口密码长度上限 20
+	buf := make([]byte, 10)
 	if _, err := rand.Read(buf); err != nil {
 		panic(fmt.Sprintf("生成随机管理员密码失败: %v", err))
 	}
