@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 
 	"Xin-api/internal/form"
 	"Xin-api/internal/model"
@@ -20,6 +21,9 @@ import (
 
 // defaultModelRatio 渠道模型默认计费倍率（官方价）
 const defaultModelRatio = 1.0
+
+// channelNameConflictMsg 渠道名称重复时的提示文案
+const channelNameConflictMsg = "渠道名称已存在"
 
 // roundRatio 将倍率四舍五入到 4 位小数，与 models.ratio numeric(12,4) 对齐
 func roundRatio(v float64) float64 {
@@ -52,6 +56,9 @@ func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 	if !h.bindAndValidate(c, &req) {
 		return
 	}
+	if !h.ensureChannelNameAvailable(c, req.Name, 0) {
+		return
+	}
 
 	channel := &model.Channel{
 		Name:       req.Name,
@@ -69,6 +76,10 @@ func (h *ChannelHandler) CreateChannel(c *gin.Context) {
 
 	if err := h.channelRepo.Create(c.Request.Context(), channel); err != nil {
 		logger.Error(c.Request.Context(), "create channel failed: %v", err)
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			response.AdminFailMsg(c, response.Conflict, channelNameConflictMsg)
+			return
+		}
 		response.AdminFail(c, response.InternalError)
 		return
 	}
@@ -113,6 +124,9 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 	if !h.bindAndValidate(c, &req) {
 		return
 	}
+	if !h.ensureChannelNameAvailable(c, req.Name, id) {
+		return
+	}
 
 	// 先获取老数据进行校验，或直接覆盖
 	channel := &model.Channel{
@@ -132,6 +146,10 @@ func (h *ChannelHandler) UpdateChannel(c *gin.Context) {
 
 	if err := h.channelRepo.Update(c.Request.Context(), channel); err != nil {
 		logger.Error(c.Request.Context(), "update channel failed: %v", err)
+		if errors.Is(err, gorm.ErrDuplicatedKey) {
+			response.AdminFailMsg(c, response.Conflict, channelNameConflictMsg)
+			return
+		}
 		response.AdminFail(c, response.InternalError)
 		return
 	}
@@ -552,6 +570,22 @@ func (h *ChannelHandler) parsePathInt64(c *gin.Context, name string) (int64, boo
 		return 0, false
 	}
 	return id, true
+}
+
+// ensureChannelNameAvailable 校验渠道名称是否已被其他未删除渠道占用（大小写不敏感）
+// excludeID 用于更新场景排除自身，新增时传 0
+func (h *ChannelHandler) ensureChannelNameAvailable(c *gin.Context, name string, excludeID int64) bool {
+	existing, err := h.channelRepo.GetByName(c.Request.Context(), name)
+	if err != nil {
+		logger.Error(c.Request.Context(), "check duplicate channel name failed: %v", err)
+		response.AdminFail(c, response.InternalError)
+		return false
+	}
+	if existing != nil && existing.ID != excludeID {
+		response.AdminFailMsg(c, response.Conflict, channelNameConflictMsg)
+		return false
+	}
+	return true
 }
 
 // bindAndValidate 参数校验辅助方法

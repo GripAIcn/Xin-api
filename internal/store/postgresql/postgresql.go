@@ -103,7 +103,8 @@ func NewPostgres(usdCNYRate float64, adminInitPassword string) *gorm.DB {
 	)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: newLogger,
+		Logger:         newLogger,
+		TranslateError: true,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("连接 PostgreSQL 失败: %v", err))
@@ -126,6 +127,9 @@ func NewPostgres(usdCNYRate float64, adminInitPassword string) *gorm.DB {
 			panic(fmt.Sprintf("重建 channel_metrics.tpot 生成列失败: %v", err))
 		}
 	}
+
+	// 渠道名称唯一索引（lower(name) 大小写不敏感）的旧索引清理与建档已由脚本手工执行，
+	// 启动时不再自动 DROP/校验，由 AutoMigrate 兜底创建缺失的新索引。
 
 	// 第三步：自动迁移（建表）
 	// 顺序按外键依赖排列：先父表后子表

@@ -20,6 +20,8 @@ type ChannelRepo interface {
 	UpdateStatus(ctx context.Context, id int64, status string) error
 	// GetByID 根据 ID 查询渠道详情
 	GetByID(ctx context.Context, id int64) (*model.Channel, error)
+	// GetByName 按名称查询未软删的渠道（大小写不敏感），用于判重；不存在返回 (nil, nil)
+	GetByName(ctx context.Context, name string) (*model.Channel, error)
 	// ListAll 获取所有渠道（包含关闭和熔断的，供管理后台列表展示）
 	ListAll(ctx context.Context) ([]model.Channel, error)
 	// ListActiveByModel ⚡️核心流量方法：根据请求的模型，捞出所有当前可用的物理渠道（状态为 active）
@@ -104,6 +106,17 @@ func (r *channelRepo) UpdateStatus(ctx context.Context, id int64, status string)
 
 func (r *channelRepo) GetByID(ctx context.Context, id int64) (*model.Channel, error) {
 	channel, err := gorm.G[model.Channel](r.db).Where("id = ?", id).First(ctx)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &channel, nil
+}
+
+func (r *channelRepo) GetByName(ctx context.Context, name string) (*model.Channel, error) {
+	channel, err := gorm.G[model.Channel](r.db).Where("lower(name) = lower(?)", name).First(ctx)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

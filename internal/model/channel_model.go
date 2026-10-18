@@ -17,7 +17,7 @@ const (
 // 说明：渠道支持的模型改为由 models 表（渠道 × 模型）行式表达，不再使用数组列。
 type Channel struct {
 	ID              int64          `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	Name            string         `gorm:"column:name;type:varchar(100);not null;uniqueIndex:uq_channels_name_active,where:deleted_at IS NULL;comment:渠道名称" json:"name"`
+	Name            string         `gorm:"column:name;type:varchar(100);not null;uniqueIndex:uq_channels_lower_name_active,where:deleted_at IS NULL,expression:lower(name);comment:渠道名称" json:"name"`
 	Provider        string         `gorm:"column:provider;type:varchar(64);not null;comment:供应商类型 openai/anthropic/gemini/deepseek" json:"provider"`
 	Protocol        StringArray    `gorm:"column:protocol;type:varchar(64)[];not null;index:idx_channels_protocol,type:gin;comment:支持协议数组 chat/responses/gemini" json:"protocol"`
 	BaseURL         string         `gorm:"column:base_url;type:varchar(255);not null;comment:供应商基础URL" json:"base_url"`
