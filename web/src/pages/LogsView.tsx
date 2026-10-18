@@ -191,21 +191,32 @@ function LogDetailContent({
       <Section title="基础信息">
         <InfoGrid>
           <InfoItem label="请求 ID" value={dash(detail.request_id)} />
-          <InfoItem label="上游请求 ID" value={dash(detail.upstream_req_id)} />
+          {isAdmin && (
+            <InfoItem
+              label="上游请求 ID"
+              value={dash(detail.upstream_req_id)}
+            />
+          )}
           <InfoItem label="类型" value={logTypeLabel(detail.log_type)} />
           <InfoItem
             label="状态"
             value={detail.status === 'success' ? '成功' : '失败'}
           />
           <InfoItem label="模型" value={dash(detail.model)} />
-          <InfoItem label="上游模型" value={dash(detail.upstream_model)} />
-          <InfoItem label="供应商" value={dash(detail.provider)} />
+          {isAdmin && (
+            <>
+              <InfoItem label="上游模型" value={dash(detail.upstream_model)} />
+              <InfoItem label="供应商" value={dash(detail.provider)} />
+            </>
+          )}
           <InfoItem label="协议" value={dash(detail.protocol)} />
           {isAdmin && <InfoItem label="渠道" value={channelText(detail)} />}
           <InfoItem label="用户" value={userText(detail)} />
           <InfoItem label="API Key ID" value={dash(detail.api_key_id)} />
           <InfoItem label="客户端 IP" value={dash(detail.client_ip)} />
-          <InfoItem label="网关节点" value={dash(detail.gateway_node)} />
+          {isAdmin && (
+            <InfoItem label="网关节点" value={dash(detail.gateway_node)} />
+          )}
           <InfoItem label="创建时间" value={formatDate(detail.created_at)} />
           <InfoItem
             label="开始时间"
@@ -604,32 +615,38 @@ export default function LogsView() {
               />
             </Field>
 
-            <Field label="上游请求 ID">
-              <Input
-                className="w-48"
-                placeholder="upstream_req_id"
-                value={upstreamReqId}
-                onChange={(e) => setUpstreamReqId(e.target.value)}
-              />
-            </Field>
+            {isAdmin && (
+              <Field label="上游请求 ID">
+                <Input
+                  className="w-48"
+                  placeholder="upstream_req_id"
+                  value={upstreamReqId}
+                  onChange={(e) => setUpstreamReqId(e.target.value)}
+                />
+              </Field>
+            )}
 
-            <Field label="供应商">
-              <Input
-                className="w-32"
-                placeholder="provider"
-                value={provider}
-                onChange={(e) => setProvider(e.target.value)}
-              />
-            </Field>
+            {isAdmin && (
+              <Field label="供应商">
+                <Input
+                  className="w-32"
+                  placeholder="provider"
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                />
+              </Field>
+            )}
 
-            <Field label="协议">
-              <Input
-                className="w-32"
-                placeholder="protocol"
-                value={protocol}
-                onChange={(e) => setProtocol(e.target.value)}
-              />
-            </Field>
+            {isAdmin && (
+              <Field label="协议">
+                <Input
+                  className="w-32"
+                  placeholder="protocol"
+                  value={protocol}
+                  onChange={(e) => setProtocol(e.target.value)}
+                />
+              </Field>
+            )}
 
             <Field label="是否流式">
               <Select value={isStream} onValueChange={setIsStream}>
@@ -702,7 +719,11 @@ export default function LogsView() {
                 <TableHead className="min-w-[150px]">时间</TableHead>
                 <TableHead className="w-[80px]">类型</TableHead>
                 <TableHead className="min-w-[200px]">请求 ID</TableHead>
-                <TableHead className="min-w-[160px]">上游请求 ID</TableHead>
+                {isAdmin && (
+                  <TableHead className="min-w-[160px]">
+                    上游请求 ID
+                  </TableHead>
+                )}
                 <TableHead className="min-w-[140px]">模型</TableHead>
                 {isAdmin && (
                   <TableHead className="min-w-[120px]">渠道</TableHead>
@@ -718,7 +739,7 @@ export default function LogsView() {
               {loading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isAdmin ? 11 : 10}
+                    colSpan={isAdmin ? 11 : 9}
                     className="h-32 text-center text-muted-foreground"
                   >
                     <span className="inline-flex items-center gap-2">
@@ -730,7 +751,7 @@ export default function LogsView() {
               ) : list.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={isAdmin ? 11 : 10}
+                    colSpan={isAdmin ? 11 : 9}
                     className="h-32 text-center text-muted-foreground"
                   >
                     暂无日志
@@ -749,18 +770,20 @@ export default function LogsView() {
                         {row.request_id}
                       </span>
                     </TableCell>
-                    <TableCell>
-                      {row.upstream_req_id ? (
-                        <span
-                          className="block max-w-[180px] truncate"
-                          title={row.upstream_req_id}
-                        >
-                          {row.upstream_req_id}
-                        </span>
-                      ) : (
-                        '-'
-                      )}
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        {row.upstream_req_id ? (
+                          <span
+                            className="block max-w-[180px] truncate"
+                            title={row.upstream_req_id}
+                          >
+                            {row.upstream_req_id}
+                          </span>
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell>{dash(row.model)}</TableCell>
                     {isAdmin && <TableCell>{channelText(row)}</TableCell>}
                     <TableCell>

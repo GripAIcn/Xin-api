@@ -76,6 +76,7 @@ func (h *LogHandler) List(c *gin.Context) {
 func sanitizeLogItem(item *model.LogListItem) {
 	item.ChannelID = nil
 	item.ChannelName = nil
+	item.UpstreamReqID = nil
 }
 
 // ListBillings 分页查询账单流水（消费 / 充值 / 退款合并）。
@@ -157,6 +158,9 @@ func (h *LogHandler) Get(c *gin.Context) {
 		}
 		// 普通用户不可见上游渠道与路由细节
 		sanitizeLogItem(&detail.LogListItem)
+		detail.UpstreamModel = nil
+		detail.Provider = nil
+		detail.GatewayNode = nil
 		detail.RetryChannels = []int64{}
 		detail.RouteStrategy = nil
 		detail.RouteWeight = nil
