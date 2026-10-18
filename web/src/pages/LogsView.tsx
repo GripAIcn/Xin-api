@@ -761,7 +761,7 @@ export default function LogsView() {
                         '-'
                       )}
                     </TableCell>
-                    <TableCell>{row.model}</TableCell>
+                    <TableCell>{dash(row.model)}</TableCell>
                     {isAdmin && <TableCell>{channelText(row)}</TableCell>}
                     <TableCell>
                       <DotBadge
