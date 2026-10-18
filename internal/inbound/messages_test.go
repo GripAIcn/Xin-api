@@ -91,6 +91,75 @@ func TestMessagesNormalizeSystemString(t *testing.T) {
 	}
 }
 
+func TestMessagesNormalizeImageInput(t *testing.T) {
+	in := []byte(`{
+		"model":"claude-3-5-sonnet",
+		"messages":[{"role":"user","content":[
+			{"type":"text","text":"what is <this>?"},
+			{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aGVsbG8="}},
+			{"type":"image","source":{"type":"url","url":"https://example.com/b.jpg"}}
+		]}]
+	}`)
+	c := &messagesCodec{}
+	out, err := c.NormalizeRequest(in, NormalizeOptions{})
+	if err != nil {
+		t.Fatalf("NormalizeRequest error: %v", err)
+	}
+	if strings.Contains(string(out), `\u003c`) {
+		t.Errorf("output lost raw HTML: %s", string(out))
+	}
+
+	var got struct {
+		Messages []struct {
+			Role    string          `json:"role"`
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if len(got.Messages) != 1 {
+		t.Fatalf("len(messages) = %d, want 1", len(got.Messages))
+	}
+
+	var parts []struct {
+		Type     string `json:"type"`
+		Text     string `json:"text"`
+		ImageURL struct {
+			URL string `json:"url"`
+		} `json:"image_url"`
+	}
+	if err := json.Unmarshal(got.Messages[0].Content, &parts); err != nil {
+		t.Fatalf("content is not an array: %v", err)
+	}
+	if len(parts) != 3 {
+		t.Fatalf("len(content) = %d, want 3", len(parts))
+	}
+	if parts[0].Type != "text" || parts[0].Text != "what is <this>?" {
+		t.Errorf("parts[0] = %+v, want text", parts[0])
+	}
+	if parts[1].Type != "image_url" || parts[1].ImageURL.URL != "data:image/png;base64,aGVsbG8=" {
+		t.Errorf("parts[1] = %+v, want base64 data URI", parts[1])
+	}
+	if parts[2].Type != "image_url" || parts[2].ImageURL.URL != "https://example.com/b.jpg" {
+		t.Errorf("parts[2] = %+v, want image url", parts[2])
+	}
+
+	// 纯文本内容仍保持字符串形式
+	in = []byte(`{"model":"claude","messages":[{"role":"user","content":[{"type":"text","text":"hi"}]}]}`)
+	out, err = c.NormalizeRequest(in, NormalizeOptions{})
+	if err != nil {
+		t.Fatalf("NormalizeRequest error: %v", err)
+	}
+	var textOnly messagesNormOut
+	if err := json.Unmarshal(out, &textOnly); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if textOnly.Messages[0].Content != "hi" {
+		t.Errorf("content = %q, want string hi", textOnly.Messages[0].Content)
+	}
+}
+
 type messagesEncOut struct {
 	ID      string `json:"id"`
 	Type    string `json:"type"`

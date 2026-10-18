@@ -47,7 +47,7 @@ func (c *geminiCodec) NormalizeRequest(body []byte, opts NormalizeOptions) ([]by
 		if ct.Role == "model" {
 			role = "assistant"
 		}
-		messages = append(messages, map[string]any{"role": role, "content": ct.text()})
+		messages = append(messages, map[string]any{"role": role, "content": ct.chatContent()})
 	}
 
 	out := map[string]any{
@@ -155,10 +155,27 @@ func (c *geminiCodec) UpstreamError(upstreamStatus int, upstreamBody []byte) (in
 
 // geminiContent Gemini contents 单条消息
 type geminiContent struct {
-	Role  string `json:"role"`
-	Parts []struct {
-		Text string `json:"text"`
-	} `json:"parts"`
+	Role  string       `json:"role"`
+	Parts []geminiPart `json:"parts"`
+}
+
+// geminiPart Gemini contents part（文本 / 内联图片 / 文件图片）
+type geminiPart struct {
+	Text       string            `json:"text"`
+	InlineData *geminiInlineData `json:"inlineData"`
+	FileData   *geminiFileData   `json:"fileData"`
+}
+
+// geminiInlineData Gemini inlineData（base64 内联资源）
+type geminiInlineData struct {
+	MimeType string `json:"mimeType"`
+	Data     string `json:"data"`
+}
+
+// geminiFileData Gemini fileData（远端文件引用）
+type geminiFileData struct {
+	MimeType string `json:"mimeType"`
+	FileURI  string `json:"fileUri"`
 }
 
 // text 拼接该消息所有 part 的文本
@@ -168,6 +185,42 @@ func (c geminiContent) text() string {
 		b.WriteString(p.Text)
 	}
 	return b.String()
+}
+
+// chatContent 拼接文本；含图片 part 时返回 OpenAI content part 数组
+// inlineData → data URI；fileData → 原始 fileUri
+func (c geminiContent) chatContent() any {
+	hasImage := false
+	for _, p := range c.Parts {
+		if (p.InlineData != nil && p.InlineData.Data != "") || (p.FileData != nil && p.FileData.FileURI != "") {
+			hasImage = true
+			break
+		}
+	}
+	if !hasImage {
+		return c.text()
+	}
+	out := make([]map[string]any, 0, len(c.Parts))
+	for _, p := range c.Parts {
+		if p.Text != "" {
+			out = append(out, map[string]any{"type": "text", "text": p.Text})
+		}
+		switch {
+		case p.InlineData != nil && p.InlineData.Data != "":
+			out = append(out, map[string]any{
+				"type": "image_url",
+				"image_url": map[string]any{
+					"url": "data:" + p.InlineData.MimeType + ";base64," + p.InlineData.Data,
+				},
+			})
+		case p.FileData != nil && p.FileData.FileURI != "":
+			out = append(out, map[string]any{
+				"type":      "image_url",
+				"image_url": map[string]any{"url": p.FileData.FileURI},
+			})
+		}
+	}
+	return out
 }
 
 // geminiUsage OpenAI usage → Gemini usageMetadata

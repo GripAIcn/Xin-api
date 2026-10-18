@@ -37,10 +37,11 @@ func (a *anthropicAdapter) ExtractModel(body []byte) (string, error) {
 	return req.Model, nil
 }
 
-// anthropicMessage Anthropic Messages 请求中的单条消息，content 已展平为纯文本
+// anthropicMessage Anthropic Messages 请求中的单条消息
+// content 为字符串（纯文本）或 Anthropic content block 数组（含图片）
 type anthropicMessage struct {
 	Role    string `json:"role"`
-	Content string `json:"content"`
+	Content any    `json:"content"`
 }
 
 // BuildUpstreamRequest 将 OpenAI Chat 请求体转换为 Anthropic Messages 请求体
@@ -62,7 +63,7 @@ func (a *anthropicAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiK
 		model = in.Model
 	}
 
-	// system 消息合并到顶层 system，user/assistant 保留进 messages（仅取纯文本）
+	// system 消息合并到顶层 system（仅文本），user/assistant 保留进 messages（支持图片）
 	var systemParts []string
 	messages := make([]anthropicMessage, 0, len(in.Messages))
 	for _, rawMsg := range in.Messages {
@@ -73,14 +74,13 @@ func (a *anthropicAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiK
 		if err := json.Unmarshal(rawMsg, &m); err != nil {
 			continue
 		}
-		text := extractTextContent(m.Content)
 		switch m.Role {
 		case "system":
-			if text != "" {
+			if text := chatContentText(m.Content); text != "" {
 				systemParts = append(systemParts, text)
 			}
 		case "user", "assistant":
-			messages = append(messages, anthropicMessage{Role: m.Role, Content: text})
+			messages = append(messages, anthropicMessage{Role: m.Role, Content: anthropicChatContent(m.Content)})
 		}
 	}
 
@@ -269,35 +269,59 @@ func (a *anthropicAdapter) UpstreamModelsRequest(apiKey string) *UpstreamRequest
 	}
 }
 
-// extractTextContent 从 OpenAI message.content 中提取纯文本
-// content 可能是字符串，也可能是 [{type:"text", text:"..."}] 数组；数组只保留 text 部分
-func extractTextContent(raw json.RawMessage) string {
-	trimmed := trimSpace(raw)
-	if len(trimmed) == 0 {
+// anthropicChatContent 将 OpenAI message.content 转换为 Anthropic content：
+// 纯文本时返回字符串，含图片时返回 content block 数组
+func anthropicChatContent(raw json.RawMessage) any {
+	parts := parseChatContentParts(raw)
+	if len(parts) == 0 {
 		return ""
 	}
-	switch trimmed[0] {
-	case '"':
-		var s string
-		if err := json.Unmarshal(trimmed, &s); err == nil {
-			return s
-		}
-	case '[':
-		var blocks []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal(trimmed, &blocks); err == nil {
-			var sb strings.Builder
-			for _, b := range blocks {
-				if b.Type == "text" {
-					sb.WriteString(b.Text)
-				}
-			}
-			return sb.String()
+
+	hasImage := false
+	for _, p := range parts {
+		if p.Type == "image_url" {
+			hasImage = true
+			break
 		}
 	}
-	return ""
+	if !hasImage {
+		var sb strings.Builder
+		for _, p := range parts {
+			sb.WriteString(p.Text)
+		}
+		return sb.String()
+	}
+
+	blocks := make([]map[string]any, 0, len(parts))
+	for _, p := range parts {
+		switch p.Type {
+		case "text":
+			if p.Text != "" {
+				blocks = append(blocks, map[string]any{"type": "text", "text": p.Text})
+			}
+		case "image_url":
+			if source := anthropicImageSource(p.ImageURL); source != nil {
+				blocks = append(blocks, map[string]any{"type": "image", "source": source})
+			}
+		}
+	}
+	return blocks
+}
+
+// anthropicImageSource 将 OpenAI image_url 转为 Anthropic image source：
+// data URI → base64，http(s) 链接 → url
+func anthropicImageSource(url string) map[string]any {
+	if mediaType, data, ok := splitDataURI(url); ok {
+		return map[string]any{
+			"type":       "base64",
+			"media_type": mediaType,
+			"data":       data,
+		}
+	}
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
+		return map[string]any{"type": "url", "url": url}
+	}
+	return nil
 }
 
 // anthropicStopReasonToOpenAI 将 Anthropic stop_reason 映射为 OpenAI finish_reason

@@ -60,28 +60,24 @@ func (a *geminiAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiKey 
 		return nil, fmt.Errorf("gemini: model field is required")
 	}
 
-	// messages → contents / systemInstruction
+	// messages → contents / systemInstruction（user/assistant 支持图片 part）
 	var contents []map[string]any
 	var systemTexts []string
 	for _, msg := range req.Messages {
-		text, err := parseGeminiContent(msg.Content)
-		if err != nil {
-			return nil, fmt.Errorf("gemini: parse message content failed: %w", err)
-		}
 		switch msg.Role {
 		case "system":
-			if text != "" {
+			if text := chatContentText(msg.Content); text != "" {
 				systemTexts = append(systemTexts, text)
 			}
 		case "assistant":
 			contents = append(contents, map[string]any{
 				"role":  "model",
-				"parts": []map[string]any{{"text": text}},
+				"parts": geminiParts(msg.Content),
 			})
 		default: // user 及其它角色统一按用户消息处理
 			contents = append(contents, map[string]any{
 				"role":  "user",
-				"parts": []map[string]any{{"text": text}},
+				"parts": geminiParts(msg.Content),
 			})
 		}
 	}
@@ -257,27 +253,31 @@ type geminiResponse struct {
 	ModelVersion string `json:"modelVersion"`
 }
 
-// parseGeminiContent 解析 OpenAI 消息 content：字符串或 [{type:"text",text:"..."}] 数组
-func parseGeminiContent(raw json.RawMessage) (string, error) {
-	if len(raw) == 0 {
-		return "", nil
+// geminiParts 将 OpenAI message.content 转为 Gemini parts：
+// 文本 → text，data URI 图片 → inlineData，http(s) 图片 → fileData
+func geminiParts(raw json.RawMessage) []map[string]any {
+	parts := make([]map[string]any, 0, 1)
+	for _, p := range parseChatContentParts(raw) {
+		switch p.Type {
+		case "text":
+			parts = append(parts, map[string]any{"text": p.Text})
+		case "image_url":
+			if mimeType, data, ok := splitDataURI(p.ImageURL); ok {
+				parts = append(parts, map[string]any{
+					"inlineData": map[string]any{"mimeType": mimeType, "data": data},
+				})
+			} else if p.ImageURL != "" {
+				parts = append(parts, map[string]any{
+					"fileData": map[string]any{"fileUri": p.ImageURL},
+				})
+			}
+		}
 	}
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return s, nil
+	if len(parts) == 0 {
+		// Gemini 要求 parts 非空，空内容补一个空文本 part
+		parts = append(parts, map[string]any{"text": ""})
 	}
-	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(raw, &parts); err != nil {
-		return "", err
-	}
-	var b strings.Builder
-	for _, p := range parts {
-		b.WriteString(p.Text)
-	}
-	return b.String(), nil
+	return parts
 }
 
 // mapGeminiFinishReason 将 Gemini finishReason 映射为 OpenAI finish_reason

@@ -1,7 +1,9 @@
 package adapter
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // UpstreamRequest 上游请求抽象：由适配器根据入站 OpenAI Chat 请求构造
@@ -67,6 +69,90 @@ func (r *Registry) GetAdapter(provider string) (ProviderAdapter, error) {
 		return nil, fmt.Errorf("no adapter found for provider: %s", provider)
 	}
 	return adapter, nil
+}
+
+// chatContentPart 规范化后的 OpenAI Chat content part（文本或图片）
+type chatContentPart struct {
+	Type     string // text / image_url
+	Text     string
+	ImageURL string
+}
+
+// parseChatContentParts 解析 OpenAI message.content：
+// content 可能是字符串，也可能是 [{type:"text",...},{type:"image_url",...}] 数组
+func parseChatContentParts(raw json.RawMessage) []chatContentPart {
+	trimmed := trimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	if trimmed[0] == '"' {
+		var s string
+		if err := json.Unmarshal(trimmed, &s); err == nil && s != "" {
+			return []chatContentPart{{Type: "text", Text: s}}
+		}
+		return nil
+	}
+	if trimmed[0] != '[' {
+		return nil
+	}
+
+	var blocks []struct {
+		Type     string `json:"type"`
+		Text     string `json:"text"`
+		ImageURL struct {
+			URL string `json:"url"`
+		} `json:"image_url"`
+	}
+	if err := json.Unmarshal(trimmed, &blocks); err != nil {
+		return nil
+	}
+
+	parts := make([]chatContentPart, 0, len(blocks))
+	for _, b := range blocks {
+		switch b.Type {
+		case "text":
+			if b.Text != "" {
+				parts = append(parts, chatContentPart{Type: "text", Text: b.Text})
+			}
+		case "image_url":
+			if b.ImageURL.URL != "" {
+				parts = append(parts, chatContentPart{Type: "image_url", ImageURL: b.ImageURL.URL})
+			}
+		}
+	}
+	return parts
+}
+
+// chatContentText 提取 content 中的纯文本部分
+func chatContentText(raw json.RawMessage) string {
+	var sb strings.Builder
+	for _, p := range parseChatContentParts(raw) {
+		if p.Type == "text" {
+			sb.WriteString(p.Text)
+		}
+	}
+	return sb.String()
+}
+
+// splitDataURI 将 data:<mediaType>;base64,<data> 拆分为 mediaType 与 base64 数据
+func splitDataURI(url string) (mediaType, data string, ok bool) {
+	if !strings.HasPrefix(url, "data:") {
+		return "", "", false
+	}
+	rest := url[len("data:"):]
+	comma := strings.IndexByte(rest, ',')
+	if comma < 0 {
+		return "", "", false
+	}
+	meta := rest[:comma]
+	if !strings.HasSuffix(meta, ";base64") {
+		return "", "", false
+	}
+	mediaType = strings.TrimSuffix(meta, ";base64")
+	if mediaType == "" {
+		mediaType = "application/octet-stream"
+	}
+	return mediaType, rest[comma+1:], true
 }
 
 // openaiSSE 将 JSON 负载包装为 OpenAI SSE 事件块

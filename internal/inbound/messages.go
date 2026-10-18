@@ -64,7 +64,7 @@ func (c *messagesCodec) NormalizeRequest(body []byte, _ NormalizeOptions) ([]byt
 		if m.Role != "user" && m.Role != "assistant" {
 			continue
 		}
-		messages = append(messages, map[string]any{"role": m.Role, "content": anthropicTextContent(m.Content)})
+		messages = append(messages, map[string]any{"role": m.Role, "content": anthropicChatContent(m.Content)})
 	}
 
 	out := map[string]any{
@@ -93,6 +93,89 @@ func (c *messagesCodec) NormalizeRequest(body []byte, _ NormalizeOptions) ([]byt
 	return jsonx.Marshal(out)
 }
 
+// anthropicContentBlock Anthropic 内容块（text / image）
+type anthropicContentBlock struct {
+	Type   string                `json:"type"`
+	Text   string                `json:"text"`
+	Source *anthropicImageSource `json:"source"`
+}
+
+// anthropicImageSource Anthropic image 块的 source 字段
+type anthropicImageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+	URL       string `json:"url"`
+}
+
+// anthropicChatContent 解析 Anthropic 内容：字符串或块数组
+// 仅含文本时返回字符串；含 image 块时返回 OpenAI content part 数组
+func anthropicChatContent(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var parts []anthropicContentBlock
+	if err := json.Unmarshal(raw, &parts); err != nil {
+		return ""
+	}
+	hasImage := false
+	for _, p := range parts {
+		if p.Type == "image" && anthropicImageURL(p.Source) != "" {
+			hasImage = true
+			break
+		}
+	}
+	if !hasImage {
+		var b strings.Builder
+		for _, p := range parts {
+			if p.Type == "text" {
+				b.WriteString(p.Text)
+			}
+		}
+		return b.String()
+	}
+	out := make([]map[string]any, 0, len(parts))
+	for _, p := range parts {
+		switch p.Type {
+		case "text":
+			out = append(out, map[string]any{"type": "text", "text": p.Text})
+		case "image":
+			url := anthropicImageURL(p.Source)
+			if url == "" {
+				continue
+			}
+			out = append(out, map[string]any{
+				"type":      "image_url",
+				"image_url": map[string]any{"url": url},
+			})
+		}
+	}
+	return out
+}
+
+// anthropicImageURL 将 Anthropic image source 转为 OpenAI 可用的图片 URL
+// base64 → data URI；url → 原始 URL
+func anthropicImageURL(src *anthropicImageSource) string {
+	if src == nil {
+		return ""
+	}
+	switch src.Type {
+	case "base64":
+		if src.MediaType == "" || src.Data == "" {
+			return ""
+		}
+		return "data:" + src.MediaType + ";base64," + src.Data
+	case "url":
+		return src.URL
+	default:
+		return ""
+	}
+}
+
 // anthropicTextContent 解析 Anthropic 内容：字符串或 [{type,text}] 块数组，仅拼接 text 块
 func anthropicTextContent(raw json.RawMessage) string {
 	if len(raw) == 0 {
@@ -102,10 +185,7 @@ func anthropicTextContent(raw json.RawMessage) string {
 	if err := json.Unmarshal(raw, &s); err == nil {
 		return s
 	}
-	var parts []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
+	var parts []anthropicContentBlock
 	if err := json.Unmarshal(raw, &parts); err != nil {
 		return ""
 	}
