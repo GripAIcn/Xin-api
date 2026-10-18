@@ -24,14 +24,14 @@ Xin API 是一个高性能的大语言模型（LLM）网关服务，无缝兼容
 
 ### 核心特性
 
-- **🎯 统一 API 接入**: 数据面同时提供 `/v1/chat/completions`、`/v1/responses`、`/v1beta/models/{model}:generateContent` 三种入站协议端点，统一路由到上游供应商
+- **🎯 统一 API 接入**: 数据面同时提供 `/v1/chat/completions`、`/v1/responses`、`/v1/messages`（Anthropic Messages 兼容）、`/v1beta/models/{model}:generateContent` 四种入站协议端点，统一路由到上游供应商
 - **🔀 智能分发**: 按「优先级 + 同级加权轮询」选路，失败自动重试并排除已失败渠道
 - **🛡️ 熔断保护**: 基于 Redis 的分布式被动熔断，连续失败达到阈值后自动隔离渠道，并按恢复间隔探测恢复
 - **⚡ 限流能力（预留）**: 已实现基于 Redis 的令牌桶限流中间件，当前版本尚未挂载到数据面，`rpm_limit` / `tpm_limit` 暂未生效
 - **👥 统一渠道管理**: 集中管理上游供应商渠道，配置权重、优先级与状态，并支持渠道级「模型管理」（增删改、启用/禁用、从上游拉取模型）
 - **🗂️ 模型管理**: 以逻辑模型名为维度聚合展示各渠道的可用模型，支持跨渠道批量新增、编辑与启用/禁用
 - **🔁 模型名映射**: 按「渠道 × 对外模型名」登记上游真实模型名，转发时自动改写为上游名、响应回写对外名
-- **🧩 多协议适配**: 入站支持 OpenAI Chat、OpenAI Responses、Gemini 原生协议；出站按渠道供应商适配 OpenAI / DeepSeek / Anthropic / Gemini
+- **🧩 多协议适配**: 入站支持 OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini 原生协议；出站按渠道供应商适配 OpenAI / DeepSeek / Anthropic / Gemini
 - **💰 计费与结算**: 价格方案支持 USD / CNY 计价，按配置汇率折算为 CNY 结算，并记录余额变动与汇率快照
 - **🔑 API Key 管理**: 灵活的 API Key 分发和吊销机制
 - **🧪 渠道健康检测**: 手动一键测试渠道状态，支持单渠道/批量测试多模型连通性

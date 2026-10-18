@@ -24,14 +24,14 @@ Xin API is a high-performance Large Language Model (LLM) gateway service that se
 
 ### Core Features
 
-- **🎯 Unified API Gateway**: Expose `/v1/chat/completions`, `/v1/responses`, and `/v1beta/models/{model}:generateContent` as inbound endpoints, standardizing different LLM APIs behind a unified gateway
+- **🎯 Unified API Gateway**: Expose `/v1/chat/completions`, `/v1/responses`, `/v1/messages` (Anthropic Messages compatible), and `/v1beta/models/{model}:generateContent` as inbound endpoints, standardizing different LLM APIs behind a unified gateway
 - **🔀 Smart Distribution**: Route by priority plus weighted round-robin within the same priority; retry automatically and exclude failed channels
 - **🛡️ Circuit Breaker**: Redis-backed distributed passive circuit breaker that isolates a channel after consecutive failures and probes for recovery at a configurable interval
 - **⚡ Rate Limiting (Reserved)**: A Redis token-bucket limiter middleware is implemented but not yet mounted on the data plane; `rpm_limit` / `tpm_limit` are currently inactive
 - **👥 Unified Channel Management**: Manage upstream provider channels with weights, priorities, and status, including per-channel model management (create/update/delete, enable/disable, fetch models from upstream)
 - **🗂️ Model Management**: Aggregate available models across channels by logical model name, with cross-channel bulk create, edit, and enable/disable
 - **🔁 Model Name Mapping**: Register the upstream model name per "channel × external model name"; rewrite the outgoing request to the upstream name and restore the external name in responses
-- **🧩 Multi-Protocol Adaptation**: Accept OpenAI Chat, OpenAI Responses, and native Gemini inbound protocols; adapt outbound requests per channel provider (OpenAI / DeepSeek / Anthropic / Gemini)
+- **🧩 Multi-Protocol Adaptation**: Accept OpenAI Chat, OpenAI Responses, Anthropic Messages, and native Gemini inbound protocols; adapt outbound requests per channel provider (OpenAI / DeepSeek / Anthropic / Gemini)
 - **💰 Billing & Settlement**: Price plans support USD / CNY pricing, settle in CNY using the configured exchange rate, and record balance changes with exchange-rate snapshots
 - **🔑 API Key Management**: Flexible API key distribution and revocation
 - **🧪 Channel Health Check**: One-click manual channel testing, supporting single/batch testing of multi-model connectivity
