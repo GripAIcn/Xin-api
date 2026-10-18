@@ -52,6 +52,8 @@ type ChannelRepo interface {
 	DeleteModelSoftWithBinding(ctx context.Context, channelID, modelID int64) error
 	// ListModelChannelRows 查询全部「渠道 × 模型」明细行（JOIN 渠道信息），供模型管理页按逻辑模型名聚合
 	ListModelChannelRows(ctx context.Context) ([]model.ModelChannelEntry, error)
+	// ListEnabledModels 查询对外可用的逻辑模型名（模型与渠道均 active 且未软删），按名称去重
+	ListEnabledModels(ctx context.Context) ([]model.EnabledModelInfo, error)
 }
 
 type channelRepo struct {
@@ -348,4 +350,35 @@ func (r *channelRepo) ListModelChannelRows(ctx context.Context) ([]model.ModelCh
 		Order("models.name ASC, channels.priority DESC, channels.weight DESC").
 		Scan(&rows).Error
 	return rows, err
+}
+
+// ListEnabledModels 查询对外可用的逻辑模型名（按名称去重），供数据面 GET /v1/models 使用。
+// 判定与 ListActiveByModel 保持一致：模型 active + 渠道 active + 双方未软删。
+// 说明：按 createdAt 升序取出全部可用「渠道 × 模型」行后在 Go 内按名称去重，
+// 首条即该逻辑模型的最早创建时间；避免 MIN(created_at) 聚合结果在不同数据库驱动下类型不一致。
+func (r *channelRepo) ListEnabledModels(ctx context.Context) ([]model.EnabledModelInfo, error) {
+	rows := make([]model.EnabledModelInfo, 0)
+	err := r.db.WithContext(ctx).
+		Table("models AS m").
+		Select("m.name AS name, m.created_at AS created_at").
+		Joins("JOIN channels c ON c.id = m.channel_id").
+		Where("m.deleted_at IS NULL").
+		Where("m.status = ?", model.ModelStatusActive).
+		Where("c.deleted_at IS NULL").
+		Where("c.status = ?", model.ChannelStatusActive).
+		Order("m.name ASC, m.created_at ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// 同名模型跨渠道去重：排序后相邻同名只保留首条（created_at 最早）
+	deduped := make([]model.EnabledModelInfo, 0, len(rows))
+	for _, row := range rows {
+		if len(deduped) > 0 && deduped[len(deduped)-1].Name == row.Name {
+			continue
+		}
+		deduped = append(deduped, row)
+	}
+	return deduped, nil
 }

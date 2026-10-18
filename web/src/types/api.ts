@@ -192,7 +192,7 @@ export interface UpdateChannelModelStatusRequest {
 
 // === 模型管理（按逻辑模型名聚合）===
 
-// 逻辑模型在某渠道下的明细行（GET /v1/models 的 channels 元素）
+// 逻辑模型在某渠道下的明细行（GET /v1/admin/models 的 channels 元素）
 export interface ModelChannelEntry {
   model_id: number
   channel_id: number
@@ -211,7 +211,7 @@ export interface ModelChannelEntry {
   price_name?: string | null
 }
 
-// 按逻辑模型名聚合的分组（GET /v1/models 的元素）
+// 按逻辑模型名聚合的分组（GET /v1/admin/models 的元素）
 export interface ModelGroup {
   name: string
   channel_count: number

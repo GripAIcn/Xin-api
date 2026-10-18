@@ -106,7 +106,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 				adminChannel.PUT("/channels/:id/models/:modelId/status", channelHandler.UpdateChannelModelStatus) // 启用/禁用模型
 
 				// 模型管理：按逻辑模型名聚合查询全部渠道模型
-				adminChannel.GET("/models", channelHandler.ListModels) // 按逻辑模型名聚合查询（模型管理页）
+				adminChannel.GET("/admin/models", channelHandler.ListModels) // 按逻辑模型名聚合查询（模型管理页）
 
 				// 价格方案管理
 				adminChannel.POST("/prices", modelPriceHandler.CreatePrice)                 // 新增价格方案
@@ -155,9 +155,11 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 			cfg.Log.RequestBody,
 			cfg.Log.ResponseBody,
 		)
+		modelHandler := handler.NewModelHandler(channelRepo)
 		dataPlane := v1.Group("")
 		dataPlane.Use(middleware.ApiKeyAuth(apiKeyRepo, logRepo))
 		{
+			dataPlane.GET("/models", modelHandler.ListModels)                // OpenAI 模型列表（仅启用模型）
 			dataPlane.POST("/chat/completions", chatHandler.HandleDataPlane) // OpenAI Chat 兼容
 			dataPlane.POST("/responses", chatHandler.HandleResponses)        // OpenAI Responses API
 			dataPlane.POST("/messages", chatHandler.HandleMessages)          // Anthropic Messages 兼容

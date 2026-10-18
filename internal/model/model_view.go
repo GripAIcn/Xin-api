@@ -46,3 +46,10 @@ type ModelGroup struct {
 	ActiveCount  int                 `json:"active_count"`
 	Channels     []ModelChannelEntry `json:"channels"`
 }
+
+// EnabledModelInfo 对外可用的逻辑模型（按名称去重），供数据面 GET /v1/models 使用。
+// CreatedAt 取该逻辑模型在所有可用渠道中的最早创建时间。
+type EnabledModelInfo struct {
+	Name      string    `gorm:"column:name"`
+	CreatedAt time.Time `gorm:"column:created_at"`
+}
