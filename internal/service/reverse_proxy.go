@@ -148,10 +148,11 @@ func (p *StreamProxy) Forward(
 // forwardStream 逐 SSE 事件读取上游流，经适配器转换后写回客户端，并采集转发信息
 func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt adapter.ProviderAdapter, externalModel string, encoder ResponseEncoder, captureResponseBody bool) (*ForwardResult, error) {
 	start := time.Now()
-	c.Status(http.StatusOK)
+	// 先设置 SSE 响应头，再写入状态码，避免头被提前提交导致 Content-Type 丢失
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
+	c.Status(http.StatusOK)
 
 	result := &ForwardResult{
 		StatusCode:    http.StatusOK,
