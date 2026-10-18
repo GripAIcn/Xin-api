@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -69,12 +70,29 @@ func main() {
 
 	// 7. 静态前端 SPA (生产模式)
 	r.StaticFile("/", "./web/dist/index.html")
-	// 预渲染的公开文档页
-	r.StaticFile("/docs", "./web/dist/docs/index.html")
+	// 预渲染的公开页面：与 web/scripts/prerender.ts 的 PUBLIC_PAGES 保持一致。
+	// 必须显式注册，否则会被 NoRoute 兜底成控制台外壳（带 noindex），无法被搜索引擎收录
+	for _, pagePath := range []string{"/features", "/docs", "/faq", "/contact"} {
+		r.StaticFile(pagePath, "./web/dist"+pagePath+"/index.html")
+	}
 	r.Static("/assets", "./web/dist/assets")
 	// 本地字体等 public 静态资源，避免被 NoRoute 回退为 HTML
 	r.Static("/fonts", "./web/dist/fonts")
+	// 根目录静态文件：SEO 与站点图标，必须在 NoRoute 之前显式注册，
+	// 否则会被 SPA 兜底成 HTML 外壳（Content-Type 也会变成 text/html）
+	r.StaticFile("/robots.txt", "./web/dist/robots.txt")
+	r.StaticFile("/sitemap.xml", "./web/dist/sitemap.xml")
+	r.StaticFile("/favicon.ico", "./web/dist/favicon.ico")
+	r.StaticFile("/apple-touch-icon.png", "./web/dist/apple-touch-icon.png")
+	r.StaticFile("/og.png", "./web/dist/og.png")
+	r.Static("/brand", "./web/dist/brand")
 	r.NoRoute(func(c *gin.Context) {
+		// 带静态后缀的路径一律不兜底：避免把 HTML 外壳当作资源返回（软 404 / 重复内容），
+		// 同时保证站长平台的文件验证（如 baidu_verify_xxx.html）能独立生效
+		if filepath.Ext(c.Request.URL.Path) != "" {
+			c.Status(http.StatusNotFound)
+			return
+		}
 		c.File("./web/dist/app.html")
 	})
 

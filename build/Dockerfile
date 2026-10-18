@@ -4,6 +4,8 @@
 FROM node:22-alpine AS frontend-builder
 
 ARG NPM_REGISTRY=https://registry.npmmirror.com
+# 站点正式地址：预渲染产物中的 canonical / og / sitemap / robots 全部由它拼接
+ARG SITE_URL=https://api.gripai.cn
 
 WORKDIR /web
 
@@ -13,7 +15,7 @@ RUN npm ci --no-audit --no-fund --registry=${NPM_REGISTRY}
 
 COPY web/ ./
 
-RUN npm run build
+RUN SITE_URL=${SITE_URL} npm run build
 
 # ============================================
 # 阶段二：Go 后端构建
