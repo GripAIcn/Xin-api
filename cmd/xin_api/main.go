@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -69,6 +70,23 @@ func main() {
 	router.SetupRouter(r, db, *cfg, breaker, rdb, metricAggregator)
 
 	// 7. 静态前端 SPA (生产模式)
+	// 静态资源缓存策略：必须在静态路由注册前声明。
+	// /assets 等文件名带内容哈希，可长期强缓存；HTML 入口必须每次回源校验，
+	// 否则发版后会继续引用已被删除的旧 chunk。
+	r.Use(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		switch {
+		case strings.HasPrefix(path, "/assets/"),
+			strings.HasPrefix(path, "/fonts/"),
+			strings.HasPrefix(path, "/brand/"):
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		case path == "/og.png", path == "/favicon.ico", path == "/apple-touch-icon.png":
+			c.Header("Cache-Control", "public, max-age=604800")
+		case path == "/", path == "/features", path == "/docs", path == "/faq", path == "/contact":
+			c.Header("Cache-Control", "no-cache")
+		}
+		c.Next()
+	})
 	r.StaticFile("/", "./web/dist/index.html")
 	// 预渲染的公开页面：与 web/scripts/prerender.ts 的 PUBLIC_PAGES 保持一致。
 	// 必须显式注册，否则会被 NoRoute 兜底成控制台外壳（带 noindex），无法被搜索引擎收录
