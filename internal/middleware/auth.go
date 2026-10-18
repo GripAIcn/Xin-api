@@ -157,10 +157,14 @@ func RequirePasswordChanged() gin.HandlerFunc {
 }
 
 // extractDataPlaneKey 按优先级提取数据面 API Key：
-// Authorization: Bearer → x-goog-api-key 头（Gemini 官方 SDK）→ ?key= 查询参数（Gemini 兼容）
+// Authorization: Bearer → x-api-key 头（Anthropic SDK / Claude Code 默认鉴权头）
+// → x-goog-api-key 头（Gemini 官方 SDK）→ ?key= 查询参数（Gemini 兼容）
 func extractDataPlaneKey(c *gin.Context) string {
 	if auth := c.GetHeader("Authorization"); strings.HasPrefix(auth, "Bearer ") {
 		return strings.TrimPrefix(auth, "Bearer ")
+	}
+	if key := c.GetHeader("x-api-key"); key != "" {
+		return key
 	}
 	if key := c.GetHeader("x-goog-api-key"); key != "" {
 		return key
@@ -168,30 +172,42 @@ func extractDataPlaneKey(c *gin.Context) string {
 	return c.Query("key")
 }
 
+// dataPlaneAuthError 数据面鉴权失败响应：
+// Anthropic Messages 入站返回 Anthropic 错误体，其余入站保持 OpenAI 错误结构
+func dataPlaneAuthError(c *gin.Context) {
+	if c.Request != nil && c.Request.URL != nil && strings.HasSuffix(c.Request.URL.Path, "/v1/messages") {
+		status := response.MapToHTTPStatus(response.Unauthorized)
+		c.Data(status, "application/json", response.AnthropicErrorBody(status, response.Msg(response.Unauthorized)))
+		c.Abort()
+		return
+	}
+	response.DataPlaneError(c, response.Unauthorized)
+}
+
 // ApiKeyAuth 数据面 API Key 认证中间件
-// 支持 Authorization: Bearer / x-goog-api-key / ?key= 三种取值方式，校验其有效性
+// 支持 Authorization: Bearer / x-api-key / x-goog-api-key / ?key= 四种取值方式，校验其有效性
 func ApiKeyAuth(apiKeyRepo postgresql.ApiKeyRepo) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := extractDataPlaneKey(c)
 		if key == "" {
-			response.DataPlaneError(c, response.Unauthorized)
+			dataPlaneAuthError(c)
 			return
 		}
 
 		// 落库只存哈希：对来访明文 Key 求摘要后比对
 		apiKey, err := apiKeyRepo.GetByKeyHash(c.Request.Context(), model.HashApiKey(key))
 		if err != nil || apiKey == nil {
-			response.DataPlaneError(c, response.Unauthorized)
+			dataPlaneAuthError(c)
 			return
 		}
 
 		// 仅启用且未过期的 Key 可通过鉴权
 		if apiKey.Status != model.ApiKeyStatusActive {
-			response.DataPlaneError(c, response.Unauthorized)
+			dataPlaneAuthError(c)
 			return
 		}
 		if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.Before(time.Now()) {
-			response.DataPlaneError(c, response.Unauthorized)
+			dataPlaneAuthError(c)
 			return
 		}
 

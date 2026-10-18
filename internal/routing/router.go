@@ -22,7 +22,7 @@ var (
 // RouteRequest 一次选路的输入快照
 type RouteRequest struct {
 	Model             string          // 对外模型名（同时作为加权轮询的维度 key）
-	Protocol          string          // 请求协议 chat/responses/gemini
+	Protocol          string          // 请求协议 chat/responses/gemini/messages
 	Channels          []model.Channel // 候选渠道（通常来自缓存）
 	ExcludeChannelIDs []int64         // 需要排除的渠道（重试时已失败的渠道）
 }
@@ -130,6 +130,7 @@ func (r *WeightedRouter) Route(ctx context.Context, req RouteRequest) (*RouteRes
 }
 
 // supportsProtocol 判断渠道是否支持指定协议；protocol 为空或渠道未登记协议视为「全协议支持」
+// Anthropic Messages 入站归一化为 OpenAI Chat，故声明 chat 的渠道同样支持 messages
 func supportsProtocol(ch model.Channel, protocol string) bool {
 	if protocol == "" || len(ch.Protocol) == 0 {
 		return true
@@ -137,6 +138,13 @@ func supportsProtocol(ch model.Channel, protocol string) bool {
 	for _, p := range ch.Protocol {
 		if p == protocol {
 			return true
+		}
+	}
+	if protocol == "messages" {
+		for _, p := range ch.Protocol {
+			if p == "chat" {
+				return true
+			}
 		}
 	}
 	return false

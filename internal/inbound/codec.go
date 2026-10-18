@@ -19,6 +19,7 @@ const (
 	ProtocolChat      = "chat"
 	ProtocolResponses = "responses"
 	ProtocolGemini    = "gemini"
+	ProtocolMessages  = "messages"
 )
 
 // NormalizeOptions 入站归一化的元信息（协议自身无法从 body 中获取的部分）
@@ -51,6 +52,7 @@ func NewRegistry() Registry {
 		ProtocolChat:      func() Codec { return &chatCodec{} },
 		ProtocolResponses: func() Codec { return &responsesCodec{} },
 		ProtocolGemini:    func() Codec { return &geminiCodec{} },
+		ProtocolMessages:  func() Codec { return &messagesCodec{} },
 	}
 }
 

@@ -1,6 +1,7 @@
 package response
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -139,4 +140,46 @@ func DataPlaneErrorMessage(c *gin.Context, bizCode int, message string) {
 
 	// 核心：直接阻断 Gin 中间件链条后续逻辑，防止错上加错
 	c.Abort()
+}
+
+// ==========================================
+// 3. 数据面 (Data Plane) Anthropic 兼容错误结构
+// ==========================================
+
+// AnthropicErrorBody 生成 Anthropic 官方错误体 {"type":"error","error":{"type","message"}}
+func AnthropicErrorBody(status int, message string) []byte {
+	if message == "" {
+		message = http.StatusText(status)
+	}
+	body := map[string]any{
+		"type":  "error",
+		"error": map[string]any{"type": AnthropicErrorType(status), "message": message},
+	}
+	data, err := json.Marshal(body)
+	if err != nil {
+		return []byte(`{"type":"error","error":{"type":"api_error","message":"gateway error"}}`)
+	}
+	return data
+}
+
+// AnthropicErrorType HTTP 状态码 → Anthropic 错误 type 枚举
+func AnthropicErrorType(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "invalid_request_error"
+	case http.StatusUnauthorized:
+		return "authentication_error"
+	case http.StatusForbidden:
+		return "permission_error"
+	case http.StatusNotFound:
+		return "not_found_error"
+	case http.StatusTooManyRequests:
+		return "rate_limit_error"
+	case http.StatusInternalServerError:
+		return "api_error"
+	case 529:
+		return "overloaded_error"
+	default:
+		return "api_error"
+	}
 }

@@ -160,6 +160,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		{
 			dataPlane.POST("/chat/completions", chatHandler.HandleDataPlane) // OpenAI Chat 兼容
 			dataPlane.POST("/responses", chatHandler.HandleResponses)        // OpenAI Responses API
+			dataPlane.POST("/messages", chatHandler.HandleMessages)          // Anthropic Messages 兼容
 		}
 
 		// Gemini 原生路径不在 /v1 前缀下，单独挂载（:model 捕获整段，如 gemini-2.0-flash:generateContent）

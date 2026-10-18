@@ -295,6 +295,11 @@ func (h *ChatHandler) HandleResponses(c *gin.Context) {
 	h.handle(c, inbound.ProtocolResponses, inbound.NormalizeOptions{})
 }
 
+// HandleMessages 数据面 Anthropic Messages API 入口
+func (h *ChatHandler) HandleMessages(c *gin.Context) {
+	h.handle(c, inbound.ProtocolMessages, inbound.NormalizeOptions{})
+}
+
 // HandleGemini 数据面 Google Gemini generateContent 入口
 // 路由 :model 捕获整段（如 gemini-2.0-flash:generateContent），此处切分动作后缀
 func (h *ChatHandler) HandleGemini(c *gin.Context) {
