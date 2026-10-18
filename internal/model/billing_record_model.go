@@ -39,6 +39,6 @@ type BillingRecord struct {
 	ExchangeRate        *Money    `gorm:"column:exchange_rate;type:numeric(20,8);comment:结算汇率快照（CNY 定价为空或 1，按约定：仅 USD 定价写入）" json:"exchange_rate,omitempty"`
 	BalanceBefore       *Money    `gorm:"column:balance_before;type:numeric(20,8);comment:结算前余额" json:"balance_before,omitempty"`
 	BalanceAfter        *Money    `gorm:"column:balance_after;type:numeric(20,8);comment:结算后余额" json:"balance_after,omitempty"`
-	Status              string    `gorm:"column:status;type:varchar(32);not null;default:settled;check:chk_billing_records_status,status = 'settled' OR status = 'failed' OR status = 'refunded';comment:状态 settled-已结算 failed-结算失败 refunded-已退款" json:"status"`
+	Status              string    `gorm:"column:status;type:varchar(32);not null;default:settled;check:chk_billing_records_status,status = 'settled' OR status = 'failed' OR status = 'refunded';comment:状态 settled-已结算（余额允许为负） failed-结算失败（如汇率缺失） refunded-已退款" json:"status"`
 	CreatedAt           time.Time `gorm:"column:created_at;autoCreateTime;index:idx_billing_records_user_id,priority:2,sort:desc;index:idx_billing_records_created_at,sort:desc" json:"created_at"`
 }

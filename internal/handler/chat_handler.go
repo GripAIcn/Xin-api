@@ -417,6 +417,7 @@ func (h *ChatHandler) handle(c *gin.Context, protocol string, opts inbound.Norma
 		h.abortLocalError(c, codec, response.Unauthorized)
 		return
 	}
+	// 余额允许因历史消费扣成负数，因此这里按非正数拦截：负余额账户直接拒绝，不请求上游
 	if !user.Balance.IsPositive() {
 		h.writeErrorLog(ctx, requestID, modelName, codec.Name(), userID, apiKeyID, clientIP, isStream, startedAt,
 			model.LogTypeError, model.ErrorStageLocal, "insufficient_balance", "insufficient balance", nil, nil, nil, rawBody)

@@ -54,8 +54,9 @@ func (r *logRepo) CreateAudit(ctx context.Context, audit *model.AuditLog) error 
 	return r.db.WithContext(ctx).Create(audit).Error
 }
 
-// CreateWithBilling 同一事务内：写日志 → 锁定用户余额 → 条件扣减（防负）→ 写计费流水。
-// 说明：billing_records.request_id 有 UNIQUE 约束，重复写入会报错（正常防护）；
+// CreateWithBilling 同一事务内：写日志 → 锁定用户余额 → 扣减（允许为负）→ 写计费流水。
+// 说明：本层不做余额下限拦截，余额不足时照常扣成负数，由下一次请求的准入校验拒绝；
+// billing_records.request_id 有 UNIQUE 约束，重复写入会报错（正常防护）；
 // 不显式写入 total_tokens（数据库生成列，只读）。
 func (r *logRepo) CreateWithBilling(ctx context.Context, log *model.RequestLog, billing *model.BillingRecord) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -86,16 +87,12 @@ func (r *logRepo) CreateWithBilling(ctx context.Context, log *model.RequestLog, 
 		after := model.Money{Decimal: before.Decimal.Sub(billing.SettleCost.Decimal)}
 		billing.BalanceAfter = &after
 
-		// 按 CNY 结算金额条件更新防止扣成负数；余额不足（RowsAffected == 0）时安全兜底，不返回错误
+		// 允许扣减为负：不做余额下限拦截，透支由下一次请求的准入校验处理
 		res := tx.Model(&model.User{}).
-			Where("id = ? AND balance >= ?", billing.UserID, billing.SettleCost).
+			Where("id = ?", billing.UserID).
 			Update("balance", gorm.Expr("balance - ?", billing.SettleCost))
 		if res.Error != nil {
 			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			billing.BalanceAfter = &before
-			billing.Status = model.BillingStatusFailed
 		}
 
 		return tx.Create(billing).Error
