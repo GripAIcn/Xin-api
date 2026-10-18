@@ -30,11 +30,11 @@ go.work.sum
 # Editor/IDE
 .idea/
 # .vscode/
-docs/
-scripts/
+/docs/
+/scripts/
 CLAUDE.md
 .trae
 .vscode
 
 # docs (local only, not committed)
-doc/
+/doc/
