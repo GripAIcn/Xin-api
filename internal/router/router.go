@@ -135,10 +135,10 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 		// 数据面路由 (Data Plane)：使用 ApiKey 认证
 		// ==========================================
 		adapterGroup := adapter.NewRegistry()
-		adapterGroup.Register(adapter.NewOpenAIAdapter())
-		adapterGroup.RegisterAlias("deepseek", adapter.NewOpenAIAdapter())
-		adapterGroup.Register(adapter.NewAnthropicAdapter())
-		adapterGroup.Register(adapter.NewGeminiAdapter())
+		adapterGroup.Register(adapter.NewOpenAIAdapter)
+		adapterGroup.RegisterAlias("deepseek", adapter.NewOpenAIAdapter)
+		adapterGroup.Register(adapter.NewAnthropicAdapter)
+		adapterGroup.Register(adapter.NewGeminiAdapter)
 
 		inboundRegistry := inbound.NewRegistry()
 		chatHandler := handler.NewChatHandler(

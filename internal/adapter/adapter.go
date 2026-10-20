@@ -40,35 +40,40 @@ type ProviderAdapter interface {
 	UpstreamModelsRequest(apiKey string) *UpstreamRequest
 }
 
-// Registry 适配器注册表，按 provider 查找适配器
+// AdapterFactory 适配器构造器
+// 适配器可能持有跨 chunk 的流式转换状态（如工具调用的块序号映射），因此注册表只存构造器，
+// 每次转发实例化一份，保证同渠道并发请求之间状态不串扰（与 inbound.Registry 同构）
+type AdapterFactory func() ProviderAdapter
+
+// Registry 适配器注册表，按 provider 查找适配器构造器
 type Registry struct {
-	adapters map[string]ProviderAdapter
+	adapters map[string]AdapterFactory
 }
 
 // NewRegistry 创建适配器注册表
 func NewRegistry() *Registry {
 	return &Registry{
-		adapters: make(map[string]ProviderAdapter),
+		adapters: make(map[string]AdapterFactory),
 	}
 }
 
 // Register 按适配器 Name() 注册
-func (r *Registry) Register(adapter ProviderAdapter) {
-	r.adapters[adapter.Name()] = adapter
+func (r *Registry) Register(factory AdapterFactory) {
+	r.adapters[factory().Name()] = factory
 }
 
 // RegisterAlias 以别名注册适配器（如 deepseek 复用 OpenAI 兼容适配器）
-func (r *Registry) RegisterAlias(alias string, adapter ProviderAdapter) {
-	r.adapters[alias] = adapter
+func (r *Registry) RegisterAlias(alias string, factory AdapterFactory) {
+	r.adapters[alias] = factory
 }
 
-// GetAdapter 根据渠道 provider 获取适配器
+// GetAdapter 根据渠道 provider 实例化适配器
 func (r *Registry) GetAdapter(provider string) (ProviderAdapter, error) {
-	adapter, ok := r.adapters[provider]
+	factory, ok := r.adapters[provider]
 	if !ok {
 		return nil, fmt.Errorf("no adapter found for provider: %s", provider)
 	}
-	return adapter, nil
+	return factory(), nil
 }
 
 // chatContentPart 规范化后的 OpenAI Chat content part（文本或图片）

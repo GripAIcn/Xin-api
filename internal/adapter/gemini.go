@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -12,7 +13,15 @@ import (
 	"Xin-api/pkg/jsonx"
 )
 
-type geminiAdapter struct{}
+// geminiAdapter Google Gemini(generateContent) 协议适配器
+// 流式转换需跨事件累积函数调用状态，故由 Registry 每请求实例化一份
+type geminiAdapter struct {
+	chunkID     string         // 流式响应 id（同一流内保持一致）
+	toolIndex   map[int]int    // candidate parts 序号 → OpenAI tool_calls index
+	toolArgs    map[int]string // 已下发的 args 快照，用于增量补差
+	toolCount   int            // 已下发的 tool_calls 数量
+	hasToolCall bool           // 本流是否出现过函数调用（决定 finish_reason）
+}
 
 // NewGeminiAdapter 创建 Google Gemini 协议适配器
 func NewGeminiAdapter() ProviderAdapter {
@@ -45,6 +54,8 @@ func (a *geminiAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiKey 
 		MaxTokens   *int            `json:"max_tokens"`
 		Temperature *float64        `json:"temperature"`
 		TopP        *float64        `json:"top_p"`
+		Tools       json.RawMessage `json:"tools"`
+		ToolChoice  json.RawMessage `json:"tool_choice"`
 		Messages    []geminiMessage `json:"messages"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -63,16 +74,45 @@ func (a *geminiAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiKey 
 	// messages → contents / systemInstruction（user/assistant 支持图片 part）
 	var contents []map[string]any
 	var systemTexts []string
+	// Gemini 的 functionResponse 只带函数名（无调用 id），需回查此前 assistant tool_calls 的 id → name
+	callNames := make(map[string]string)
+	// Gemini 要求函数响应紧跟在发起调用的 model 消息之后，故合并连续的 tool 消息为一条 user 消息
+	var functionResponses []any
+	flushFunctionResponses := func() {
+		if len(functionResponses) == 0 {
+			return
+		}
+		contents = append(contents, map[string]any{"role": "user", "parts": functionResponses})
+		functionResponses = nil
+	}
+
 	for _, msg := range req.Messages {
+		if msg.Role != "tool" {
+			flushFunctionResponses()
+		}
 		switch msg.Role {
 		case "system":
 			if text := chatContentText(msg.Content); text != "" {
 				systemTexts = append(systemTexts, text)
 			}
 		case "assistant":
+			recordGeminiToolCallNames(msg.ToolCalls, callNames)
 			contents = append(contents, map[string]any{
 				"role":  "model",
-				"parts": geminiParts(msg.Content),
+				"parts": geminiAssistantParts(msg.Content, msg.ToolCalls),
+			})
+		case "tool":
+			// 函数名解析顺序对齐 new-api：优先取 OpenAI tool 消息自带的 name，
+			// 其次按 tool_call_id 回查此前 assistant tool_calls 记录的函数名
+			name := msg.Name
+			if name == "" {
+				name = callNames[msg.ToolCallID]
+			}
+			functionResponses = append(functionResponses, map[string]any{
+				"functionResponse": map[string]any{
+					"name":     name,
+					"response": geminiFunctionResponseBody(chatContentText(msg.Content)),
+				},
 			})
 		default: // user 及其它角色统一按用户消息处理
 			contents = append(contents, map[string]any{
@@ -81,6 +121,7 @@ func (a *geminiAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiKey 
 			})
 		}
 	}
+	flushFunctionResponses()
 
 	out := map[string]any{
 		"contents": contents,
@@ -88,6 +129,13 @@ func (a *geminiAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiKey 
 	if len(systemTexts) > 0 {
 		out["systemInstruction"] = map[string]any{
 			"parts": []map[string]any{{"text": strings.Join(systemTexts, "\n")}},
+		}
+	}
+	// tools / toolConfig：函数声明与调用模式（toolConfig 仅在存在 tools 时下发）
+	if declarations := geminiUpstreamTools(req.Tools); len(declarations) > 0 {
+		out["tools"] = []map[string]any{{"functionDeclarations": declarations}}
+		if config := geminiToolConfig(req.ToolChoice); config != nil {
+			out["toolConfig"] = config
 		}
 	}
 
@@ -132,9 +180,22 @@ func (a *geminiAdapter) ConvertResponse(body []byte, externalModel string) ([]by
 
 	content := ""
 	finishReason := ""
+	var toolCalls []map[string]any
 	if len(resp.Candidates) > 0 {
-		content = resp.Candidates[0].Text()
-		finishReason = resp.Candidates[0].FinishReason
+		candidate := resp.Candidates[0]
+		content = candidate.Text()
+		toolCalls = geminiToolCalls(candidate.Content.Parts)
+		if len(toolCalls) > 0 {
+			// 出现函数调用时 OpenAI 语义为 tool_calls
+			finishReason = "tool_calls"
+		} else {
+			finishReason = mapGeminiFinishReason(candidate.FinishReason)
+		}
+	}
+
+	message := map[string]any{"role": "assistant", "content": content}
+	if len(toolCalls) > 0 {
+		message["tool_calls"] = toolCalls
 	}
 
 	out := map[string]any{
@@ -145,8 +206,8 @@ func (a *geminiAdapter) ConvertResponse(body []byte, externalModel string) ([]by
 		"choices": []map[string]any{
 			{
 				"index":         0,
-				"message":       map[string]any{"role": "assistant", "content": content},
-				"finish_reason": mapGeminiFinishReason(finishReason),
+				"message":       message,
+				"finish_reason": finishReason,
 			},
 		},
 		"usage": map[string]any{
@@ -175,21 +236,35 @@ func (a *geminiAdapter) ConvertStreamChunk(chunk []byte, externalModel string) (
 	}
 
 	candidate := resp.Candidates[0]
-	// finish_reason 缺省时为 null
+	if a.chunkID == "" {
+		a.chunkID = newChatCompletionID()
+	}
+
+	delta := map[string]any{"content": candidate.Text()}
+	if calls := a.streamToolCalls(candidate.Content.Parts); len(calls) > 0 {
+		delta["tool_calls"] = calls
+		a.hasToolCall = true
+	}
+
+	// finish_reason 缺省时为 null；出现过函数调用时按 OpenAI 语义返回 tool_calls
 	var finishReason any
 	if candidate.FinishReason != "" {
-		finishReason = mapGeminiFinishReason(candidate.FinishReason)
+		if a.hasToolCall {
+			finishReason = "tool_calls"
+		} else {
+			finishReason = mapGeminiFinishReason(candidate.FinishReason)
+		}
 	}
 
 	out := map[string]any{
-		"id":      newChatCompletionID(),
+		"id":      a.chunkID,
 		"object":  "chat.completion.chunk",
 		"created": time.Now().Unix(),
 		"model":   externalModel,
 		"choices": []map[string]any{
 			{
 				"index":         0,
-				"delta":         map[string]any{"content": candidate.Text()},
+				"delta":         delta,
 				"finish_reason": finishReason,
 			},
 		},
@@ -219,16 +294,36 @@ func (a *geminiAdapter) UpstreamModelsRequest(apiKey string) *UpstreamRequest {
 
 // geminiMessage 入站 OpenAI 消息，content 保留原始 JSON 以兼容字符串与数组两种形态
 type geminiMessage struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
+	Role       string          `json:"role"`
+	Content    json.RawMessage `json:"content"`
+	ToolCalls  json.RawMessage `json:"tool_calls"`
+	ToolCallID string          `json:"tool_call_id"`
+	Name       string          `json:"name"`
 }
 
-// geminiCandidate Gemini 回复候选，可能包含多个文本部分
+// geminiPart Gemini 内容 part：文本 / 函数调用 / 函数响应
+type geminiPart struct {
+	Text             string                  `json:"text"`
+	FunctionCall     *geminiFunctionCall     `json:"functionCall"`
+	FunctionResponse *geminiFunctionResponse `json:"functionResponse"`
+}
+
+// geminiFunctionCall 模型发起的函数调用，args 为参数对象
+type geminiFunctionCall struct {
+	Name string          `json:"name"`
+	Args json.RawMessage `json:"args"`
+}
+
+// geminiFunctionResponse 回传给模型的函数执行结果，response 必须为对象
+type geminiFunctionResponse struct {
+	Name     string          `json:"name"`
+	Response json.RawMessage `json:"response"`
+}
+
+// geminiCandidate Gemini 回复候选，可能包含多个文本/函数调用部分
 type geminiCandidate struct {
 	Content struct {
-		Parts []struct {
-			Text string `json:"text"`
-		} `json:"parts"`
+		Parts []geminiPart `json:"parts"`
 	} `json:"content"`
 	FinishReason string `json:"finishReason"`
 }
@@ -278,6 +373,247 @@ func geminiParts(raw json.RawMessage) []map[string]any {
 		parts = append(parts, map[string]any{"text": ""})
 	}
 	return parts
+}
+
+// recordGeminiToolCallNames 记录 assistant tool_calls 的 id → 函数名映射
+// Gemini 的 functionResponse 只接受函数名，需要据此把 OpenAI 的 tool_call_id 还原为名称
+func recordGeminiToolCallNames(raw json.RawMessage, callNames map[string]string) {
+	var calls []struct {
+		ID       string `json:"id"`
+		Function struct {
+			Name string `json:"name"`
+		} `json:"function"`
+	}
+	if len(raw) == 0 || json.Unmarshal(raw, &calls) != nil {
+		return
+	}
+	for _, c := range calls {
+		if c.ID != "" && c.Function.Name != "" {
+			callNames[c.ID] = c.Function.Name
+		}
+	}
+}
+
+// geminiAssistantParts 将 assistant 消息转为 Gemini parts：文本/图片 part + functionCall part
+func geminiAssistantParts(content, toolCalls json.RawMessage) []map[string]any {
+	parts := geminiParts(content)
+	// 纯工具调用场景去掉占位空文本 part
+	if len(parts) == 1 {
+		if text, ok := parts[0]["text"].(string); ok && text == "" {
+			parts = nil
+		}
+	}
+
+	var calls []struct {
+		Function struct {
+			Name      string `json:"name"`
+			Arguments string `json:"arguments"`
+		} `json:"function"`
+	}
+	if len(toolCalls) > 0 && json.Unmarshal(toolCalls, &calls) == nil {
+		for _, c := range calls {
+			if c.Function.Name == "" {
+				continue
+			}
+			args, _ := toolObject([]byte(c.Function.Arguments))
+			if args == nil {
+				args = map[string]any{}
+			}
+			parts = append(parts, map[string]any{
+				"functionCall": map[string]any{"name": c.Function.Name, "args": args},
+			})
+		}
+	}
+	if len(parts) == 0 {
+		// Gemini 要求 parts 非空
+		parts = []map[string]any{{"text": ""}}
+	}
+	return parts
+}
+
+// geminiFunctionResponseBody 构造 functionResponse.response（必须为对象）
+// 工具输出为 JSON 对象时原样透传，否则包装为 {"result": ...}
+func geminiFunctionResponseBody(content string) any {
+	if obj, ok := toolObject([]byte(content)); ok {
+		return obj
+	}
+	return map[string]any{"result": content}
+}
+
+// geminiUpstreamTools 将 OpenAI tools 转换为 Gemini functionDeclarations
+func geminiUpstreamTools(raw json.RawMessage) []map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var tools []struct {
+		Type     string `json:"type"`
+		Function struct {
+			Name        string          `json:"name"`
+			Description string          `json:"description"`
+			Parameters  json.RawMessage `json:"parameters"`
+		} `json:"function"`
+	}
+	if json.Unmarshal(raw, &tools) != nil {
+		return nil
+	}
+	declarations := make([]map[string]any, 0, len(tools))
+	for _, t := range tools {
+		if t.Type != "function" || t.Function.Name == "" {
+			continue
+		}
+		declaration := map[string]any{"name": t.Function.Name}
+		if t.Function.Description != "" {
+			declaration["description"] = t.Function.Description
+		}
+		params, _ := toolObject(t.Function.Parameters)
+		if params == nil {
+			params = map[string]any{"type": "object", "properties": map[string]any{}}
+		}
+		declaration["parameters"] = params
+		declarations = append(declarations, declaration)
+	}
+	if len(declarations) == 0 {
+		return nil
+	}
+	return declarations
+}
+
+// geminiToolConfig 将 OpenAI tool_choice 映射为 Gemini toolConfig.functionCallingConfig
+func geminiToolConfig(raw json.RawMessage) map[string]any {
+	trimmed := trimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
+		return nil
+	}
+	mode := ""
+	var allowed []string
+	if trimmed[0] == '"' {
+		var kind string
+		if json.Unmarshal(trimmed, &kind) != nil {
+			return nil
+		}
+		mode = geminiFunctionCallingMode(kind)
+	} else {
+		var obj struct {
+			Type     string `json:"type"`
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		}
+		if json.Unmarshal(trimmed, &obj) != nil {
+			return nil
+		}
+		if obj.Type == "function" {
+			if obj.Function.Name == "" {
+				return nil
+			}
+			mode = "ANY"
+			allowed = []string{obj.Function.Name}
+		} else {
+			mode = geminiFunctionCallingMode(obj.Type)
+		}
+	}
+	if mode == "" {
+		return nil
+	}
+	config := map[string]any{"mode": mode}
+	if len(allowed) > 0 {
+		config["allowedFunctionNames"] = allowed
+	}
+	return map[string]any{"functionCallingConfig": config}
+}
+
+// geminiFunctionCallingMode OpenAI tool_choice 类型名 → Gemini functionCallingConfig.mode
+func geminiFunctionCallingMode(kind string) string {
+	switch kind {
+	case "auto":
+		return "AUTO"
+	case "required", "any":
+		return "ANY"
+	case "none":
+		return "NONE"
+	default:
+		return ""
+	}
+}
+
+// geminiToolCalls 将 Gemini 响应中的 functionCall part 转为 OpenAI tool_calls
+// Gemini 不返回调用 id，此处生成并在后续 tool 消息中按 id 回查函数名
+func geminiToolCalls(parts []geminiPart) []map[string]any {
+	calls := make([]map[string]any, 0, len(parts))
+	for _, p := range parts {
+		if p.FunctionCall == nil || p.FunctionCall.Name == "" {
+			continue
+		}
+		calls = append(calls, map[string]any{
+			"id":   toolUseID(""),
+			"type": "function",
+			"function": map[string]any{
+				"name":      p.FunctionCall.Name,
+				"arguments": compactToolArguments(p.FunctionCall.Args),
+			},
+		})
+	}
+	return calls
+}
+
+// streamToolCalls 将流式块中的 functionCall part 转为 OpenAI tool_calls 增量
+// 以 part 序号为键：首次出现下发 id/name/arguments，后续出现按已下发前缀补差
+func (a *geminiAdapter) streamToolCalls(parts []geminiPart) []map[string]any {
+	var out []map[string]any
+	for i, p := range parts {
+		if p.FunctionCall == nil || p.FunctionCall.Name == "" {
+			continue
+		}
+		if a.toolIndex == nil {
+			a.toolIndex = make(map[int]int)
+			a.toolArgs = make(map[int]string)
+		}
+		index, seen := a.toolIndex[i]
+		if !seen {
+			index = a.toolCount
+			a.toolCount++
+			a.toolIndex[i] = index
+			a.toolArgs[index] = string(p.FunctionCall.Args)
+			out = append(out, map[string]any{
+				"index": index,
+				"id":    toolUseID(""),
+				"type":  "function",
+				"function": map[string]any{
+					"name":      p.FunctionCall.Name,
+					"arguments": compactToolArguments(p.FunctionCall.Args),
+				},
+			})
+			continue
+		}
+		// 同一 part 的后续增量：Gemini 可能下发增量片段，也可能重发累计参数，统一按前缀补差
+		current := string(p.FunctionCall.Args)
+		previous := a.toolArgs[index]
+		if current == "" || current == previous {
+			continue
+		}
+		if strings.HasPrefix(current, previous) {
+			current = current[len(previous):]
+		}
+		a.toolArgs[index] = string(p.FunctionCall.Args)
+		out = append(out, map[string]any{
+			"index":    index,
+			"function": map[string]any{"arguments": current},
+		})
+	}
+	return out
+}
+
+// compactToolArguments 压缩函数参数 JSON；参数为增量片段等非法 JSON 时原样返回
+func compactToolArguments(raw []byte) string {
+	trimmed := trimSpace(raw)
+	if len(trimmed) == 0 {
+		return ""
+	}
+	var buf bytes.Buffer
+	if json.Compact(&buf, trimmed) != nil {
+		return string(trimmed)
+	}
+	return buf.String()
 }
 
 // mapGeminiFinishReason 将 Gemini finishReason 映射为 OpenAI finish_reason
