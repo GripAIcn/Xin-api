@@ -156,8 +156,10 @@ The frontend dev server runs on `http://localhost:5173` by default; CORS to the 
 | `CACHE_CHANNEL_EXPIRE` | `300s` | Channel cache expiration time |
 | `LOG_REQUEST_BODY` | `false` | Persist request bodies to `request_payloads` |
 | `LOG_RESPONSE_BODY` | `false` | Persist response bodies (streaming responses capped at 1 MiB) |
-| `PROXY_REQUEST_TIMEOUT` | `120s` | Upstream request timeout |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | Upstream first-byte (response header) timeout / non-streaming body read limit |
 | `PROXY_MAX_BODY_MB` | `10` | Max request body size (MB) |
+| `PROXY_STREAM_KEEPALIVE_INTERVAL` | `15s` | Downstream SSE idle keepalive interval (`0` disables) |
+| `PROXY_STREAM_IDLE_TIMEOUT` | `300s` | Upstream stream idle limit; stream is ended on timeout (`0` disables) |
 | `USD_CNY_RATE` | `7.2` | Initial USD→CNY settlement rate (written to `exchange_rates` only once) |
 | `NGINX_HTTP_PORT` | `80` | Nginx HTTP port (Docker Compose only) |
 | `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS port (Docker Compose only) |

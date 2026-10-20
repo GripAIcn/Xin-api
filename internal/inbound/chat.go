@@ -24,3 +24,8 @@ func (c *chatCodec) LocalError(bizCode int) (int, []byte) {
 func (c *chatCodec) UpstreamError(upstreamStatus int, upstreamBody []byte) (int, []byte) {
 	return upstreamStatus, upstreamBody
 }
+
+// KeepaliveEvent 空闲保活：SSE 注释行，客户端解析层直接忽略
+func (c *chatCodec) KeepaliveEvent() []byte {
+	return []byte(": ping\n\n")
+}

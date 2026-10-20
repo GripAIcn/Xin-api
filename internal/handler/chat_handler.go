@@ -539,10 +539,15 @@ func (h *ChatHandler) handle(c *gin.Context, protocol string, opts inbound.Norma
 		// Forward 不再向客户端写出错误响应；此处按入站协议编码后统一回写（已写出则跳过）
 		if !c.Writer.Written() {
 			var ue *service.UpstreamError
-			if errors.As(proxyErr, &ue) {
+			var te *service.ErrUpstreamTimeout
+			switch {
+			case errors.As(proxyErr, &ue):
 				status, errBody := codec.UpstreamError(ue.StatusCode, ue.Body)
 				c.Data(status, "application/json", errBody)
-			} else {
+			case errors.As(proxyErr, &te):
+				// 上游未按时返回数据：按本地超时错误编码（504 / 上游超时文案）
+				h.abortLocalError(c, codec, response.UpstreamTimeout)
+			default:
 				h.abortLocalError(c, codec, response.ServiceUnavailable)
 			}
 		}
@@ -628,6 +633,16 @@ func (h *ChatHandler) writeForwardErrorLog(
 		log.ErrorCode = strPtr(upstreamErrorCode(ue.Body, ue.StatusCode))
 		log.ErrorMessage = strPtr(msg)
 		log.StatusCode = i32Ptr(ue.StatusCode)
+	}
+
+	// 本地判定的上游超时：归因到 upstream/timeout，与渠道指标的 timeout_count 口径一致
+	var te *service.ErrUpstreamTimeout
+	if errors.As(proxyErr, &te) {
+		log.ErrorStage = strPtr(model.ErrorStageUpstream)
+		log.ErrorType = strPtr("timeout")
+		log.ErrorCode = strPtr("upstream_timeout")
+		log.ErrorMessage = strPtr(proxyErr.Error())
+		log.StatusCode = i32Ptr(response.MapToHTTPStatus(response.UpstreamTimeout))
 	}
 
 	var responseBody []byte

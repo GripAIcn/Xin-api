@@ -3,8 +3,11 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -17,7 +20,10 @@ import (
 
 // StreamProxy 上游请求与响应转换代理
 type StreamProxy struct {
-	client *http.Client
+	client         *http.Client
+	keepaliveInt   time.Duration // 下游 SSE 空闲保活间隔，0 表示禁用
+	idleTimeout    time.Duration // 流式上游静默上限（读空闲看门狗），0 表示禁用
+	requestTimeout time.Duration // 上游首字节（响应头）超时，同时作为非流式响应体读取的总超时
 }
 
 // ResponseEncoder 把适配器产出的 OpenAI Chat 响应（或 SSE 块）再编码为入站协议格式
@@ -25,6 +31,8 @@ type StreamProxy struct {
 type ResponseEncoder interface {
 	EncodeResponse(openAIResponse []byte) ([]byte, error)
 	EncodeStreamChunk(openAISSESChunk []byte) ([]byte, error)
+	// KeepaliveEvent 流式空闲保活事件（SSE 注释或协议原生 ping）；nil 表示该协议不发送
+	KeepaliveEvent() []byte
 }
 
 // ForwardResult 单次转发的上游信息快照
@@ -50,9 +58,31 @@ type ForwardResult struct {
 const maxCapturedResponseBytes = 1 << 20
 
 // NewStreamProxy 创建代理
-func NewStreamProxy(timeout time.Duration) *StreamProxy {
+// requestTimeout：上游首字节（响应头）超时，同时作为非流式响应体读取的总逾时
+// keepaliveInterval：下游 SSE 空闲保活间隔，0 表示禁用
+// idleTimeout：流式上游静默上限（读空闲看门狗），0 表示禁用
+func NewStreamProxy(requestTimeout, keepaliveInterval, idleTimeout time.Duration) *StreamProxy {
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		// 上游首字节超时：替代原先覆盖「建连→body 读完」整段的 Client.Timeout
+		ResponseHeaderTimeout: requestTimeout,
+	}
 	return &StreamProxy{
-		client: &http.Client{Timeout: timeout},
+		// Timeout 置 0：整段超时改由分层超时（拨号/TLS/首字节）+ 流式读空闲看门狗承担，
+		// 避免长推理等“持续有输出但总时长很长”的流被整段掐断
+		client:         &http.Client{Transport: transport},
+		keepaliveInt:   keepaliveInterval,
+		idleTimeout:    idleTimeout,
+		requestTimeout: requestTimeout,
 	}
 }
 
@@ -82,7 +112,13 @@ func (p *StreamProxy) Forward(
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return &ForwardResult{StatusCode: http.StatusBadGateway, LatencyMs: time.Since(start).Milliseconds()}, err
+		latency := time.Since(start).Milliseconds()
+		// 上游首字节（响应头）超时归入超时错误，便于上层映射 504/超时统计
+		if isTimeoutErr(err) {
+			return &ForwardResult{StatusCode: http.StatusGatewayTimeout, LatencyMs: latency},
+				&ErrUpstreamTimeout{Stage: "header", Err: err}
+		}
+		return &ForwardResult{StatusCode: http.StatusBadGateway, LatencyMs: latency}, err
 	}
 	defer resp.Body.Close()
 
@@ -106,13 +142,24 @@ func (p *StreamProxy) Forward(
 	}
 
 	// 非流式：读取完整响应并转换
+	// Client 已关闭整段超时，此处按 requestTimeout 给响应体读取单独兜底，避免上游只回 header 时挂死
+	readCtx, cancelRead := context.WithTimeout(c.Request.Context(), p.requestTimeout)
+	defer cancelRead()
+	stopTimeout := context.AfterFunc(readCtx, func() { _ = resp.Body.Close() })
+	defer stopTimeout()
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return &ForwardResult{
+		result := &ForwardResult{
 			StatusCode:    http.StatusOK,
 			UpstreamReqID: extractUpstreamReqID(resp),
 			LatencyMs:     time.Since(start).Milliseconds(),
-		}, err
+		}
+		if readCtx.Err() != nil {
+			result.StatusCode = http.StatusGatewayTimeout
+			return result, &ErrUpstreamTimeout{Stage: "body", Err: err}
+		}
+		return result, err
 	}
 	converted, err := adpt.ConvertResponse(respBody, externalModel)
 	if err != nil {
@@ -146,6 +193,7 @@ func (p *StreamProxy) Forward(
 }
 
 // forwardStream 逐 SSE 事件读取上游流，经适配器转换后写回客户端，并采集转发信息
+// 上游读取放在独立 goroutine，主循环 select 三路：上游事件 / 下游保活定时器 / 上游静默看门狗
 func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt adapter.ProviderAdapter, externalModel string, encoder ResponseEncoder, captureResponseBody bool) (*ForwardResult, error) {
 	start := time.Now()
 	// 先设置 SSE 响应头，再写入状态码，避免头被提前提交导致 Content-Type 丢失
@@ -161,19 +209,91 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 	}
 
 	reader := bufio.NewReader(resp.Body)
+	// stop 通知读协程退出：客户端断开 / 写出失败 / 静默超时时不再等上游。
+	// Forward 返回时会关闭 resp.Body，正在阻塞的读取随之结束
+	stop := make(chan struct{})
+	defer close(stop)
+
+	type readEvent struct {
+		event []byte
+		err   error
+	}
+	events := make(chan readEvent, 8)
+	go func() {
+		defer close(events)
+		for {
+			event, err := readSSEEvent(reader)
+			select {
+			case events <- readEvent{event: event, err: err}:
+			case <-stop:
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	var keepalive []byte
+	if encoder != nil {
+		keepalive = encoder.KeepaliveEvent()
+	}
+
+	// 下游保活定时器：仅在空闲超过间隔时补发一个无语义事件，刷新反代空闲读超时
+	var tickCh <-chan time.Time
+	if p.keepaliveInt > 0 && len(keepalive) > 0 {
+		ticker := time.NewTicker(p.keepaliveInt)
+		defer ticker.Stop()
+		tickCh = ticker.C
+	}
+
+	// 上游静默看门狗：每收到一个上游事件即重置，替代已关闭的整段超时
+	var idleTimer *time.Timer
+	var idleCh <-chan time.Time
+	if p.idleTimeout > 0 {
+		idleTimer = time.NewTimer(p.idleTimeout)
+		defer idleTimer.Stop()
+		idleCh = idleTimer.C
+	}
+
 	var firstChunkWritten bool
 	var writeAborted bool
 	var readFailed bool
+	var idleTimeoutHit bool
 	var captured bytes.Buffer
+	lastWriteAt := start
 
 	c.Stream(func(w io.Writer) bool {
-		event, readErr := readSSEEvent(reader)
-		if len(event) > 0 {
-			converted, convErr := adpt.ConvertStreamChunk(event, externalModel)
+		var ev readEvent
+		select {
+		case r, ok := <-events:
+			if !ok {
+				return false // 上游流已结束且事件已全部下发
+			}
+			resetTimer(idleTimer, p.idleTimeout)
+			ev = r
+		case <-tickCh:
+			if time.Since(lastWriteAt) < p.keepaliveInt {
+				return true // 仍有数据在流动，无需补保活
+			}
+			if _, writeErr := w.Write(keepalive); writeErr != nil {
+				writeAborted = true
+				return false
+			}
+			lastWriteAt = time.Now()
+			return true
+		case <-idleCh:
+			idleTimeoutHit = true
+			return false
+		}
+
+		if len(ev.event) > 0 {
+			converted, convErr := adpt.ConvertStreamChunk(ev.event, externalModel)
 			if convErr != nil {
 				return false
 			}
-			if len(converted) > 0 {
+			// 仅语义块（携带 data 负载）参与写出/TTFT/采集：上游注释型保活既不下发也不污染指标
+			if len(converted) > 0 && len(sseDataPayload(converted)) > 0 {
 				// 解析转换后的 OpenAI chunk 元信息（最后一次非空值生效），必须编码前完成
 				result.mergeMeta(parseOpenAIMeta(sseDataPayload(converted)), true)
 				// 写回客户端前按入站协议再编码
@@ -188,7 +308,7 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 						firstChunkWritten = true
 						result.TTFTMs = time.Since(start).Milliseconds()
 					}
-					// 按上限累积写回客户端的响应原文（用于 request_payloads）
+					// 按上限累积写回客户端的响应原文（用于 request_payloads，保活字节不落库）
 					if captureResponseBody && captured.Len() < maxCapturedResponseBytes {
 						remaining := maxCapturedResponseBytes - captured.Len()
 						if len(mout) <= remaining {
@@ -201,13 +321,14 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 						writeAborted = true
 						return false
 					}
+					lastWriteAt = time.Now()
 				}
 			}
 		}
-		if readErr != nil && readErr != io.EOF {
+		if ev.err != nil && ev.err != io.EOF {
 			readFailed = true
 		}
-		return readErr == nil
+		return ev.err == nil
 	})
 
 	result.LatencyMs = time.Since(start).Milliseconds()
@@ -219,12 +340,43 @@ func (p *StreamProxy) forwardStream(c *gin.Context, resp *http.Response, adpt ad
 	case c.Request.Context().Err() != nil, writeAborted:
 		result.IsCancelled = true
 		result.CancelledBy = "client"
-	case readFailed:
+	case readFailed, idleTimeoutHit:
 		result.IsCancelled = true
 		result.CancelledBy = "upstream"
 	}
 
+	// 上游静默超时：返回超时错误供上层做超时归因（响应已写出时上层不会再回写错误体）
+	if idleTimeoutHit {
+		return result, &ErrUpstreamTimeout{Stage: "stream_idle", Err: context.DeadlineExceeded}
+	}
+
 	return result, nil
+}
+
+// resetTimer 安全重置计时器：先排空可能已触发的信号，避免 Reset 后立即误触发
+func resetTimer(t *time.Timer, d time.Duration) {
+	if t == nil || d <= 0 {
+		return
+	}
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
+	t.Reset(d)
+}
+
+// isTimeoutErr 判断错误是否由超时引起（响应头超时 / context 超时 / 网络超时）
+func isTimeoutErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
 }
 
 // readSSEEvent 读取一个完整的 SSE 事件（以空行分隔）
@@ -360,3 +512,19 @@ type UpstreamError struct {
 func (e *UpstreamError) Error() string {
 	return http.StatusText(e.StatusCode)
 }
+
+// ErrUpstreamTimeout 网关本地判定的上游超时（上游未按约定时限返回数据）
+// 与 UpstreamError 区分：它不是上游返回的状态码，而是本地的超时归因
+type ErrUpstreamTimeout struct {
+	Stage string // header（响应头超时）/ body（非流式读取超时）/ stream_idle（流式静默超时）
+	Err   error
+}
+
+func (e *ErrUpstreamTimeout) Error() string {
+	if e.Err == nil {
+		return "upstream timeout (" + e.Stage + ")"
+	}
+	return "upstream timeout (" + e.Stage + "): " + e.Err.Error()
+}
+
+func (e *ErrUpstreamTimeout) Unwrap() error { return e.Err }

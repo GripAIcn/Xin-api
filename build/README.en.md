@@ -129,8 +129,10 @@ See [.env.example](../.env.example) for the full list. Common entries:
 | `JWT_SECRET` / `JWT_EXPIRE` | built-in default / `24h` | Admin API signing key and lifetime |
 | `CB_FAILURE_THRESHOLD` / `CB_RECOVERY_INTERVAL` | `5` / `60s` | Circuit breaker threshold and probe interval |
 | `CACHE_CHANNEL_EXPIRE` | `300s` | Channel cache pool TTL |
-| `PROXY_REQUEST_TIMEOUT` | `120s` | Upstream request timeout |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | Upstream first-byte (response header) timeout / non-streaming body read limit |
 | `PROXY_MAX_BODY_MB` | `10` | Request body limit (Nginx allows 50 MB) |
+| `PROXY_STREAM_KEEPALIVE_INTERVAL` | `15s` | Downstream SSE idle keepalive interval (`0` disables) |
+| `PROXY_STREAM_IDLE_TIMEOUT` | `300s` | Upstream stream idle limit; stream is ended on timeout (`0` disables) |
 | `LOG_REQUEST_BODY` / `LOG_RESPONSE_BODY` | `false` | Persist raw request/response bodies |
 | `USD_CNY_RATE` | `7.2` | Settlement rate for USD-priced models |
 

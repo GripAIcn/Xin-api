@@ -156,8 +156,10 @@ npm run dev
 | `CACHE_CHANNEL_EXPIRE` | `300s` | 渠道缓存过期时间 |
 | `LOG_REQUEST_BODY` | `false` | 是否落库请求原文到 `request_payloads` |
 | `LOG_RESPONSE_BODY` | `false` | 是否落库响应原文（流式响应最多保留 1 MiB） |
-| `PROXY_REQUEST_TIMEOUT` | `120s` | 上游请求超时 |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | 上游首字节（响应头）超时 / 非流式读取总超时 |
 | `PROXY_MAX_BODY_MB` | `10` | 最大请求体大小（MB） |
+| `PROXY_STREAM_KEEPALIVE_INTERVAL` | `15s` | 下游 SSE 空闲保活间隔（`0` 禁用） |
+| `PROXY_STREAM_IDLE_TIMEOUT` | `300s` | 流式上游静默上限，超时主动结束流（`0` 禁用） |
 | `USD_CNY_RATE` | `7.2` | USD→CNY 初始结算汇率（仅首次写入 `exchange_rates`） |
 | `NGINX_HTTP_PORT` | `80` | Nginx HTTP 端口（仅 Compose 使用） |
 | `NGINX_HTTPS_PORT` | `443` | Nginx HTTPS 端口（仅 Compose 使用） |

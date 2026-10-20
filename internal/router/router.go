@@ -35,7 +35,7 @@ func SetupRouter(r *gin.Engine, db *gorm.DB, cfg config.Config,
 	exchangeRateHandler := handler.NewExchangeRateHandler(exchangeRateRepo)
 	channelMetricHandler := handler.NewChannelMetricHandler(postgresql.NewChannelMetricRepo(db), metricAggregator)
 	channelRouter := routing.NewWeightedRouter(service.NewWeightedRRBalancer(), breaker)
-	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout)
+	streamProxy := service.NewStreamProxy(cfg.Proxy.RequestTimeout, cfg.Proxy.StreamKeepaliveInterval, cfg.Proxy.StreamIdleTimeout)
 
 	// 2. 创建 v1 版本的统一根路由组
 	v1 := r.Group("/v1")

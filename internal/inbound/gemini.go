@@ -153,6 +153,11 @@ func (c *geminiCodec) UpstreamError(upstreamStatus int, upstreamBody []byte) (in
 	return status, geminiErrorBody(status, msg)
 }
 
+// KeepaliveEvent 空闲保活：SSE 注释行，Gemini SSE 客户端直接忽略
+func (c *geminiCodec) KeepaliveEvent() []byte {
+	return []byte(": ping\n\n")
+}
+
 // geminiContent Gemini contents 单条消息
 type geminiContent struct {
 	Role  string       `json:"role"`

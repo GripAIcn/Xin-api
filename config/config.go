@@ -20,8 +20,10 @@ type CircuitBreakerConfig struct {
 
 // ProxyConfig 上游代理配置
 type ProxyConfig struct {
-	RequestTimeout time.Duration // 上游请求超时
-	MaxBodyMB      int           // 最大请求体 MB
+	RequestTimeout          time.Duration // 上游首字节（响应头）超时 / 非流式读取总超时
+	MaxBodyMB               int           // 最大请求体 MB
+	StreamKeepaliveInterval time.Duration // 下游 SSE 空闲保活间隔，0 表示禁用
+	StreamIdleTimeout       time.Duration // 流式上游静默上限（读空闲看门狗），0 表示禁用
 }
 
 // LogConfig 日志落库开关（请求/响应原文默认关闭，避免历史数据膨胀）
@@ -115,8 +117,10 @@ func Load() *Config {
 			RecoveryInterval: getEnvToTimeDuration("CB_RECOVERY_INTERVAL", 60*time.Second),
 		},
 		Proxy: ProxyConfig{
-			RequestTimeout: getEnvToTimeDuration("PROXY_REQUEST_TIMEOUT", 120*time.Second),
-			MaxBodyMB:      getEnvToInt("PROXY_MAX_BODY_MB", 10),
+			RequestTimeout:          getEnvToTimeDuration("PROXY_REQUEST_TIMEOUT", 120*time.Second),
+			MaxBodyMB:               getEnvToInt("PROXY_MAX_BODY_MB", 10),
+			StreamKeepaliveInterval: getEnvToTimeDuration("PROXY_STREAM_KEEPALIVE_INTERVAL", 15*time.Second),
+			StreamIdleTimeout:       getEnvToTimeDuration("PROXY_STREAM_IDLE_TIMEOUT", 300*time.Second),
 		},
 		Log: LogConfig{
 			RequestBody:  getEnvToBool("LOG_REQUEST_BODY", false),

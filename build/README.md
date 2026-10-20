@@ -129,8 +129,10 @@ docker compose down        # 停止并删除容器，保留数据卷
 | `JWT_SECRET` / `JWT_EXPIRE` | 内置默认 / `24h` | Admin API 签名密钥与有效期 |
 | `CB_FAILURE_THRESHOLD` / `CB_RECOVERY_INTERVAL` | `5` / `60s` | 熔断阈值与恢复探测间隔 |
 | `CACHE_CHANNEL_EXPIRE` | `300s` | 渠道缓存池过期时间 |
-| `PROXY_REQUEST_TIMEOUT` | `120s` | 上游请求超时 |
+| `PROXY_REQUEST_TIMEOUT` | `120s` | 上游首字节（响应头）超时 / 非流式读取总超时 |
 | `PROXY_MAX_BODY_MB` | `10` | 请求体大小上限（Nginx 侧为 50 MB） |
+| `PROXY_STREAM_KEEPALIVE_INTERVAL` | `15s` | 下游 SSE 空闲保活间隔（`0` 禁用） |
+| `PROXY_STREAM_IDLE_TIMEOUT` | `300s` | 流式上游静默上限，超时主动结束流（`0` 禁用） |
 | `LOG_REQUEST_BODY` / `LOG_RESPONSE_BODY` | `false` | 是否落库请求/响应原文 |
 | `USD_CNY_RATE` | `7.2` | 美元计价模型的结算汇率 |
 

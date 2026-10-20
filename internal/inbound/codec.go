@@ -38,6 +38,8 @@ type Codec interface {
 	EncodeResponse(openAIResponse []byte) ([]byte, error)
 	// EncodeStreamChunk 将单个 OpenAI SSE 事件块编码为入站协议 SSE 事件块；nil 表示不写出
 	EncodeStreamChunk(openAISSESChunk []byte) ([]byte, error)
+	// KeepaliveEvent 空闲保活事件（SSE 注释或协议原生 ping）；nil 表示该协议不发送
+	KeepaliveEvent() []byte
 	// LocalError 按入站协议编码网关本地错误（返回 HTTP 状态码与响应体）
 	LocalError(bizCode int) (status int, body []byte)
 	// UpstreamError 按入站协议编码上游错误（传入上游原始状态码与响应体）

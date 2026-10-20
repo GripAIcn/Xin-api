@@ -891,6 +891,11 @@ func (c *responsesCodec) UpstreamError(upstreamStatus int, upstreamBody []byte) 
 	return upstreamStatus, upstreamBody
 }
 
+// KeepaliveEvent 空闲保活：SSE 注释行，Responses 客户端解析层直接忽略
+func (c *responsesCodec) KeepaliveEvent() []byte {
+	return []byte(": ping\n\n")
+}
+
 // responsesUsage OpenAI usage → Responses usage 字段名
 func responsesUsage(u *chatUsage) map[string]any {
 	var cached, reasoning int64

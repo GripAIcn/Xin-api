@@ -293,6 +293,11 @@ func (c *messagesCodec) UpstreamError(upstreamStatus int, upstreamBody []byte) (
 	return status, response.AnthropicErrorBody(status, msg)
 }
 
+// KeepaliveEvent 空闲保活：Anthropic 原生 ping 事件（SDK 识别且忽略）
+func (c *messagesCodec) KeepaliveEvent() []byte {
+	return []byte("event: ping\ndata: {\"type\": \"ping\"}\n\n")
+}
+
 // messageStart 事件负载
 func (c *messagesCodec) messageStart() []byte {
 	b, _ := jsonx.Marshal(map[string]any{
