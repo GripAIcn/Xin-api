@@ -338,3 +338,181 @@ func TestAnthropicConvertStreamToolUse(t *testing.T) {
 		t.Fatalf("message_stop chunk = %s", collected[9])
 	}
 }
+
+// TestAnthropicRawPassthrough 验证 Messages 入站按原始请求体透传：
+// cache_control / metadata 等协议字段不丢失，仅改写 model 并补充鉴权头
+func TestAnthropicRawPassthrough(t *testing.T) {
+	body := `{
+		"model": "claude-sonnet-4",
+		"max_tokens": 1024,
+		"system": [
+			{"type": "text", "text": "sys1"},
+			{"type": "text", "text": "sys2", "cache_control": {"type": "ephemeral"}}
+		],
+		"metadata": {"user_id": "user-1"},
+		"tools": [{
+			"name": "read_file",
+			"description": "读取文件",
+			"input_schema": {"type": "object", "properties": {}},
+			"cache_control": {"type": "ephemeral"}
+		}],
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "hi", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}`
+
+	ad := &anthropicAdapter{}
+	if !ad.SupportsRawPassthrough("messages") {
+		t.Fatal("messages 入站应支持原样透传")
+	}
+	if ad.SupportsRawPassthrough("chat") {
+		t.Fatal("chat 入站不应走原样透传")
+	}
+
+	req, err := ad.BuildUpstreamRequestFromRaw([]byte(body), "claude-upstream", "key",
+		map[string]string{"anthropic-beta": "prompt-caching-2024-07-31"})
+	if err != nil {
+		t.Fatalf("BuildUpstreamRequestFromRaw: %v", err)
+	}
+
+	type cacheControl struct {
+		Type string `json:"type"`
+	}
+	var out struct {
+		Model  string `json:"model"`
+		System []struct {
+			CacheControl *cacheControl `json:"cache_control"`
+		} `json:"system"`
+		Metadata struct {
+			UserID string `json:"user_id"`
+		} `json:"metadata"`
+		Tools []struct {
+			CacheControl *cacheControl `json:"cache_control"`
+		} `json:"tools"`
+		Messages []struct {
+			Content []struct {
+				CacheControl *cacheControl `json:"cache_control"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(req.Body, &out); err != nil {
+		t.Fatalf("unmarshal upstream body: %v", err)
+	}
+	if out.Model != "claude-upstream" {
+		t.Fatalf("model = %q, want %q", out.Model, "claude-upstream")
+	}
+	if len(out.System) != 2 || out.System[1].CacheControl == nil {
+		t.Fatalf("system cache_control 丢失: %+v", out.System)
+	}
+	if out.Metadata.UserID != "user-1" {
+		t.Fatalf("metadata 丢失: %+v", out.Metadata)
+	}
+	if len(out.Tools) != 1 || out.Tools[0].CacheControl == nil {
+		t.Fatalf("tools cache_control 丢失: %+v", out.Tools)
+	}
+	if len(out.Messages) != 1 || len(out.Messages[0].Content) != 1 ||
+		out.Messages[0].Content[0].CacheControl == nil {
+		t.Fatalf("messages cache_control 丢失: %+v", out.Messages)
+	}
+	if req.Headers["x-api-key"] != "key" || req.Headers["anthropic-version"] != "2023-06-01" {
+		t.Fatalf("鉴权头异常: %+v", req.Headers)
+	}
+	if req.Headers["anthropic-beta"] != "prompt-caching-2024-07-31" {
+		t.Fatalf("anthropic-beta 未沿用: %+v", req.Headers)
+	}
+}
+
+// TestAnthropicConvertResponseCacheUsage 验证缓存读写字段映射为 OpenAI usage：
+// prompt_tokens 为总输入（含缓存），cached_tokens / cache_creation_tokens 进入明细
+func TestAnthropicConvertResponseCacheUsage(t *testing.T) {
+	body := `{
+		"id": "msg_1",
+		"model": "claude-3-5-sonnet",
+		"content": [{"type": "text", "text": "hi"}],
+		"stop_reason": "end_turn",
+		"usage": {
+			"input_tokens": 10,
+			"output_tokens": 5,
+			"cache_read_input_tokens": 100,
+			"cache_creation_input_tokens": 50
+		}
+	}`
+
+	ad := NewAnthropicAdapter()
+	out, err := ad.ConvertResponse([]byte(body), "claude-3-5-sonnet")
+	if err != nil {
+		t.Fatalf("ConvertResponse: %v", err)
+	}
+
+	var got struct {
+		Usage struct {
+			PromptTokens        int64 `json:"prompt_tokens"`
+			CompletionTokens    int64 `json:"completion_tokens"`
+			TotalTokens         int64 `json:"total_tokens"`
+			PromptTokensDetails *struct {
+				CachedTokens        int64 `json:"cached_tokens"`
+				CacheCreationTokens int64 `json:"cache_creation_tokens"`
+			} `json:"prompt_tokens_details"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if got.Usage.PromptTokens != 160 || got.Usage.CompletionTokens != 5 || got.Usage.TotalTokens != 165 {
+		t.Fatalf("usage = %+v", got.Usage)
+	}
+	if got.Usage.PromptTokensDetails == nil ||
+		got.Usage.PromptTokensDetails.CachedTokens != 100 ||
+		got.Usage.PromptTokensDetails.CacheCreationTokens != 50 {
+		t.Fatalf("prompt_tokens_details = %+v", got.Usage.PromptTokensDetails)
+	}
+}
+
+// TestAnthropicConvertStreamUsage 验证流式 usage 跨事件累积：
+// message_start 给输入侧（含缓存读写），message_delta 给输出侧，最终独立 usage 块完整下发
+func TestAnthropicConvertStreamUsage(t *testing.T) {
+	ad := NewAnthropicAdapter()
+	events := []string{
+		`{"type":"message_start","message":{"id":"msg_1","usage":{"input_tokens":10,"output_tokens":1,"cache_creation_input_tokens":50,"cache_read_input_tokens":100}}}`,
+		`{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"hi"}}`,
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}`,
+		`{"type":"message_stop"}`,
+	}
+
+	var chunks []string
+	for _, ev := range events {
+		out, err := ad.ConvertStreamChunk([]byte("event: x\ndata: "+ev+"\n\n"), "claude-3-5-sonnet")
+		if err != nil {
+			t.Fatalf("ConvertStreamChunk: %v", err)
+		}
+		for _, block := range strings.Split(string(out), "\n\n") {
+			if strings.TrimSpace(block) != "" {
+				chunks = append(chunks, block)
+			}
+		}
+	}
+
+	// message_start → role 块（带输入侧 usage）+ text 增量 + 结束块 + usage 块 + [DONE]
+	if len(chunks) != 5 {
+		t.Fatalf("chunks = %d, want 5; chunks=%v", len(chunks), chunks)
+	}
+	if !strings.Contains(chunks[0], `"prompt_tokens":160`) ||
+		!strings.Contains(chunks[0], `"cached_tokens":100`) ||
+		!strings.Contains(chunks[0], `"cache_creation_tokens":50`) {
+		t.Fatalf("message_start chunk usage = %s", chunks[0])
+	}
+	if !strings.Contains(chunks[2], `"finish_reason":"stop"`) {
+		t.Fatalf("message_delta chunk = %s", chunks[2])
+	}
+	// usage 块 choices 为空，携带累积后的完整 usage
+	if !strings.Contains(chunks[3], `"choices":[]`) ||
+		!strings.Contains(chunks[3], `"prompt_tokens":160`) ||
+		!strings.Contains(chunks[3], `"completion_tokens":5`) {
+		t.Fatalf("usage chunk = %s", chunks[3])
+	}
+	if !strings.Contains(chunks[4], "[DONE]") {
+		t.Fatalf("final chunk = %s", chunks[4])
+	}
+}

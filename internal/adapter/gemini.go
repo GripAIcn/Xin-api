@@ -210,11 +210,7 @@ func (a *geminiAdapter) ConvertResponse(body []byte, externalModel string) ([]by
 				"finish_reason": finishReason,
 			},
 		},
-		"usage": map[string]any{
-			"prompt_tokens":     resp.UsageMetadata.PromptTokenCount,
-			"completion_tokens": resp.UsageMetadata.CandidatesTokenCount,
-			"total_tokens":      resp.UsageMetadata.TotalTokenCount,
-		},
+		"usage": geminiUsage(resp.UsageMetadata),
 	}
 
 	return jsonx.Marshal(out)
@@ -268,6 +264,10 @@ func (a *geminiAdapter) ConvertStreamChunk(chunk []byte, externalModel string) (
 				"finish_reason": finishReason,
 			},
 		},
+	}
+	// usageMetadata 通常只出现在流末尾（累计值），有值时随块下发供计费采集
+	if u := resp.UsageMetadata; u.PromptTokenCount > 0 || u.CandidatesTokenCount > 0 || u.TotalTokenCount > 0 {
+		out["usage"] = geminiUsage(u)
 	}
 
 	data, err := jsonx.Marshal(out)
@@ -337,15 +337,33 @@ func (c *geminiCandidate) Text() string {
 	return b.String()
 }
 
+// geminiUsageMetadata Gemini 响应/流式事件中的 usageMetadata
+type geminiUsageMetadata struct {
+	PromptTokenCount        int `json:"promptTokenCount"`
+	CandidatesTokenCount    int `json:"candidatesTokenCount"`
+	TotalTokenCount         int `json:"totalTokenCount"`
+	CachedContentTokenCount int `json:"cachedContentTokenCount"`
+}
+
+// geminiUsage Gemini usageMetadata → OpenAI usage：
+// promptTokenCount 已含缓存命中，cachedContentTokenCount 作为 cached_tokens 明细
+func geminiUsage(m geminiUsageMetadata) map[string]any {
+	usage := map[string]any{
+		"prompt_tokens":     m.PromptTokenCount,
+		"completion_tokens": m.CandidatesTokenCount,
+		"total_tokens":      m.TotalTokenCount,
+	}
+	if m.CachedContentTokenCount > 0 {
+		usage["prompt_tokens_details"] = map[string]any{"cached_tokens": m.CachedContentTokenCount}
+	}
+	return usage
+}
+
 // geminiResponse Gemini generateContent 响应（流式事件块复用同一结构）
 type geminiResponse struct {
-	Candidates    []geminiCandidate `json:"candidates"`
-	UsageMetadata struct {
-		PromptTokenCount     int `json:"promptTokenCount"`
-		CandidatesTokenCount int `json:"candidatesTokenCount"`
-		TotalTokenCount      int `json:"totalTokenCount"`
-	} `json:"usageMetadata"`
-	ModelVersion string `json:"modelVersion"`
+	Candidates    []geminiCandidate   `json:"candidates"`
+	UsageMetadata geminiUsageMetadata `json:"usageMetadata"`
+	ModelVersion  string              `json:"modelVersion"`
 }
 
 // geminiParts 将 OpenAI message.content 转为 Gemini parts：

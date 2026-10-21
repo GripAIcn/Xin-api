@@ -426,7 +426,8 @@ type openaiUsage struct {
 	PromptTokens        int64 `json:"prompt_tokens"`
 	CompletionTokens    int64 `json:"completion_tokens"`
 	PromptTokensDetails *struct {
-		CachedTokens int64 `json:"cached_tokens"`
+		CachedTokens        int64 `json:"cached_tokens"`
+		CacheCreationTokens int64 `json:"cache_creation_tokens"`
 	} `json:"prompt_tokens_details"`
 	CompletionTokensDetails *struct {
 		ReasoningTokens int64 `json:"reasoning_tokens"`
@@ -468,6 +469,7 @@ func (r *ForwardResult) mergeMeta(meta *openaiMeta, overrideID bool) {
 		r.OutputTokens = meta.Usage.CompletionTokens
 		if meta.Usage.PromptTokensDetails != nil {
 			r.CachedInputTokens = meta.Usage.PromptTokensDetails.CachedTokens
+			r.CacheCreationTokens = meta.Usage.PromptTokensDetails.CacheCreationTokens
 		}
 		if meta.Usage.CompletionTokensDetails != nil {
 			r.ReasoningTokens = meta.Usage.CompletionTokensDetails.ReasoningTokens

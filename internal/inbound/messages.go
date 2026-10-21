@@ -500,6 +500,8 @@ func (c *messagesCodec) EncodeStreamChunk(chunk []byte) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
+	// usage 先于 message_start 合并：首块可能已携带输入侧用量（含缓存读写）
+	c.usage = mergeChatUsage(c.usage, ch.Usage)
 	if !c.started {
 		if ch.Model != "" {
 			c.model = ch.Model
@@ -522,9 +524,6 @@ func (c *messagesCodec) EncodeStreamChunk(chunk []byte) ([]byte, error) {
 		if fr := choice.FinishReason; fr != nil && *fr != "" {
 			c.stopReason = openAIFinishReasonToAnthropic(*fr)
 		}
-	}
-	if ch.Usage != nil {
-		c.usage = ch.Usage
 	}
 	if buf.Len() == 0 {
 		return nil, nil
@@ -623,7 +622,7 @@ func (c *messagesCodec) messageStart() []byte {
 			"content":       []any{},
 			"stop_reason":   nil,
 			"stop_sequence": nil,
-			"usage":         map[string]any{"input_tokens": 0, "output_tokens": 0},
+			"usage":         anthropicUsage(c.usage),
 		},
 	})
 	return sseEvent("message_start", b)
@@ -673,14 +672,31 @@ func (c *messagesCodec) messageDelta() []byte {
 }
 
 // anthropicUsage OpenAI usage → Anthropic usage 字段名
+// Anthropic 的 input_tokens 不含缓存读写，故需从总输入中扣除；缓存读写单独上报
 func anthropicUsage(u *chatUsage) map[string]any {
 	if u == nil {
 		return map[string]any{"input_tokens": 0, "output_tokens": 0}
 	}
-	return map[string]any{
-		"input_tokens":  u.PromptTokens,
+	var cached, creation int64
+	if u.PromptTokensDetails != nil {
+		cached = u.PromptTokensDetails.CachedTokens
+		creation = u.PromptTokensDetails.CacheCreationTokens
+	}
+	input := u.PromptTokens - cached - creation
+	if input < 0 {
+		input = 0
+	}
+	out := map[string]any{
+		"input_tokens":  input,
 		"output_tokens": u.CompletionTokens,
 	}
+	if cached > 0 {
+		out["cache_read_input_tokens"] = cached
+	}
+	if creation > 0 {
+		out["cache_creation_input_tokens"] = creation
+	}
+	return out
 }
 
 // openAIFinishReasonToAnthropic OpenAI finish_reason → Anthropic stop_reason

@@ -113,6 +113,23 @@ func shouldRetry(res *service.ForwardResult, err error) bool {
 	return true
 }
 
+// clientProtocolHeaders 协议同构透传时需原样带给上游的客户端请求头
+var clientProtocolHeaders = []string{"anthropic-beta", "anthropic-version"}
+
+// collectClientProtocolHeaders 采集客户端协议级请求头，空值不下发
+func collectClientProtocolHeaders(src http.Header) map[string]string {
+	var out map[string]string
+	for _, k := range clientProtocolHeaders {
+		if v := src.Get(k); v != "" {
+			if out == nil {
+				out = make(map[string]string, len(clientProtocolHeaders))
+			}
+			out[k] = v
+		}
+	}
+	return out
+}
+
 // gatewayNodePtr 网关实例标识；未配置时返回 nil，避免写入空串
 func (h *ChatHandler) gatewayNodePtr() *string {
 	if h.gatewayNode == "" {
@@ -442,6 +459,8 @@ func (h *ChatHandler) handle(c *gin.Context, protocol string, opts inbound.Norma
 	}
 
 	// 4. 选路（priority 优先，同级加权轮询）+ 跨渠道重试
+	// 客户端协议级请求头（如 anthropic-beta）：仅在原样透传入站请求体时带给上游
+	clientHeaders := collectClientProtocolHeaders(c.Request.Header)
 	excluded := make([]int64, 0, 2)
 	retryChannels := make([]int64, 0, 2)
 	var (
@@ -490,7 +509,12 @@ func (h *ChatHandler) handle(c *gin.Context, protocol string, opts inbound.Norma
 		upstreamModel = h.getUpstreamModelWithCache(ctx, selected.ID, modelName)
 
 		// 7. 由适配器构造上游请求（含协议转换与鉴权头）
-		upReq, err = adpt.BuildUpstreamRequest(body, upstreamModel, selected.APIKey)
+		// 入站与上游协议同构时原样透传，避免归一化丢失 cache_control 等协议字段
+		if rawBuilder, ok := adpt.(adapter.RawRequestBuilder); ok && rawBuilder.SupportsRawPassthrough(codec.Name()) {
+			upReq, err = rawBuilder.BuildUpstreamRequestFromRaw(rawBody, upstreamModel, selected.APIKey, clientHeaders)
+		} else {
+			upReq, err = adpt.BuildUpstreamRequest(body, upstreamModel, selected.APIKey)
+		}
 		if err != nil {
 			logger.Error(ctx, "build upstream request failed: %v", err)
 			h.writeErrorLog(ctx, requestID, modelName, codec.Name(), userID, apiKeyID, clientIP, isStream, startedAt,

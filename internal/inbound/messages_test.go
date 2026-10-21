@@ -260,6 +260,57 @@ func TestMessagesEncodeStream(t *testing.T) {
 	}
 }
 
+// TestMessagesEncodeStreamCacheUsage 验证流式缓存用量：
+// message_start 输出扣除缓存后的 input_tokens 与缓存读写字段，message_delta 合并输出侧后保持完整
+func TestMessagesEncodeStreamCacheUsage(t *testing.T) {
+	blocks := []string{
+		`data: {"id":"chatcmpl-abc","model":"claude-3-5-sonnet","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"usage":{"prompt_tokens":160,"completion_tokens":1,"total_tokens":161,"prompt_tokens_details":{"cached_tokens":100,"cache_creation_tokens":50}}}` + "\n\n",
+		`data: {"choices":[{"index":0,"delta":{"content":"hi"}}]}` + "\n\n",
+		`data: {"choices":[],"usage":{"prompt_tokens":160,"completion_tokens":5,"total_tokens":165}}` + "\n\n",
+		`data: [DONE]` + "\n\n",
+	}
+	c := &messagesCodec{}
+	var sb strings.Builder
+	for _, blk := range blocks {
+		out, err := c.EncodeStreamChunk([]byte(blk))
+		if err != nil {
+			t.Fatalf("EncodeStreamChunk error: %v", err)
+		}
+		sb.Write(out)
+	}
+
+	events := parseMessagesSSE(t, sb.String())
+	var start, delta map[string]any
+	for _, ev := range events {
+		switch ev.Event {
+		case "message_start":
+			if msg, ok := ev.Data["message"].(map[string]any); ok {
+				start, _ = msg["usage"].(map[string]any)
+			}
+		case "message_delta":
+			delta, _ = ev.Data["usage"].(map[string]any)
+		}
+	}
+
+	if start == nil {
+		t.Fatal("message_start 缺少 usage")
+	}
+	if start["input_tokens"] != float64(10) || start["output_tokens"] != float64(1) ||
+		start["cache_read_input_tokens"] != float64(100) ||
+		start["cache_creation_input_tokens"] != float64(50) {
+		t.Fatalf("message_start usage = %+v", start)
+	}
+	if delta == nil {
+		t.Fatal("message_delta 缺少 usage")
+	}
+	// 输出侧 usage 未重复携带缓存明细，应保留首块已合并的缓存字段
+	if delta["input_tokens"] != float64(10) || delta["output_tokens"] != float64(5) ||
+		delta["cache_read_input_tokens"] != float64(100) ||
+		delta["cache_creation_input_tokens"] != float64(50) {
+		t.Fatalf("message_delta usage = %+v", delta)
+	}
+}
+
 // sseEventPart 解析后的 Anthropic SSE 事件（事件名 + data JSON）
 type sseEventPart struct {
 	Event string

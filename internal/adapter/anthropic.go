@@ -20,6 +20,13 @@ type anthropicAdapter struct {
 	chunkID   string      // 流式响应 id（取自 message_start）
 	toolIndex map[int]int // Anthropic content_block 序号 → OpenAI tool_calls index
 	toolCount int         // 已下发的 tool_calls 数量
+
+	// 流式 usage 累积：message_start 给输入侧，message_delta 给输出侧
+	hasUsage            bool
+	inputTokens         int // 未命中缓存的输入
+	outputTokens        int
+	cacheReadTokens     int
+	cacheCreationTokens int
 }
 
 // NewAnthropicAdapter 创建 Anthropic 适配器
@@ -168,6 +175,55 @@ func (a *anthropicAdapter) BuildUpstreamRequest(body []byte, upstreamModel, apiK
 	}, nil
 }
 
+// anthropicMessagesProtocol 入站 Anthropic Messages 协议名（与 inbound.ProtocolMessages 一致）
+const anthropicMessagesProtocol = "messages"
+
+// SupportsRawPassthrough 入站同为 Anthropic Messages 时按原始请求体透传
+// 归一化为 OpenAI Chat 会剥掉 cache_control / metadata 等协议字段，导致上游无法复用提示缓存
+func (a *anthropicAdapter) SupportsRawPassthrough(protocol string) bool {
+	return protocol == anthropicMessagesProtocol
+}
+
+// BuildUpstreamRequestFromRaw 透传客户端原始 Messages 请求体：
+// 仅改写上游模型名、补充鉴权头，并沿用 anthropic-beta / anthropic-version 等客户端协议级请求头
+func (a *anthropicAdapter) BuildUpstreamRequestFromRaw(rawBody []byte, upstreamModel, apiKey string, clientHeaders map[string]string) (*UpstreamRequest, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rawBody, &raw); err != nil {
+		return nil, fmt.Errorf("anthropic: parse request body failed: %w", err)
+	}
+	if _, ok := raw["model"]; !ok {
+		return nil, fmt.Errorf("anthropic: model field is required")
+	}
+	if upstreamModel != "" {
+		m, err := jsonx.Marshal(upstreamModel)
+		if err != nil {
+			return nil, err
+		}
+		raw["model"] = m
+	}
+	newBody, err := jsonx.Marshal(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	headers := map[string]string{
+		"x-api-key":         apiKey,
+		"anthropic-version": "2023-06-01",
+	}
+	for k, v := range clientHeaders {
+		if v != "" {
+			headers[k] = v
+		}
+	}
+
+	return &UpstreamRequest{
+		Method:   http.MethodPost,
+		Endpoint: "/v1/messages",
+		Body:     newBody,
+		Headers:  headers,
+	}, nil
+}
+
 // ConvertResponse 将 Anthropic 非流式响应转换为 OpenAI Chat Completion 响应
 func (a *anthropicAdapter) ConvertResponse(body []byte, externalModel string) ([]byte, error) {
 	var resp struct {
@@ -182,8 +238,10 @@ func (a *anthropicAdapter) ConvertResponse(body []byte, externalModel string) ([
 		} `json:"content"`
 		StopReason string `json:"stop_reason"`
 		Usage      struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
@@ -238,11 +296,8 @@ func (a *anthropicAdapter) ConvertResponse(body []byte, externalModel string) ([
 				"finish_reason": anthropicStopReasonToOpenAI(resp.StopReason),
 			},
 		},
-		"usage": map[string]any{
-			"prompt_tokens":     resp.Usage.InputTokens,
-			"completion_tokens": resp.Usage.OutputTokens,
-			"total_tokens":      resp.Usage.InputTokens + resp.Usage.OutputTokens,
-		},
+		"usage": anthropicUsage(resp.Usage.InputTokens, resp.Usage.OutputTokens,
+			resp.Usage.CacheReadInputTokens, resp.Usage.CacheCreationInputTokens),
 	}
 
 	newBody, err := jsonx.Marshal(out)
@@ -267,7 +322,8 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 		Type    string `json:"type"`
 		Index   int    `json:"index"`
 		Message struct {
-			ID string `json:"id"`
+			ID    string                `json:"id"`
+			Usage *anthropicStreamUsage `json:"usage"`
 		} `json:"message"`
 		ContentBlock struct {
 			Type string `json:"type"`
@@ -280,6 +336,7 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 			PartialJSON string `json:"partial_json"`
 			StopReason  string `json:"stop_reason"`
 		} `json:"delta"`
+		Usage *anthropicStreamUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return nil, nil
@@ -294,7 +351,7 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 		id = anthropicDefaultChunkID
 	}
 
-	buildChunk := func(delta map[string]any, finishReason *string) []byte {
+	buildChunk := func(delta map[string]any, finishReason *string, usage map[string]any) []byte {
 		out := map[string]any{
 			"id":      id,
 			"object":  "chat.completion.chunk",
@@ -308,6 +365,26 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 				},
 			},
 		}
+		if usage != nil {
+			out["usage"] = usage
+		}
+		payload, err := jsonx.Marshal(out)
+		if err != nil {
+			return nil
+		}
+		return openaiSSE(payload)
+	}
+
+	// buildUsageChunk 构造仅含 usage 的结束块（choices 为空，与 OpenAI include_usage 语义一致）
+	buildUsageChunk := func(usage map[string]any) []byte {
+		out := map[string]any{
+			"id":      id,
+			"object":  "chat.completion.chunk",
+			"created": time.Now().Unix(),
+			"model":   externalModel,
+			"choices": []map[string]any{},
+			"usage":   usage,
+		}
 		payload, err := jsonx.Marshal(out)
 		if err != nil {
 			return nil
@@ -317,8 +394,10 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 
 	switch ev.Type {
 	case "message_start":
-		// 首个 chunk：仅带 role
-		return buildChunk(map[string]any{"role": "assistant", "content": ""}, nil), nil
+		// 输入侧用量（含缓存读写）在 message_start 下发，提前合并供首块与最终块使用
+		a.mergeStreamUsage(ev.Message.Usage)
+		// 首个 chunk：仅带 role，附带已知的输入侧 usage
+		return buildChunk(map[string]any{"role": "assistant", "content": ""}, nil, a.streamUsage()), nil
 	case "content_block_start":
 		// 仅 tool_use 块需要下发 tool_calls 起始增量（text 块由 text_delta 承载）
 		if ev.ContentBlock.Type != "tool_use" {
@@ -342,11 +421,11 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 					},
 				},
 			},
-		}, nil), nil
+		}, nil, nil), nil
 	case "content_block_delta":
 		switch ev.Delta.Type {
 		case "text_delta":
-			return buildChunk(map[string]any{"content": ev.Delta.Text}, nil), nil
+			return buildChunk(map[string]any{"content": ev.Delta.Text}, nil, nil), nil
 		case "input_json_delta":
 			if ev.Delta.PartialJSON == "" {
 				return nil, nil
@@ -358,19 +437,86 @@ func (a *anthropicAdapter) ConvertStreamChunk(chunk []byte, externalModel string
 						"function": map[string]any{"arguments": ev.Delta.PartialJSON},
 					},
 				},
-			}, nil), nil
+			}, nil, nil), nil
 		default:
 			return nil, nil
 		}
 	case "message_delta":
+		// 输出侧用量只在 message_delta 给出，合并后以独立 usage 块下发
+		a.mergeStreamUsage(ev.Usage)
 		reason := anthropicStopReasonToOpenAI(ev.Delta.StopReason)
-		return buildChunk(map[string]any{}, &reason), nil
+		out := buildChunk(map[string]any{}, &reason, nil)
+		if usage := a.streamUsage(); usage != nil {
+			if chunk := buildUsageChunk(usage); chunk != nil {
+				out = append(out, chunk...)
+			}
+		}
+		return out, nil
 	case "message_stop":
 		return openaiSSE([]byte("[DONE]")), nil
 	default:
 		// ping / content_block_stop / message_start 以外的其它事件无需下发
 		return nil, nil
 	}
+}
+
+// anthropicStreamUsage Anthropic 流式事件中的 usage 负载（message_start.message.usage 与 message_delta.usage 同构）
+type anthropicStreamUsage struct {
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+}
+
+// mergeStreamUsage 合并流式 usage：非零字段覆盖，避免输出侧块把输入侧计数清空
+func (a *anthropicAdapter) mergeStreamUsage(u *anthropicStreamUsage) {
+	if u == nil {
+		return
+	}
+	a.hasUsage = true
+	if u.InputTokens > 0 {
+		a.inputTokens = u.InputTokens
+	}
+	if u.OutputTokens > 0 {
+		a.outputTokens = u.OutputTokens
+	}
+	if u.CacheReadInputTokens > 0 {
+		a.cacheReadTokens = u.CacheReadInputTokens
+	}
+	if u.CacheCreationInputTokens > 0 {
+		a.cacheCreationTokens = u.CacheCreationInputTokens
+	}
+}
+
+// streamUsage 返回累积后的 OpenAI usage；未收到任何 usage 时返回 nil（避免下发零值块）
+func (a *anthropicAdapter) streamUsage() map[string]any {
+	if !a.hasUsage {
+		return nil
+	}
+	return anthropicUsage(a.inputTokens, a.outputTokens, a.cacheReadTokens, a.cacheCreationTokens)
+}
+
+// anthropicUsage Anthropic usage → OpenAI usage：
+// OpenAI 的 prompt_tokens 含缓存命中与缓存创建，Anthropic 的 input_tokens 不含，故需相加；
+// cache_creation_tokens 为网关内部计费扩展字段
+func anthropicUsage(input, output, cacheRead, cacheCreation int) map[string]any {
+	prompt := input + cacheRead + cacheCreation
+	usage := map[string]any{
+		"prompt_tokens":     prompt,
+		"completion_tokens": output,
+		"total_tokens":      prompt + output,
+	}
+	if cacheRead > 0 || cacheCreation > 0 {
+		details := map[string]any{}
+		if cacheRead > 0 {
+			details["cached_tokens"] = cacheRead
+		}
+		if cacheCreation > 0 {
+			details["cache_creation_tokens"] = cacheCreation
+		}
+		usage["prompt_tokens_details"] = details
+	}
+	return usage
 }
 
 // UpstreamModelsRequest 构造 GET {base}/v1/models 请求（Anthropic 鉴权头）

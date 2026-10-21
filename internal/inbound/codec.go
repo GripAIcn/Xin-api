@@ -73,21 +73,62 @@ func (r Registry) New(name string) Codec {
 
 // chatUsage OpenAI Chat usage 字段
 type chatUsage struct {
-	PromptTokens            int64 `json:"prompt_tokens"`
-	CompletionTokens        int64 `json:"completion_tokens"`
-	TotalTokens             int64 `json:"total_tokens"`
+	PromptTokens            int64                        `json:"prompt_tokens"`
+	CompletionTokens        int64                        `json:"completion_tokens"`
+	TotalTokens             int64                        `json:"total_tokens"`
 	PromptTokensDetails     *chatPromptTokensDetails     `json:"prompt_tokens_details,omitempty"`
 	CompletionTokensDetails *chatCompletionTokensDetails `json:"completion_tokens_details,omitempty"`
 }
 
-// chatPromptTokensDetails prompt_tokens 明细（缓存命中）
+// chatPromptTokensDetails prompt_tokens 明细（缓存命中 / 缓存创建）
 type chatPromptTokensDetails struct {
-	CachedTokens int64 `json:"cached_tokens"`
+	CachedTokens        int64 `json:"cached_tokens"`
+	CacheCreationTokens int64 `json:"cache_creation_tokens,omitempty"`
 }
 
 // chatCompletionTokensDetails completion_tokens 明细（推理 token）
 type chatCompletionTokensDetails struct {
 	ReasoningTokens int64 `json:"reasoning_tokens"`
+}
+
+// mergeChatUsage 合并分片上报的 usage：Anthropic 流式在 message_start 给输入侧、
+// message_delta 给输出侧，需按非零字段合并而非整体覆盖
+func mergeChatUsage(dst, src *chatUsage) *chatUsage {
+	if src == nil {
+		return dst
+	}
+	if dst == nil {
+		dst = &chatUsage{}
+	}
+	if src.PromptTokens > 0 {
+		dst.PromptTokens = src.PromptTokens
+	}
+	if src.CompletionTokens > 0 {
+		dst.CompletionTokens = src.CompletionTokens
+	}
+	if src.TotalTokens > 0 {
+		dst.TotalTokens = src.TotalTokens
+	}
+	if src.PromptTokensDetails != nil {
+		if dst.PromptTokensDetails == nil {
+			dst.PromptTokensDetails = &chatPromptTokensDetails{}
+		}
+		if src.PromptTokensDetails.CachedTokens > 0 {
+			dst.PromptTokensDetails.CachedTokens = src.PromptTokensDetails.CachedTokens
+		}
+		if src.PromptTokensDetails.CacheCreationTokens > 0 {
+			dst.PromptTokensDetails.CacheCreationTokens = src.PromptTokensDetails.CacheCreationTokens
+		}
+	}
+	if src.CompletionTokensDetails != nil {
+		if dst.CompletionTokensDetails == nil {
+			dst.CompletionTokensDetails = &chatCompletionTokensDetails{}
+		}
+		if src.CompletionTokensDetails.ReasoningTokens > 0 {
+			dst.CompletionTokensDetails.ReasoningTokens = src.CompletionTokensDetails.ReasoningTokens
+		}
+	}
+	return dst
 }
 
 // chatFunctionCall 工具调用中的函数描述

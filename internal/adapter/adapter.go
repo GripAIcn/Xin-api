@@ -40,6 +40,18 @@ type ProviderAdapter interface {
 	UpstreamModelsRequest(apiKey string) *UpstreamRequest
 }
 
+// RawRequestBuilder 可选能力：入站协议与上游协议一致时，直接复用客户端原始请求体
+// 归一化为 OpenAI Chat 会丢失协议私有字段（如 Messages 的 cache_control / metadata），
+// 因此协议同构的链路走原样透传，仅改写 model 与鉴权头
+type RawRequestBuilder interface {
+	// SupportsRawPassthrough 入站协议是否可按原始请求体透传
+	SupportsRawPassthrough(protocol string) bool
+
+	// BuildUpstreamRequestFromRaw 以客户端原始请求体构造上游请求
+	// upstreamModel 非空时改写 model；clientHeaders 为需沿用的客户端协议级请求头
+	BuildUpstreamRequestFromRaw(rawBody []byte, upstreamModel, apiKey string, clientHeaders map[string]string) (*UpstreamRequest, error)
+}
+
 // AdapterFactory 适配器构造器
 // 适配器可能持有跨 chunk 的流式转换状态（如工具调用的块序号映射），因此注册表只存构造器，
 // 每次转发实例化一份，保证同渠道并发请求之间状态不串扰（与 inbound.Registry 同构）
