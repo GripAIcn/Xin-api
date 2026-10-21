@@ -464,15 +464,19 @@ func (r *ForwardResult) mergeMeta(meta *openaiMeta, overrideID bool) {
 		r.UpstreamReqID = meta.ID
 	}
 	if meta.Usage != nil {
-		r.HasUsage = true
-		r.InputTokens = meta.Usage.PromptTokens
 		r.OutputTokens = meta.Usage.CompletionTokens
-		if meta.Usage.PromptTokensDetails != nil {
-			r.CachedInputTokens = meta.Usage.PromptTokensDetails.CachedTokens
-			r.CacheCreationTokens = meta.Usage.PromptTokensDetails.CacheCreationTokens
-		}
 		if meta.Usage.CompletionTokensDetails != nil {
 			r.ReasoningTokens = meta.Usage.CompletionTokensDetails.ReasoningTokens
+		}
+		// 输入侧为 0 视为上游未上报输入用量（如 Anthropic 兼容代理缺少 message_start usage）：
+		// 不标记 HasUsage，让计费回落为按请求体估算，避免按 0 输入计费；输出用量仍保留
+		if meta.Usage.PromptTokens > 0 {
+			r.HasUsage = true
+			r.InputTokens = meta.Usage.PromptTokens
+			if meta.Usage.PromptTokensDetails != nil {
+				r.CachedInputTokens = meta.Usage.PromptTokensDetails.CachedTokens
+				r.CacheCreationTokens = meta.Usage.PromptTokensDetails.CacheCreationTokens
+			}
 		}
 	}
 	if len(meta.Choices) > 0 && meta.Choices[0].FinishReason != nil && *meta.Choices[0].FinishReason != "" {

@@ -38,6 +38,31 @@ func (e fakeEncoder) KeepaliveEvent() []byte                     { return e.keep
 
 var pingEncoder = fakeEncoder{keepalive: []byte(": ping\n\n")}
 
+// TestMergeMetaUsageFallback 验证 usage 兜底：输入侧为 0 时不标记 HasUsage（计费回落估算），
+// 但输出用量仍保留；输入侧存在时正常采集缓存明细
+func TestMergeMetaUsageFallback(t *testing.T) {
+	var outputOnly ForwardResult
+	outputOnly.mergeMeta(parseOpenAIMeta([]byte(
+		`{"usage":{"prompt_tokens":0,"completion_tokens":7,"total_tokens":7}}`)), false)
+	if outputOnly.HasUsage {
+		t.Fatal("输入侧为 0 时不应标记 HasUsage")
+	}
+	if outputOnly.OutputTokens != 7 {
+		t.Fatalf("output tokens = %d, want 7", outputOnly.OutputTokens)
+	}
+
+	var full ForwardResult
+	full.mergeMeta(parseOpenAIMeta([]byte(
+		`{"usage":{"prompt_tokens":160,"completion_tokens":5,"total_tokens":165,`+
+			`"prompt_tokens_details":{"cached_tokens":100,"cache_creation_tokens":50}}}`)), false)
+	if !full.HasUsage || full.InputTokens != 160 || full.OutputTokens != 5 {
+		t.Fatalf("usage = %+v", full)
+	}
+	if full.CachedInputTokens != 100 || full.CacheCreationTokens != 50 {
+		t.Fatalf("cache details = %+v", full)
+	}
+}
+
 // closeNotifyRecorder 让 httptest.ResponseRecorder 满足 gin 依赖的 http.CloseNotifier
 // （gin.Context.Stream 会做该断言，真实 net/http 响应writer 已实现）
 type closeNotifyRecorder struct {
