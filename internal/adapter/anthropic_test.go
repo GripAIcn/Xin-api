@@ -516,3 +516,36 @@ func TestAnthropicConvertStreamUsage(t *testing.T) {
 		t.Fatalf("final chunk = %s", chunks[4])
 	}
 }
+
+// TestAnthropicConvertStreamUsageRepeatedInput 验证 message_delta 重复回带输入侧用量时按覆盖处理：
+// 输入侧只取一份（不累加），输出侧以最新的累计值为准
+func TestAnthropicConvertStreamUsageRepeatedInput(t *testing.T) {
+	ad := NewAnthropicAdapter()
+	events := []string{
+		`{"type":"message_start","message":{"id":"msg_2","usage":{"input_tokens":10,"output_tokens":1,"cache_creation_input_tokens":50,"cache_read_input_tokens":100}}}`,
+		`{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":10,"cache_read_input_tokens":100,"cache_creation_input_tokens":50,"output_tokens":7}}`,
+		`{"type":"message_stop"}`,
+	}
+
+	var usageChunk string
+	for _, ev := range events {
+		out, err := ad.ConvertStreamChunk([]byte("event: x\ndata: "+ev+"\n\n"), "claude-3-5-sonnet")
+		if err != nil {
+			t.Fatalf("ConvertStreamChunk: %v", err)
+		}
+		for _, block := range strings.Split(string(out), "\n\n") {
+			if strings.Contains(block, `"choices":[]`) {
+				usageChunk = block
+			}
+		}
+	}
+	if usageChunk == "" {
+		t.Fatal("缺少独立 usage 块")
+	}
+	if !strings.Contains(usageChunk, `"prompt_tokens":160`) ||
+		!strings.Contains(usageChunk, `"completion_tokens":7`) ||
+		!strings.Contains(usageChunk, `"cached_tokens":100`) ||
+		!strings.Contains(usageChunk, `"cache_creation_tokens":50`) {
+		t.Fatalf("usage chunk = %s", usageChunk)
+	}
+}
