@@ -63,6 +63,7 @@ type responsesRequest struct {
 	Temperature       *float64        `json:"temperature"`
 	TopP              *float64        `json:"top_p"`
 	User              string          `json:"user"`
+	PromptCacheKey    string          `json:"prompt_cache_key"`
 	Stream            bool            `json:"stream"`
 	Tools             json.RawMessage `json:"tools"`
 	ToolChoice        json.RawMessage `json:"tool_choice"`
@@ -136,6 +137,10 @@ func (c *responsesCodec) NormalizeRequest(body []byte, _ NormalizeOptions) ([]by
 	}
 	if req.User != "" {
 		out["user"] = req.User
+	}
+	if req.PromptCacheKey != "" {
+		// prompt_cache_key：OpenAI 提示缓存路由键，透传给上游提升缓存命中率
+		out["prompt_cache_key"] = req.PromptCacheKey
 	}
 	if tools := responsesTools(req.Tools); len(tools) > 0 {
 		out["tools"] = tools

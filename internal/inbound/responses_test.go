@@ -441,3 +441,39 @@ func TestResponsesStreamEvents(t *testing.T) {
 		t.Errorf("stream contains HTML-escaped sequences: %s", string(raw))
 	}
 }
+
+// TestResponsesNormalizePromptCacheKey prompt_cache_key 必须透传到规范 Chat 请求体（提升上游缓存路由命中率）
+func TestResponsesNormalizePromptCacheKey(t *testing.T) {
+	c := &responsesCodec{}
+
+	out, err := c.NormalizeRequest([]byte(`{
+		"model": "gpt-6-sol",
+		"input": "hi",
+		"prompt_cache_key": "conv-123"
+	}`), NormalizeOptions{})
+	if err != nil {
+		t.Fatalf("NormalizeRequest error: %v", err)
+	}
+	var got struct {
+		PromptCacheKey string `json:"prompt_cache_key"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if got.PromptCacheKey != "conv-123" {
+		t.Errorf("prompt_cache_key = %q, want conv-123", got.PromptCacheKey)
+	}
+
+	// 未携带时不注入该字段
+	out, err = c.NormalizeRequest([]byte(`{"model":"gpt-6-sol","input":"hi"}`), NormalizeOptions{})
+	if err != nil {
+		t.Fatalf("NormalizeRequest error: %v", err)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+	if _, ok := raw["prompt_cache_key"]; ok {
+		t.Errorf("prompt_cache_key should be absent when not provided")
+	}
+}
