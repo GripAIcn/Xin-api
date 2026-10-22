@@ -2,23 +2,23 @@ package form
 
 // CreateChannelReq 添加上游渠道请求入参
 type CreateChannelReq struct {
-	Name       string   `json:"name" binding:"required" validate:"required,min=2,max=100"`    // 渠道名称
-	Provider   string   `json:"provider" binding:"required" validate:"required,min=1,max=64"` // 供应商类型：openai/anthropic/gemini/deepseek
-	Protocol   []string `json:"protocol" binding:"required" validate:"required,min=1,dive"`   // 支持协议数组：chat/responses/gemini
-	BaseURL    string   `json:"base_url" binding:"required" validate:"required,url"`          // 必须符合标准的 URL 格式
-	APIKey     string   `json:"api_key" binding:"required" validate:"required,min=1,max=255"` // 供应商密钥
-	Weight     int      `json:"weight" binding:"required" validate:"required,min=1,max=100"`  // 负载权重范围 1-100
-	Priority   int      `json:"priority"`                                                     // 路由优先级，数值越大越优先
-	Tags       []string `json:"tags"`                                                         // 路由标签：fast/cheap/stable
-	Timeout    int      `json:"timeout" validate:"omitempty,min=1"`                           // 请求超时（秒）
-	MaxRetries int      `json:"max_retries" validate:"omitempty,min=0"`                       // 失败重试次数
+	Name       string   `json:"name" binding:"required" validate:"required,min=2,max=100"`                                                                                       // 渠道名称
+	Provider   string   `json:"provider" binding:"required,oneof=openai deepseek anthropic gemini" validate:"required,oneof=openai deepseek anthropic gemini"`                   // 供应商类型：openai/deepseek/anthropic/gemini
+	Protocol   []string `json:"protocol" binding:"required,min=1,dive,oneof=chat responses messages gemini" validate:"required,min=1,dive,oneof=chat responses messages gemini"` // 支持协议数组：chat/responses/messages/gemini
+	BaseURL    string   `json:"base_url" binding:"required" validate:"required,url"`                                                                                             // 必须符合标准的 URL 格式
+	APIKey     string   `json:"api_key" binding:"required" validate:"required,min=1,max=255"`                                                                                    // 供应商密钥
+	Weight     int      `json:"weight" binding:"required" validate:"required,min=1,max=100"`                                                                                     // 负载权重范围 1-100
+	Priority   int      `json:"priority"`                                                                                                                                        // 路由优先级，数值越大越优先
+	Tags       []string `json:"tags"`                                                                                                                                            // 路由标签：fast/cheap/stable
+	Timeout    int      `json:"timeout" validate:"omitempty,min=1"`                                                                                                              // 请求超时（秒）
+	MaxRetries int      `json:"max_retries" validate:"omitempty,min=0"`                                                                                                          // 失败重试次数
 }
 
 // UpdateChannelReq 覆盖更新渠道请求入参
 type UpdateChannelReq struct {
 	Name       string   `json:"name" binding:"required" validate:"required,min=2,max=100"`
-	Provider   string   `json:"provider" binding:"required" validate:"required,min=1,max=64"`
-	Protocol   []string `json:"protocol" binding:"required" validate:"required,min=1,dive"`
+	Provider   string   `json:"provider" binding:"required,oneof=openai deepseek anthropic gemini" validate:"required,oneof=openai deepseek anthropic gemini"`
+	Protocol   []string `json:"protocol" binding:"required,min=1,dive,oneof=chat responses messages gemini" validate:"required,min=1,dive,oneof=chat responses messages gemini"`
 	BaseURL    string   `json:"base_url" binding:"required" validate:"required,url"`
 	APIKey     string   `json:"api_key" binding:"required" validate:"required,min=1,max=255"`
 	Weight     int      `json:"weight" binding:"required" validate:"required,min=1,max=100"`

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Boxes,
+  ChevronDown,
   CircleCheck,
   CirclePlay,
   CircleX,
@@ -40,6 +41,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -57,6 +64,13 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Table,
   TableBody,
   TableCell,
@@ -73,14 +87,30 @@ import {
 import { useChannelStore } from '@/stores/channels'
 import type { Channel, ChannelTestResult } from '@/types/api'
 
+// 供应商与协议的可选值，与后端枚举校验保持一致
+const PROVIDER_OPTIONS: readonly string[] = [
+  'openai',
+  'deepseek',
+  'anthropic',
+  'gemini',
+]
+const PROTOCOL_OPTIONS: readonly string[] = [
+  'chat',
+  'responses',
+  'messages',
+  'gemini',
+]
+
 const channelFormSchema = z.object({
   name: z.string().min(1, '请输入渠道名称').min(2, '至少 2 个字符'),
-  provider: z.string().min(1, '请输入供应商，例如 openai'),
-  protocol: z
+  provider: z
     .string()
-    .min(1, '请输入协议')
-    .refine((v) => v.split(',').map((s) => s.trim()).filter(Boolean).length > 0, {
-      message: '至少填写一个协议',
+    .refine((v) => PROVIDER_OPTIONS.includes(v), { message: '请选择供应商' }),
+  protocol: z
+    .array(z.string())
+    .min(1, '至少选择一个协议')
+    .refine((vs) => vs.every((v) => PROTOCOL_OPTIONS.includes(v)), {
+      message: '请选择合法的协议',
     }),
   base_url: z.string().min(1, '请输入 Base URL'),
   api_key: z.string().min(1, '请输入 API Key'),
@@ -93,7 +123,7 @@ const channelFormSchema = z.object({
 
 type ChannelFormValues = z.infer<typeof channelFormSchema>
 
-// 将逗号分隔文本拆成去空数组（用于 protocol / tags）
+// 将逗号分隔文本拆成去空数组（用于 tags）
 const splitList = (value: string): string[] =>
   value.split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -128,7 +158,7 @@ export default function ChannelsView() {
     defaultValues: {
       name: '',
       provider: '',
-      protocol: '',
+      protocol: [],
       base_url: '',
       api_key: '',
       weight: 1,
@@ -167,7 +197,7 @@ export default function ChannelsView() {
     form.reset({
       name: '',
       provider: '',
-      protocol: '',
+      protocol: [],
       base_url: '',
       api_key: '',
       weight: 1,
@@ -184,7 +214,7 @@ export default function ChannelsView() {
     form.reset({
       name: row.name,
       provider: row.provider,
-      protocol: (row.protocol ?? []).join(','),
+      protocol: row.protocol ?? [],
       base_url: row.base_url,
       api_key: row.api_key,
       weight: row.weight,
@@ -203,7 +233,7 @@ export default function ChannelsView() {
         await updateChannel(editingChannel.id, {
           name: values.name,
           provider: values.provider,
-          protocol: splitList(values.protocol),
+          protocol: values.protocol,
           base_url: values.base_url,
           api_key: values.api_key,
           weight: values.weight,
@@ -218,7 +248,7 @@ export default function ChannelsView() {
         await createChannel({
           name: values.name,
           provider: values.provider,
-          protocol: splitList(values.protocol),
+          protocol: values.protocol,
           base_url: values.base_url,
           api_key: values.api_key,
           weight: values.weight,
@@ -481,9 +511,23 @@ export default function ChannelsView() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>供应商</FormLabel>
-                    <FormControl>
-                      <Input placeholder="例如：openai" {...field} />
-                    </FormControl>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="请选择供应商" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {PROVIDER_OPTIONS.map((provider) => (
+                          <SelectItem key={provider} value={provider}>
+                            {provider}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -495,12 +539,43 @@ export default function ChannelsView() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>协议</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="多个用逗号分隔，例如：chat,responses"
-                        {...field}
-                      />
-                    </FormControl>
+                    <DropdownMenu modal={false}>
+                      <DropdownMenuTrigger asChild>
+                        <FormControl>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="w-full justify-between font-normal"
+                          >
+                            {field.value.length > 0
+                              ? field.value.join(', ')
+                              : '请选择协议'}
+                            <ChevronDown className="size-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="start"
+                        className="w-[var(--radix-dropdown-menu-trigger-width)]"
+                      >
+                        {PROTOCOL_OPTIONS.map((protocol) => (
+                          <DropdownMenuCheckboxItem
+                            key={protocol}
+                            checked={field.value.includes(protocol)}
+                            onSelect={(event) => event.preventDefault()}
+                            onCheckedChange={(checked) => {
+                              field.onChange(
+                                checked
+                                  ? [...field.value, protocol]
+                                  : field.value.filter((v) => v !== protocol),
+                              )
+                            }}
+                          >
+                            {protocol}
+                          </DropdownMenuCheckboxItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <FormMessage />
                   </FormItem>
                 )}
